@@ -34,6 +34,7 @@ export function numberFromUrl(url) {
 /* The text with its episode number taken out: what is left is the
    title, if the page gave one. "3 серия — Возвращение" → "Возвращение". */
 export function titleFromText(text) {
+  if (BARE.test(text)) return '';
   return String(text || '')
     .replace(TEXT_AFTER, ' ').replace(TEXT_BEFORE, ' ')
     .replace(/^[\s\-–—:·|]+|[\s\-–—:·|]+$/g, '')

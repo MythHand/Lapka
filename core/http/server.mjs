@@ -6,6 +6,12 @@
    and the browser sets it itself; Origin is checked when present.
    Everything the routes hand out is about the user's own machine, so
    the checks are not optional.
+
+   One allowance: a top-level navigation to a page is let through
+   whatever site started it. A foreign page can open our page but
+   cannot read it, and a browser extension or a link from elsewhere
+   would otherwise be refused. The API keeps the strict rule, so the
+   only thing a foreign page can make Lapka do is show itself.
    ═══════════════════════════════════════════════════════════ */
 import http from 'node:http';
 import fs from 'node:fs';
@@ -22,10 +28,11 @@ export function json(res, code, data) {
 
 export function startServer({ port, host = '127.0.0.1', webDir, lapka }) {
   const hosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
-  const fromLoopback = req => {
+  const fromLoopback = (req, { navigation = false } = {}) => {
     if (!hosts.has(String(req.headers.host || '').toLowerCase())) return false;
     const site = req.headers['sec-fetch-site'];
-    if (site && site !== 'same-origin' && site !== 'none') return false;
+    const isNav = req.headers['sec-fetch-mode'] === 'navigate' && req.headers['sec-fetch-dest'] === 'document';
+    if (site && site !== 'same-origin' && site !== 'none' && !(navigation && isNav)) return false;
     if (req.headers.origin) {
       let u; try { u = new URL(req.headers.origin); } catch { return false; }
       if (!hosts.has(u.host.toLowerCase())) return false;
@@ -43,9 +50,9 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka }) {
   };
 
   const server = http.createServer(async (req, res) => {
-    if (!fromLoopback(req)) return json(res, 403, { error: 'loopback only' });
     const url = new URL(req.url, `http://${host}`);
     const p = url.pathname;
+    if (!fromLoopback(req, { navigation: !p.startsWith('/api/') })) return json(res, 403, { error: 'loopback only' });
     try {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'inspect.html');
       if (req.method === 'GET' && /^\/[\w.-]+\.(?:html|js|mjs|css|svg|png|woff2)$/.test(p)) return serveStatic(res, p.slice(1));
@@ -54,8 +61,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka }) {
         const target = url.searchParams.get('url');
         if (!/^https?:\/\//i.test(target || '')) return json(res, 400, { error: 'url must be http(s)' });
         const t0 = Date.now();
-        const { series, reports, dubs } = await lapka.look(target);
-        return json(res, 200, { series, reports, dubs, ms: Date.now() - t0 });
+        const looked = await lapka.look(target);
+        return json(res, 200, { ...looked, ms: Date.now() - t0 });
       }
       json(res, 404, { error: 'not found' });
     } catch (e) {

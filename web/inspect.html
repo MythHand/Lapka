@@ -38,8 +38,11 @@ async function look(url) {
     data = await r.json();
     if (!r.ok) throw new Error(data.error || r.status);
   } catch (e) { $('#steps').innerHTML = '<span class="wait">Не вышло: ' + esc(e.message) + '</span>'; return; }
+  try { show(data); } catch (e) { $('#steps').innerHTML = '<span class="wait">Ответ пришёл, а показать не смогла: ' + esc(e.message) + '</span>'; console.error(e); }
+}
 
-  const steps = data.steps;
+function show(data) {
+  const steps = data.steps || [];
   $('#steps').innerHTML = steps.map(s => '<b>' + esc(s) + '</b>').join(' → ') + ' <span class="cand">(' + data.ms + ' мс)</span>';
 
   const s = data.series;
@@ -68,8 +71,12 @@ async function look(url) {
 }
 
 $('#f').addEventListener('submit', e => { e.preventDefault(); const u = $('#url').value.trim(); if (u) look(u); });
+/* An address in the query runs on its own only when we got here by
+   ourselves: typed, bookmarked, or from this page. Sent here by some
+   other site, the address is filled in and waits for the click. */
 const initial = new URLSearchParams(location.search).get('url');
-if (initial) { $('#url').value = initial; look(initial); }
+const ours = !document.referrer || new URL(document.referrer).origin === location.origin;
+if (initial) { $('#url').value = initial; if (ours) look(initial); }
 </script>
 </body>
 </html>
