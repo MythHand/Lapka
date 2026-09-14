@@ -3,14 +3,21 @@
 
    Given an address, it fetches the page through the session, reads
    it, and if the page turns out to be one episode, goes up to the
-   series page and reads that too. What it learned lands in one
-   catalog; what it saw stays in the reports.
+   series page and reads that too. Then every player the episode page
+   embeds is opened by an extractor, and what it plays lands in the
+   catalog as streams. What Lapka learned is one catalog; what it saw
+   stays in the reports.
    ═══════════════════════════════════════════════════════════ */
 import { createSession } from './session/index.mjs';
-import { discover, toContribution } from './discover/index.mjs';
-import { createSeries, merge, allDubs } from './catalog/index.mjs';
+import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
+import { loadExtractors, extractorFor } from './extract/index.mjs';
+import { createSeries, merge, allDubs, findEpisode, markHealth } from './catalog/index.mjs';
 
-export function createLapka({ session = createSession(), profiles = [] } = {}) {
+export async function bootLapka(opts = {}) {
+  return createLapka({ extractors: await loadExtractors(), ...opts });
+}
+
+export function createLapka({ session = createSession(), profiles = [], extractors = [] } = {}) {
   const profileFor = url => {
     let host; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
     return profiles.find(p => p.match === host || (p.match instanceof RegExp && p.match.test(url))) || null;
@@ -20,6 +27,26 @@ export function createLapka({ session = createSession(), profiles = [] } = {}) {
     const res = await session.fetch(url, { referer });
     if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
     return discover({ html: res.body, url: res.url || url, profile: profileFor(url) });
+  }
+
+  /* One embedded player opened: what it plays, as a contribution for
+     this episode. A player the page named a dub for gets its streams
+     under that dub; a player that carries its own dub switch brings
+     its dubs along; a player that gives nothing is reported as such. */
+  async function openPlayer(player, number, pageUrl) {
+    const x = extractorFor(extractors, player.url);
+    if (!x) return { player, error: 'no extractor' };
+    try {
+      const got = await x.extract(player.url, { referer: pageUrl }, session);
+      const source = streams => ({ player: player.id, embedUrl: player.url, extractor: x.name, streams });
+      let dubs;
+      if (got.dubs?.length) dubs = got.dubs.map(d => ({ name: d.name, sources: [source(d.streams)] }));
+      else if (got.streams?.length) dubs = [{ name: player.dubLabel || UNNAMED_DUB, sources: [source(got.streams)] }];
+      else return { player, extractor: x.name, error: 'no streams' };
+      return { player, extractor: x.name, contribution: { origin: `extract:${x.name}`, episodes: [{ number, dubs }] } };
+    } catch (e) {
+      return { player, extractor: x.name, error: e.message };
+    }
   }
 
   /* One address in, a catalog and the reports behind it out. */
@@ -37,10 +64,40 @@ export function createLapka({ session = createSession(), profiles = [] } = {}) {
     /* the series page names the series best; the episode page adds its dubs */
     for (const r of [...reports].reverse()) merge(series, toContribution(r));
 
-    /* one status line: the episode page's steps, then what the series page added */
     const steps = [...new Set(reports.flatMap(r => r.steps))];
-    return { series, reports, steps, dubs: allDubs(series).map(d => d.name) };
+    const opened = [];
+    const number = first.episode.value;
+    if (first.kind === 'episode' && number !== null) {
+      const embeds = first.players.filter(p => !p.stream);
+      const results = await Promise.all(embeds.map(p => openPlayer(p, number, first.url)));
+      for (const r of results) {
+        opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null,
+          streams: r.contribution ? r.contribution.episodes[0].dubs.reduce((n, d) => n + d.sources[0].streams.length, 0) : 0 });
+        if (r.contribution) merge(series, r.contribution);
+      }
+      /* health: a player that answered with streams is alive, one that did not is not */
+      const ep = findEpisode(series, number);
+      if (ep) for (const d of ep.dubs) for (const s of d.sources) {
+        const r = results.find(x => x.player.url === s.embedUrl);
+        if (r) markHealth(s, !r.error, r.error);
+      }
+      if (embeds.length) {
+        const ok = results.filter(r => r.contribution).length;
+        steps.push(ok === embeds.length ? `Открыла ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}, потоки есть`
+          : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
+        for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
+      }
+    }
+
+    return { series, reports, opened, steps, dubs: allDubs(series).map(d => d.name) };
   }
 
-  return { look, readPage, session };
+  return { look, readPage, session, extractors };
+}
+
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
 }

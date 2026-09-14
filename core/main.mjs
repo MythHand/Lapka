@@ -1,14 +1,14 @@
 /* Lapka, started by hand or by `npm start`. */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createLapka } from './lapka.mjs';
+import { bootLapka } from './lapka.mjs';
 import { startServer } from './http/server.mjs';
 
 export const PORT = Number(process.env.PORT) || 8800;
 export const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
 
 export async function start({ port = PORT } = {}) {
-  const lapka = createLapka();
+  const lapka = await bootLapka();
   const server = await startServer({ port, webDir: WEB_DIR, lapka });
   return { lapka, ...server };
 }

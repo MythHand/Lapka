@@ -47,7 +47,7 @@ function show(data) {
 
   const s = data.series;
   const eps = s.episodes.map(e => {
-    const dubs = e.dubs.map(d => '<span class="dub">' + esc(d.name) + ' <small>' + d.sources.map(x => x.player + (x.streams.length ? ' ▶' : '')).join(', ') + '</small></span>').join('');
+    const dubs = e.dubs.map(d => '<span class="dub">' + esc(d.name) + ' <small>' + d.sources.map(x => x.player + (x.streams.length ? ' ▶' + x.streams.length : '') + (x.health.ok === false ? ' ✕' : '')).join(', ') + '</small></span>').join('');
     return '<div class="ep"><span class="n">' + e.number + '</span><span>' + esc(e.title || '') + (dubs ? '<div>' + dubs + '</div>' : '') + '</span></div>';
   }).join('');
   const pending = data.reports.flatMap(r => r.players.filter(p => !p.dubLabel && !p.stream));
@@ -57,7 +57,7 @@ function show(data) {
     (s.cover ? '<div class="cand">обложка: ' + esc(s.cover) + '</div>' : '') +
     '<div class="cand">' + esc(s.sourceUrl) + ' · id ' + s.id + '</div>' +
     '<div>Озвучки: ' + (data.dubs.length ? data.dubs.map(esc).join(', ') : '<span class="cand">пока не названы</span>') + '</div>' +
-    (pending.length ? '<div class="wait">Ждут экстрактор: ' + pending.map(p => esc(p.id)).join(', ') + '</div>' : '') +
+    (data.opened.length ? '<div class="cand">Плееры: ' + data.opened.map(o => esc(o.player) + ' · ' + (o.error ? '<span class="wait">' + esc(o.error) + '</span>' : '<span class="ok">' + o.streams + ' ▶ через ' + esc(o.extractor) + '</span>')).join(' · ') + '</div>' : '') +
     '</section>' +
     '<section><h2>Серии</h2>' + (eps || '<span class="cand">нет</span>') + '</section>' +
     '<section><h2>Отчёт разбора</h2>' + data.reports.map(r =>
