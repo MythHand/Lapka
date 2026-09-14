@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lapka · воспроизведение</title>
+<style>
+  :root { color-scheme: dark; } body { margin: 0; background: #000; color: #ddd; font: 14px/1.4 system-ui, sans-serif; }
+  video { display: block; width: 100vw; height: 100vh; background: #000; }
+  #bar { position: fixed; top: 0; left: 0; right: 0; padding: .6rem 1rem; background: linear-gradient(#000a, #0000); display: flex; gap: 1rem; align-items: center; }
+  #bar a { color: #ddd; text-decoration: none; opacity: .8; } #status { margin-left: auto; opacity: .7; }
+</style>
+</head>
+<body>
+<video id="v" controls autoplay playsinline></video>
+<div id="bar"><a href="javascript:history.back()">← назад</a><span id="title"></span><span id="status"></span></div>
+<script src="/vendor/hls.min.js"></script>
+<script>
+/* Not the player. A bare <video> to prove the stream reaches the
+   browser through Lapka; the player comes in the UI phase. */
+const q = new URLSearchParams(location.search);
+const id = q.get('stream'), kind = q.get('kind') || 'hls';
+const v = document.getElementById('v'), status = document.getElementById('status');
+document.getElementById('title').textContent = q.get('title') || '';
+const say = t => { status.textContent = t; };
+if (!id) say('нет потока');
+else if (kind === 'mp4') { v.src = `/api/stream/${id}.mp4`; say('mp4 через Lapka'); }
+else if (window.Hls && Hls.isSupported()) {
+  const h = new Hls({ enableWorker: true });
+  h.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) say('ошибка: ' + d.type + ' ' + (d.details || '')); });
+  h.on(Hls.Events.MANIFEST_PARSED, () => say('HLS через Lapka · ' + h.levels.length + ' ур.'));
+  h.loadSource(`/api/stream/${id}.m3u8`); h.attachMedia(v);
+} else if (v.canPlayType('application/vnd.apple.mpegurl')) { v.src = `/api/stream/${id}.m3u8`; say('HLS нативно через Lapka'); }
+else say('этот браузер не играет HLS');
+v.addEventListener('error', () => say('видео не пошло: ' + (v.error && v.error.message)));
+/* ?probe=<ms>: after that long, write what the video got into the
+   page, for the headless browser in the tests to read. */
+const probe = Number(q.get('probe'));
+if (probe) setTimeout(() => {
+  const pre = document.createElement('pre'); pre.id = 'pip-test-out';
+  pre.textContent = JSON.stringify({ status: status.textContent, currentTime: v.currentTime, readyState: v.readyState,
+    buffered: v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0, duration: v.duration, paused: v.paused, error: v.error && v.error.message });
+  document.body.appendChild(pre);
+}, probe);
+</script>
+</body>
+</html>

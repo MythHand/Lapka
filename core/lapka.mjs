@@ -17,7 +17,7 @@ export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), ...opts });
 }
 
-export function createLapka({ session = createSession(), profiles = [], extractors = [] } = {}) {
+export function createLapka({ session = createSession(), profiles = [], extractors = [], delivery = null } = {}) {
   const profileFor = url => {
     let host; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
     return profiles.find(p => p.match === host || (p.match instanceof RegExp && p.match.test(url))) || null;
@@ -87,6 +87,12 @@ export function createLapka({ session = createSession(), profiles = [], extracto
           : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
         for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
       }
+    }
+
+    /* every stream we now hold gets an address the player can ask for */
+    if (delivery) for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) for (const st of s.streams) {
+      st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+      st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
     }
 
     return { series, reports, opened, steps, dubs: allDubs(series).map(d => d.name) };

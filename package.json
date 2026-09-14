@@ -23,6 +23,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "hls.js": "^1.7.3",
     "linkedom": "^0.18.13"
   }
 }

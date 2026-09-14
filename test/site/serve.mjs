@@ -64,7 +64,16 @@ export function startSite({ port = 0, media } = {}) {
       const file = path.join(media, m[1]);
       let st;
       try { st = await fsp.stat(file); } catch { return notFound(res); }
-      res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'content-length': st.size });
+      const type = TYPES[path.extname(file)] || 'application/octet-stream';
+      const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+      if (range && (range[1] || range[2])) {
+        const start = range[1] ? Number(range[1]) : Math.max(0, st.size - Number(range[2]));
+        const end = range[1] && range[2] ? Math.min(Number(range[2]), st.size - 1) : st.size - 1;
+        if (start > end || start >= st.size) { res.writeHead(416, { 'content-range': `bytes */${st.size}` }); return res.end(); }
+        res.writeHead(206, { 'content-type': type, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${st.size}`, 'accept-ranges': 'bytes' });
+        return fs.createReadStream(file, { start, end }).pipe(res);
+      }
+      res.writeHead(200, { 'content-type': type, 'content-length': st.size, 'accept-ranges': 'bytes' });
       return fs.createReadStream(file).pipe(res);
     }
     notFound(res);
