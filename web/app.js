@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════════════════
-   PIP Player, the player itself
-   Two modes: plain file:// and the local ffmpeg server.
+   Lapka, the player itself.
+   One link in, a series with its episodes and dubs out, played
+   through the local server.
    ═══════════════════════════════════════════════════════════ */
 (() => {
 'use strict';
@@ -88,6 +89,7 @@ function applyI18n(root = document) {
   for (const el of root.querySelectorAll('[data-i18n-html]')) el.innerHTML = t(el.dataset.i18nHtml);
   for (const el of root.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle);
   for (const el of root.querySelectorAll('[data-i18n-aria]')) el.setAttribute('aria-label', t(el.dataset.i18nAria));
+  for (const el of root.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder);
 }
 
 function setLang(code) {
@@ -119,7 +121,7 @@ function repaintUi() {
 
 /* ── dom ─────────────────────────────────────────────────── */
 const workspace = $('#workspace'), stageHost = $('#stageHost'), stage = $('#stage');
-const video = $('#video'), prober = $('#prober');
+const video = $('#video');
 const titleName = $('#titleName'), titlePath = $('#titlePath');
 const pulseEl = $('#pulse'), pulseIcon = $('#pulseIcon'), flashEl = $('#flash');
 const notice = $('#notice'), noticeText = $('#noticeText');
@@ -143,13 +145,12 @@ const btnGear = $('#btnGear'), gearMenu = $('#gearMenu');
 const queueList = $('#queueList'), queueFiles = $('#queueFiles'), queueTotal = $('#queueTotal');
 const btnViewRows = $('#btnViewRows'), btnViewGrid = $('#btnViewGrid');
 const ghostName = $('#ghostName'), pipGhost = $('#pipGhost');
-const filePick = $('#filePick'), dirPick = $('#dirPick'), favicon = $('#favicon');
+const favicon = $('#favicon');
 const dropveil = $('#dropveil'), toastEl = $('#toast');
-const browserModal = $('#browserModal'), helpModal = $('#helpModal');
-const brPlaces = $('#brPlaces'), brList = $('#brList'), brPath = $('#brPath');
-const btnDisk = $('#btnDisk'), btnEmptyDisk = $('#btnEmptyDisk');
 const deckPack = $('#deckPack'), btnPack = $('#btnPack'), queueAdd = $('.queue__add');
 const queueEl = $('#queue'), btnLocate = $('#btnLocate');
+const linkForm = $('#linkForm'), linkInput = $('#linkInput');
+const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
@@ -358,96 +359,82 @@ function saveStr(key, val) {
   try { localStorage.setItem(key, val); } catch (_) { /* private mode */ }
 }
 
-const SESSION_V = 1;
-const POS_KEEP = 200;      // how many files we remember positions for
+const SESSION_V = 2;
 const POS_MIN = 30;        // before the thirtieth second there is nowhere to return to
-const POS_TAIL = 60;       // and not to the very end either: the file is finished
+const POS_TAIL = 60;       // and not to the very end either: the episode is finished
 
-let posMap = readStore('pip.pos', {});
-
-function markPos(path, sec) {
-  if (!path || !isFinite(sec)) return;
+/* Where an episode was left is kept on the server, keyed by the
+   series, the episode and the dub: nothing here is a path. The copy
+   in state.positions is what the rows are painted from. */
+const posKey = it => {
+  const dub = it.dub ? it.dub.key : state.dubKey;
+  return state.series && dub ? `${state.series.id}/${it.number}/${dub}` : null;
+};
+const posTimers = {};
+function markPos(it, sec) {
+  const k = posKey(it);
+  if (!k || !isFinite(sec)) return;
   const d = duration();
-  if (sec < POS_MIN || (d && sec > d - POS_TAIL)) { delete posMap[path]; }
-  else posMap[path] = Math.round(sec);
-  const keys = Object.keys(posMap);
-  if (keys.length > POS_KEEP) for (const k of keys.slice(0, keys.length - POS_KEEP)) delete posMap[k];
-  writeStore('pip.pos', posMap);
+  const gone = sec < POS_MIN || (d && sec > d - POS_TAIL);
+  if (gone) delete state.positions[k]; else state.positions[k] = Math.round(sec);
+  clearTimeout(posTimers[k]);
+  const [series, episode, dub] = k.split('/');
+  posTimers[k] = setTimeout(() => post(`/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec)}`).catch(() => {}), 800);
   for (const li of queueList.children) {
-    const it = byId(li.dataset.id);
-    if (it && it.path === path) paintPos(li, it);
+    const x = byId(li.dataset.id);
+    if (x === it) paintPos(li, x);
   }
 }
 
-/* Where watching stopped, drawn as a bar on the file's frame, in the
+/* Where watching stopped, drawn as a bar on the episode's frame, in the
    rows and in the tiles alike. Only what the player would return to is
    drawn: the first half minute and the last minute are not kept, so a
    finished episode has no bar. */
 function paintPos(li, it) {
-  const at = it.path ? posMap[it.path] : null, d = it.dur;
+  const k = posKey(it);
+  const at = k ? state.positions[k] : null, d = it.dur;
   const f = at && d ? Math.min(1, at / d) : 0;
   li.classList.toggle('has-pos', f > 0);
   li.style.setProperty('--pos', f.toFixed(4));
 }
 
-/* A row's frame takes the proportions of the file: known from the probe,
-   or from the frame itself once it has loaded. Until then the box is
-   16:9, the common case. */
+/* A row's frame takes the proportions of the picture once it has
+   loaded. Until then the box is 16:9, the common case. */
 function paintShape(li, it) {
   const box = li.querySelector('.item__thumb');
   if (box && it.aspect) box.style.aspectRatio = String(it.aspect);
 }
 
 let saveT = null;
-let sessionReady = false;   // nothing is written until boot ends: the list is still empty
+let sessionReady = false;   // nothing is written until boot ends
 function saveSession() {
   if (!sessionReady) return;
   clearTimeout(saveT);
   saveT = setTimeout(() => {
-    const items = state.list.filter(i => i.kind === 'server')
-      .map(i => ({ name: i.name, path: i.path, size: i.size, dur: i.dur }));
-    if (!items.length) { try { localStorage.removeItem('pip.session'); } catch (_) {} return; }
-    writeStore('pip.session', {
-      v: SESSION_V, items, loop: state.loop,
-      audioPref: state.audioPref, subPref: state.subPref,
-      current: cur() ? cur().path : null,
-    });
+    if (!state.series) { try { localStorage.removeItem('lapka.session'); } catch (_) {} return; }
+    writeStore('lapka.session', { v: SESSION_V, url: state.series.sourceUrl, current: cur() ? cur().number : null, loop: state.loop });
   }, 500);
 }
 
-/* The queue comes back, playback does not. The browser would block
-   autoplay without a click anyway, and the server would have to start
-   an ffmpeg pass just because a tab was opened. */
-function restoreSession() {
-  const ses = readStore('pip.session', null);
-  if (!ses || ses.v !== SESSION_V || !Array.isArray(ses.items) || !ses.items.length) return 0;
-  for (const e of ses.items) {
-    if (!e || !e.path) continue;
-    state.list.push({
-      id: ++state.seq, kind: 'server', name: e.name, path: e.path,
-      size: e.size || 0, dur: e.dur || null, err: false, tracks: null, audioIndex: null,
-      subs: null, subIndex: null, probed: false,
-      audioPicked: false, subPicked: false,
-    });
-  }
+/* The series comes back, playback does not: the browser would block
+   autoplay without a click anyway. */
+async function restoreSession() {
+  const ses = readStore('lapka.session', null);
+  if (!ses || ses.v !== SESSION_V || !ses.url) return false;
   if (ses.loop === 'queue' || ses.loop === 'one') state.loop = ses.loop;
-  if (ses.audioPref) state.audioPref = ses.audioPref;
-  if (ses.subPref) state.subPref = ses.subPref;
-  /* The file we stopped on is marked current but not opened: otherwise
-     opening a tab would start an ffmpeg pass. The source is supplied by
-     the first press of play, see togglePlay. */
-  const back = ses.current && state.list.find(i => i.path === ses.current);
-  if (back) { state.current = back; paintTitle(); }
-  return state.list.length;
+  return openLink(ses.url, { autoplay: false, at: ses.current, quiet: true });
 }
 
 /* ── state ─────────────────────────────────────────────────── */
 const state = {
   list: [], current: null,
+  series: null,      // the catalog of the series open now
+  dubKey: null,      // the dub chosen for it, carried to every episode
+  positions: {},     // series/episode/dub → seconds, mirrored from the server
+  remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,
   autoplay: strFromStore('pip.autoplay', '1') !== '0',
-  audioPref: null,   // the track chosen by hand, carried to the next files
-  subPref: null,     // the same for subtitles; null means off
+  subPref: null,     // the subtitle track chosen by hand; null means off
   set: loadSettings(),   // the player settings, see SETTINGS
   cue: {             // subtitle styling, all within what ::cue can do
     size: strFromStore('pip.cue.size', 'm'),
@@ -456,10 +443,8 @@ const state = {
   },
   pipWin: null, errStreak: 0, seq: 0,
   vol: numFromStore('pip.vol', 1, 0, 1),   // volume survives a reload
-  server: null,            // the answer from /api/ping, or null
-  busy: false,             // a file is being prepared, the favicon shows it
+  busy: false,             // a page is being read, the favicon shows it
   seekPreview: null,       // the position shown while seeking
-  browserDir: null,
   view: strFromStore('pip.view', 'rows') === 'grid' ? 'grid' : 'rows',
   /* the browser one by default: it has no address bar on top */
   pipMode: strFromStore('pip.pipMode', 'native'),
@@ -467,9 +452,7 @@ const state = {
 
 /* A link to the source in the empty queue. An empty string hides it,
    which is better than a broken address. */
-const REPO = 'https://github.com/MythHand/PIP-Player';
-
-const MEDIA_EXT = /\.(mp4|m4v|webm|ogv|ogm|mov|mkv|avi|ts|m2ts|mts|mpg|mpeg|3gp|flv|wmv|divx|mp3|m4a|m4b|aac|flac|wav|opus|oga)$/i;
+const REPO = 'https://github.com/MythHand/Lapka';
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 /* Codes arrive from ffprobe as they are, two letters or three. */
@@ -509,12 +492,6 @@ function toast(msg) {
 }
 const idxOf = it => state.list.indexOf(it);
 const byId = id => state.list.find(x => String(x.id) === String(id));
-/* the second line under the title: where the file sits */
-function folderOf(it) {
-  const p = it.kind === 'server' ? it.path : (it.path || it.name);
-  const dir = p.slice(0, p.lastIndexOf('/'));
-  return dir || (it.kind === 'server' ? '' : t('queue.picked'));
-}
 const cur = () => state.current;
 const svg = d => `<svg viewBox="0 0 24 24">${d}</svg>`;
 
@@ -587,60 +564,41 @@ function seekTo(t) {
   paintSeek();
 }
 
-/* ── the server preparing a file ──────────────────────────────
-   One ffmpeg pass per file and track, the result goes into the cache.
-   While it runs, the progress is shown. */
+/* ── talking to the server ───────────────────────────────────── */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || String(r.status));
+  return d;
+}
+const post = path => api(path, { method: 'POST', headers: { 'x-lapka': '1' } });
 
 /* stop playback completely: not only pause but also dropping the
-   source, otherwise the previous track is heard behind the overlay */
+   source, otherwise the previous episode is heard behind the overlay */
+let hls = null;
 function stopPlayback() {
+  if (hls) { hls.destroy(); hls = null; }
   if (!video.getAttribute('src')) return;
   video.pause();
   video.removeAttribute('src');
   video.load();
 }
 
-/* There is deliberately no progress bar: encoding reports percentages,
-   but the faststart phase that follows rewrites the whole file and
-   reports nothing, so a bar would freeze at 100 % there. What is shown
-   is the steps themselves and the command being run. */
-const PREP_STEPS = ['prep.probe', 'prep.convert', 'prep.finalize'];
-
-function trackLabel(it) {
-  const tr = (it.tracks || []).find(x => x.index === it.audioIndex);
-  if (!tr) return '';
-  const name = langName(tr.lang), title = (tr.title || '').trim();
-  const head = name && title ? `${name} · ${title}`
-             : name || title || t('audio.trackN', { n: tr.order + 1 });
-  return [head, tr.codec.toUpperCase(), channelsLabel(tr.channels, tr.layout)].filter(Boolean).join(' · ');
-}
-
-function showProgress(it, info) {
+/* The overlay while the server reads a page and opens its players.
+   One step at a time, named; no percentages, a page answers when it
+   answers. */
+function showProgress(it, key) {
   closeMenus();
   prepName.textContent = it.name;
-  const lab = trackLabel(it);
-  prepTrack.textContent = lab ? t('prep.track', { name: lab }) : '';
-
-  const phase = info.phase || 'convert';
-  const order = ['probe', 'convert', 'finalize'];
-  const now = order.indexOf(phase);
-
+  prepTrack.textContent = state.series ? state.series.title : '';
   prepSteps.replaceChildren();
-  PREP_STEPS.forEach((key, i) => {
-    const done = i < now, active = i === now;
-    const li = document.createElement('li');
-    li.className = 'step' + (done ? ' step--done' : active ? ' step--active' : '');
-    const mark = done ? '✓' : active ? '' : '';
-    li.innerHTML = `<span class="step__mark">${mark}</span><span class="step__text"></span><span class="step__aux"></span>`;
-    li.querySelector('.step__text').textContent = t(key);
-    /* no percentages: faststart reports no progress and any number
-       would stick there. Only the elapsed time is shown. */
-    if (active && info.elapsed) li.querySelector('.step__aux').textContent = fmt(info.elapsed / 1000);
-    prepSteps.append(li);
-  });
-
-  prepCmd.textContent = info.cmd || '';
+  const li = document.createElement('li');
+  li.className = 'step step--active';
+  li.innerHTML = '<span class="step__mark"></span><span class="step__text"></span><span class="step__aux"></span>';
+  li.querySelector('.step__text').textContent = t(key);
+  prepSteps.append(li);
+  prepCmd.textContent = '';
   prep.classList.add('show');
   state.busy = true;
   paintFavicon();
@@ -651,316 +609,104 @@ function hideProgress() {
   paintFavicon();
 }
 
-function prepareQuery(it) {
-  const q = new URLSearchParams({ path: it.path });
-  if (it.audioIndex != null) q.set('a', String(it.audioIndex));
-  return q.toString();
+/* ═══════════════ opening a link ═══════════════
+   One address in. The server reads the page, finds the series and
+   its episodes, and the queue is those episodes. Each episode is
+   opened on the server only when it is about to play. */
+const nameFor = ep => ep.title ? `${ep.number} · ${ep.title}` : t('queue.episodeN', { n: ep.number });
+
+function itemFor(ep) {
+  return {
+    id: ++state.seq, number: ep.number, title: ep.title || '', name: nameFor(ep),
+    dur: null, err: false, aspect: null,
+    dubs: null,       // what the episode offers, once its page was opened
+    dub: null,        // the dub playing
+    source: null,     // the player it comes from
+    stream: null,     // the stream, with its address on the server
+    opening: null, loadedSrc: null, avoid: null,
+  };
 }
 
-async function ensureReady(it) {
-  for (;;) {
-    let r;
-    try { r = await (await fetch('/api/prepare?' + prepareQuery(it))).json(); }
-    catch (_) { hideProgress(); toast(t('toast.bridgeDown')); return null; }
-
-    if (r.duration) it.dur = r.duration;
-    if (r.state === 'ready' || r.state === 'direct') { hideProgress(); return r; }
-    if (r.state === 'error' || r.error) {
-      hideProgress();
-      it.err = true; render();
-      toast(t('toast.prepFail', { name: it.name }));
-      return null;
-    }
-    stopPlayback();          // the previous track must not play on behind the overlay
-    showProgress(it, r);
-    await sleep(600);
-    if (it !== cur()) { hideProgress(); return null; }
-  }
+/* what the server already knows about an episode, onto its row */
+function takeEpisode(it, ep) {
+  if (!ep || !ep.dubs || !ep.dubs.length) return;
+  it.dubs = ep.dubs.map(d => ({ key: d.key, name: d.name, sources: d.sources.length,
+    alive: d.sources.filter(x => x.health.ok !== false && x.streams.length).length }));
 }
 
-/* The next file is prepared while the current one plays. Its tracks are
-   probed first: without that the server would take the default track and
-   a whole pass would be wasted if the choice was carried over from the
-   previous file. */
-async function prefetchNext() {
-  const nx = state.list[idxOf(cur()) + 1];
-  if (!nx || nx.kind !== 'server') return;
-  await probeItem(nx);
-  resolveTracks(nx);
-  fetch('/api/prepare?' + prepareQuery(nx)).catch(() => {});
+async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
+  url = String(url || '').trim();
+  if (!/^https?:\/\//i.test(url)) { toast(t('toast.badLink')); return false; }
+  showProgress({ name: url }, 'prep.page');
+  let got;
+  try { got = await api('/api/look?url=' + encodeURIComponent(url)); }
+  catch (e) { hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
+  hideProgress();
+  if (!got.series.episodes.length) { toast(t('toast.noEpisodes')); return false; }
+
+  stopPlayback(); playToken++;
+  state.series = got.series;
+  state.current = null;
+  state.list = got.series.episodes.map(itemFor);
+  for (const it of state.list) takeEpisode(it, got.series.episodes.find(e => e.number === it.number));
+  state.dubKey = (state.remote.dubs || {})[got.series.id] || null;
+  linkInput.value = '';
+  render(); paintTitle();
+  if (!quiet) toast(t('toast.opened', { n: state.list.length }));
+
+  const wanted = at != null ? at : got.start ? got.start.episode : null;
+  const first = state.list.find(i => i.number === wanted) || state.list[0];
+  if (autoplay) playItem(first);
+  else { state.current = first; paintTitle(); paintActive(); }
+  return true;
+}
+
+/* ── which dub and which stream play ─────────────────────────
+   The server opens the episode's page if it has not, takes the dub
+   chosen for the series or the nearest thing to it, a live source,
+   its best stream. A stream that just failed is passed in so that its
+   source is marked dead and another one is picked. */
+async function resolveItem(it, { avoid = null } = {}) {
+  if (it.opening) return it.opening;
+  it.opening = (async () => {
+    const q = new URLSearchParams({ series: state.series.id, episode: String(it.number) });
+    if (state.dubKey) q.set('dub', state.dubKey);
+    if (avoid) q.set('avoid', avoid);
+    const r = await api('/api/resolve?' + q);
+    it.dubs = r.dubs; it.dub = r.dub; it.source = r.source; it.stream = r.stream;
+    if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode); }
+    return r;
+  })();
+  try { return await it.opening; } finally { it.opening = null; }
 }
 
 async function sourceFor(it) {
-  if (it.kind === 'local') return it.url;
-  /* the track is chosen BEFORE preparing: otherwise the server spends a
-     whole pass on the default one while the carried over track is what
-     is wanted */
-  await probeItem(it);
-  resolveTracks(it);
-  if (it.carried) {
-    it.carried = false;
-    const tr = (it.tracks || []).find(x => x.index === it.audioIndex);
-    if (tr) toast(t('toast.carried', { name: tr.title || langName(tr.lang) }));
+  const avoid = it.avoid; it.avoid = null;
+  const slow = setTimeout(() => showProgress(it, 'prep.players'), 400);
+  let r;
+  try { r = await resolveItem(it, { avoid }); }
+  catch (e) {
+    clearTimeout(slow); hideProgress();
+    it.err = true; render();
+    toast(t('toast.openFail', { name: it.name }));
+    return null;
   }
-  const r = await ensureReady(it);
-  if (!r) return null;
-  /* the probe answers for the default track; another track can turn a
-     file that played as it is into one that goes through ffmpeg */
-  if (it.direct !== (r.state === 'direct')) { it.direct = r.state === 'direct'; paintMeta(); }
-  return r.state === 'direct'
-    ? '/api/raw?path=' + encodeURIComponent(it.path)
-    : '/api/media?key=' + r.key;
-}
-
-/* ═══════════════ adding files ═══════════════ */
-function addLocalFiles(files) {
-  const ok = [];
-  for (const f of files) {
-    if (!f) continue;
-    if (/^(video|audio)\//.test(f.type) || MEDIA_EXT.test(f.name)) ok.push(f);
-  }
-  if (!ok.length) { toast(t('toast.noMedia')); return; }
-  ok.sort((a, b) => collator.compare(a.webkitRelativePath || a.name, b.webkitRelativePath || b.name));
-
-  const wasEmpty = !state.list.length;
-  for (const f of ok) {
-    state.list.push({
-      id: ++state.seq, kind: 'local', file: f, name: f.name,
-      path: f.webkitRelativePath || f.name, url: URL.createObjectURL(f),
-      size: f.size, dur: null, err: false, tracks: null, audioIndex: null,
-    });
-  }
-  const added = state.list.slice(-ok.length);
-  render(); probeLocal();
-  toast(t('toast.added', { n: ok.length }));
-  if (wasEmpty) playItem(state.list[0]);
-  resolveOnDisk(added);            // in server mode, hand them over at once
-}
-
-function addServerFiles(entries) {
-  if (!entries.length) { toast(t('toast.emptyFolder')); return; }
-  const wasEmpty = !state.list.length;
-  for (const e of entries) {
-    state.list.push({
-      id: ++state.seq, kind: 'server', name: e.name, path: e.path,
-      size: e.size || 0, dur: null, err: false, tracks: null, audioIndex: null,
-      subs: null, subIndex: null, probed: false,
-      audioPicked: false, subPicked: false,
-    });
-  }
-  render(); probeServer();
-  toast(t('toast.added', { n: entries.length }));
-  if (wasEmpty) playItem(state.list[0]);
-}
-
-async function walkEntry(entry, out) {
-  if (!entry) return;
-  if (entry.isFile) await new Promise(r => entry.file(f => { out.push(f); r(); }, r));
-  else if (entry.isDirectory) {
-    const rd = entry.createReader();
-    for (;;) {
-      const batch = await new Promise(r => rd.readEntries(r, () => r([])));
-      if (!batch.length) break;
-      for (const e of batch) await walkEntry(e, out);
-    }
-  }
-}
-
-/* ── durations of local files ──────────────────────────────── */
-let probingLocal = false;
-function probeLocal() {
-  if (probingLocal) return;
-  const it = state.list.find(i => i.kind === 'local' && i.dur === null && !i.err);
-  if (!it) return;
-  probingLocal = true;
-  const fin = () => { probingLocal = false; paintMeta(); probeLocal(); };
-  prober.addEventListener('loadedmetadata', () => {
-    it.dur = isFinite(prober.duration) ? prober.duration : 0;
-    if (prober.videoWidth && prober.videoHeight) it.aspect = prober.videoWidth / prober.videoHeight;
-    fin();
-  }, { once: true });
-  prober.addEventListener('error', () => { it.dur = 0; fin(); }, { once: true });
-  prober.src = it.url;
-}
-
-/* ── the chosen track carries to the next files ───────────────
-   First we try a full match of the track set: episodes from one release
-   have the same one, and then taking the track at the same index is
-   enough. After that, language plus studio name, then language alone. */
-const trackSig = ts => ts.map(x => `${x.lang}|${(x.title || '').trim()}|${x.codec}|${x.channels}`).join('/');
-const same = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
-
-function rememberTrack(it, index) {
-  const tr = (it.tracks || []).find(x => x.index === index);
-  if (!tr) return;
-  state.audioPref = { sig: trackSig(it.tracks), order: tr.order, lang: tr.lang, title: tr.title };
-}
-
-function preferredTrack(it) {
-  const p = state.audioPref;
-  if (!p || !it.tracks || !it.tracks.length) return null;
-  if (p.sig === trackSig(it.tracks) && it.tracks[p.order]) return it.tracks[p.order].index;
-  const byBoth = it.tracks.find(x => same(x.lang, p.lang) && same(x.title, p.title));
-  if (byBoth) return byBoth.index;
-  const byLang = it.tracks.find(x => same(x.lang, p.lang));
-  return byLang ? byLang.index : null;
-}
-
-/* ── ffprobe for server side files ────────────────────────────
-   Reading the file, nothing else. Choosing the tracks is deliberately
-   not part of this, see resolveTracks. */
-async function probeItem(it) {
-  if (it.probed) return;
-  if (it.probing) return it.probing;        // a probe is already running, wait for it
-  it.probing = (async () => {
-  try {
-    const r = await fetch('/api/probe?path=' + encodeURIComponent(it.path));
-    if (r.ok) {
-      const info = await r.json();
-      it.dur = info.duration;
-      it.tracks = info.audio;
-      it.defaultAudio = info.defaultAudio;
-      it.videoCodec = info.video ? info.video.codec : null;
-      if (info.video && info.video.width && info.video.height) it.aspect = info.video.width / info.video.height;
-      it.direct = !!(info.plan && info.plan.direct);   // served as it is, ffmpeg not involved
-      it.subs = info.subs || [];
-    }
-  } catch (_) { /* the server may be gone, which is fine */ }
-  it.probed = true;
-  })();
-  await it.probing;
-  it.probing = null;
-}
-
-/* ── which track is playing ───────────────────────────────────
-   Probing a file and choosing a track are different things, and they
-   used to be fused inside probeItem. The whole queue is probed right
-   after files are added, which meant every file got a choice before the
-   user had made one; after that the probed flag was set and carrying
-   the choice to later episodes never worked again, because the player
-   held on to what it had decided at the moment of adding.
-
-   So the choice is recomputed before every playback and pinned to a
-   file only once it has been set by hand. */
-function resolveTracks(it) {
-  if (!it || it.kind !== 'server' || !it.probed) return;
-
-  if (!it.audioPicked) {
-    const want = preferredTrack(it);
-    const pick = want != null ? want : it.defaultAudio;
-    it.carried = want != null && want !== it.defaultAudio && want !== it.audioIndex;
-    it.audioIndex = pick;
-  }
-  if (!it.subPicked) it.subIndex = preferredSub(it);
-}
-
-let probingServer = false;
-async function probeServer() {
-  if (probingServer) return;
-  const it = state.list.find(i => i.kind === 'server' && !i.probed);
-  if (!it) return;
-  probingServer = true;
-  await probeItem(it);
-  probingServer = false;
-  paintMeta();
-  if (it === cur()) { resolveTracks(it); syncAudioButton(); syncSubsButton(); }
-  probeServer();
-}
-
-/* ═══════════════ handing local files to the server ═══════════════
-   The browser does not give the absolute path of a dropped file. We ask
-   the server to find it by name and size, and pick the rest of the batch
-   out of the same directory, so one or two requests cover a whole
-   folder. */
-/* Directories where files have already been found. They go to the
-   server as a hint: the next batch from the same folder costs one stat
-   instead of a sweep through the whole home folder. */
-const DIR_KEEP = 12;
-let knownDirs = readStore('pip.dirs', []);
-function rememberDir(dir) {
-  if (!dir) return;
-  knownDirs = [dir, ...knownDirs.filter(d => d !== dir)].slice(0, DIR_KEEP);
-  writeStore('pip.dirs', knownDirs);
-}
-
-async function resolveOnDisk(items, { loud } = {}) {
-  if (!state.server || !state.server.ffmpeg) return 0;
-  const pending = items.filter(i => i.kind === 'local');
-  if (!pending.length) return 0;
-
-  if (loud) toast(t('toast.seeking'));
-  let found = 0;
-  /* whether the current file already plays from the browser's copy; asked
-     before the upgrade below, which forgets what was loaded */
-  const c0 = cur(), started = !!(c0 && pending.includes(c0) && c0.loadedSrc);
-
-  try {
-    const probe = pending[0];
-    const q = new URLSearchParams({ name: probe.name, size: String(probe.size || '') });
-    for (const d of knownDirs) q.append('dir', d);
-    const r = await fetch('/api/find?' + q);
-    const hit = r.ok ? (await r.json()).matches[0] : null;
-    if (!hit) { if (loud) toast(t('toast.notFound')); return 0; }
-
-    upgradeItem(probe, hit);
-    rememberDir(hit.dir);
-    found++;
-
-    if (pending.length > 1) {
-      const ls = await fetch('/api/ls?path=' + encodeURIComponent(hit.dir));
-      const dir = ls.ok ? await ls.json() : null;
-      if (dir && dir.files) {
-        const byName = new Map(dir.files.map(f => [f.name, f]));
-        for (const it of pending.slice(1)) {
-          const m = byName.get(it.name);
-          if (m) { upgradeItem(it, m); found++; }
-        }
-      }
-    }
-  } catch (_) { if (loud) toast(t('toast.noAnswer')); return found; }
-
-  if (found) {
-    render();
-    const c = cur();
-    /* A file that already plays goes on from the same moment, now through
-       the server. One that is still starting is started over: the search
-       answers within the 0.22 s of the fade, the start it overtook gave up
-       without bringing the picture back, and the video stayed dark and
-       paused. */
-    if (c && pending.includes(c) && c.kind === 'server') { if (c === c0 && started) switchTrack(c); else playItem(c); }
-    probeServer();
-    hideNotice();
-    toast(found === 1 ? t('toast.handedOne') : t('toast.handedN', { n: found }));
-  } else if (loud) toast(t('toast.noMatch'));
-  return found;
-}
-
-function upgradeItem(it, hit) {
-  /* The browser's copy of the file playing now is still being read by the
-     video; it is let go once the server's version is in (loadSource). */
-  if (it.url) {
-    if (it === cur() && it.loadedSrc === it.url) it.staleUrl = it.url;
-    else URL.revokeObjectURL(it.url);
-    it.url = null;
-  }
-  const localKey = it.path;          // a dropped file is kept by its name
-  it.kind = 'server';
-  it.path = hit.path;
-  /* the place kept while the browser played it moves to the path on disk */
-  if (localKey && posMap[localKey] != null) {
-    if (posMap[it.path] == null) posMap[it.path] = posMap[localKey];
-    delete posMap[localKey];
-    writeStore('pip.pos', posMap);
-  }
-  it.size = hit.size || it.size;
-  it.probed = false;
-  it.audioIndex = null;
-  it.audioPicked = false;
-  it.subIndex = null;
-  it.subPicked = false;
+  clearTimeout(slow); hideProgress();
+  if (it !== cur()) return null;
+  if (!r.stream) { it.err = true; render(); toast(t('toast.noStream', { name: it.name })); return null; }
   it.err = false;
-  it.file = null;
-  it.loadedSrc = null;
+  /* the dub the server settled on is the one carried on */
+  if (state.dubKey && r.dub && r.dub.key !== state.dubKey) toast(t('toast.carried', { name: r.dub.name }));
+  if (r.dub) state.dubKey = r.dub.key;
+  paintMeta();
+  return r.stream;
+}
+
+/* The next episode is opened while the current one plays, so that
+   its streams are ready when it is its turn. */
+function prefetchNext() {
+  const nx = state.list[idxOf(cur()) + 1];
+  if (nx && !nx.stream && !nx.err && !nx.opening) resolveItem(nx).then(() => paintMeta()).catch(() => {});
 }
 
 /* ── changing the picture ─────────────────────────────────────
@@ -1013,10 +759,10 @@ async function playItem(it, autoplay = true, glide = true) {
   await faded;                       // let the fade finish
   if (token !== playToken || it !== cur()) return;
 
-  /* returning to the last position: only if the file was left in the
-     middle, and only once per start, after that it is ordinary
+  /* returning to the last position: only if the episode was left in
+     the middle, and only once per start, after that it is ordinary
      watching */
-  const back = posMap[it.path];
+  const back = state.positions[posKey(it)];
   loadSource(it, src, token, () => {
     const d = duration();
     if (back == null || back < POS_MIN || (d && back > d - POS_TAIL)) return;
@@ -1024,7 +770,7 @@ async function playItem(it, autoplay = true, glide = true) {
     toast(t('toast.resume', { time: fmt(back) }));
   }, autoplay);
   syncAudioButton(); syncSubsButton(); applySubs(it);
-  armAudioCheck(); prefetchNext();
+  prefetchNext();
 }
 
 /* Puts a source into the video: the one place where a start ends, for a
@@ -1038,10 +784,8 @@ async function playItem(it, autoplay = true, glide = true) {
    comes last. A refused play() is not reported: it also fails on every
    interrupted start, and the play button shows the state anyway. */
 function loadSource(it, src, token, onMeta, play) {
-  it.loadedSrc = src;
-  video.src = src;
-  video.load();
-  if (it.staleUrl) { URL.revokeObjectURL(it.staleUrl); it.staleUrl = null; }
+  it.loadedSrc = src.play;
+  attachSource(src);
   const reveal = fadeIn();
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
@@ -1049,7 +793,23 @@ function loadSource(it, src, token, onMeta, play) {
   if (play) video.play().catch(() => {});
 }
 
-/* changing the track: a different prepared file, the same position */
+/* An HLS stream goes through hls.js, anything else straight into the
+   element. A fatal error inside hls.js is reported the way the
+   element reports its own, so one handler deals with both. */
+function attachSource(stream) {
+  if (hls) { hls.destroy(); hls = null; }
+  if (stream.kind === 'hls' && window.Hls && Hls.isSupported()) {
+    hls = new Hls({ enableWorker: true });
+    hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) video.dispatchEvent(new Event('error')); });
+    hls.loadSource(stream.play);
+    hls.attachMedia(video);
+    return;
+  }
+  video.src = stream.play;
+  video.load();
+}
+
+/* changing the dub: another stream, the same position */
 async function switchTrack(it) {
   /* a file still starting counts as playing: the start meant to play it */
   const at = video.currentTime, playing = !video.paused || !it.loadedSrc;
@@ -1058,7 +818,7 @@ async function switchTrack(it) {
   if (token !== playToken || it !== cur() || !src) return;
   loadSource(it, src, token, () => { video.currentTime = at; }, playing);
   syncAudioButton(); syncSubsButton(); applySubs(it);
-  prefetchNext();          // the next file is prepared with the new choice
+  prefetchNext();          // the next episode is opened with the new choice
 }
 
 function next(auto = false) {
@@ -1261,46 +1021,19 @@ function paintVolume() {
   setIcon(volIcon, v === 0 ? PH.volX : v < .5 ? PH.volLow : PH.volHigh);
 }
 
-/* ═══════════════ audio tracks ═══════════════ */
+/* ═══════════════ dubs ═══════════════
+   The audio menu lists the dubs the episode offers. Choosing one is
+   remembered for the series and carried to every next episode; where
+   an episode lacks it, the server takes the nearest thing. */
 function audioOptions() {
   const it = cur();
-  if (!it) return [];
-  if (it.kind === 'server' && it.tracks && it.tracks.length) {
-    return it.tracks.map(tr => {
-      const name = langName(tr.lang);
-      const title = (tr.title || '').trim();
-      /* Studio names are exactly what tells several dubs in one language
-         apart, so they go on the first line next to it. */
-      const main = name && title ? `${name} · ${title}`
-                 : name || title || t('audio.trackN', { n: tr.order + 1 });
-      const sub = [
-        `#${tr.order + 1}`,
-        tr.codec.toUpperCase(),
-        channelsLabel(tr.channels, tr.layout),
-        tr.bitrate ? t('units.kbps', { n: Math.round(tr.bitrate / 1000) }) : '',
-        tr.sampleRate ? t('units.khz', { n: +(tr.sampleRate / 1000).toFixed(1) }) : '',
-        tr.default ? t('audio.default') : '',
-        tr.forced ? t('audio.forced') : '',
-        tr.comment ? t('audio.comment') : '',
-      ].filter(Boolean).join(' · ');
-      return { id: tr.index, main, sub, short: title || name || `#${tr.order + 1}`,
-               sel: tr.index === it.audioIndex };
-    });
-  }
-  const nat = video.audioTracks;
-  if (nat && nat.length) {
-    const out = [];
-    for (let i = 0; i < nat.length; i++) {
-      out.push({
-        id: i, native: true,
-        main: langName(nat[i].language) || nat[i].label || t('audio.trackN', { n: i + 1 }),
-        sub: nat[i].label || '',
-        sel: nat[i].enabled,
-      });
-    }
-    return out;
-  }
-  return [];
+  if (!it || !it.dubs || !it.dubs.length) return [];
+  const sel = it.dub ? it.dub.key : state.dubKey;
+  return it.dubs.map(d => ({
+    id: d.key, main: d.name, short: d.name,
+    sub: d.alive ? t('audio.sources', { n: d.alive }) : d.sources ? t('audio.dead') : '',
+    sel: d.key === sel,
+  }));
 }
 
 function syncAudioButton() {
@@ -1324,7 +1057,7 @@ function buildAudioMenu() {
   if (!opts.length) {
     const e = document.createElement('div');
     e.className = 'menu__empty';
-    e.textContent = t(state.server ? 'audio.one' : 'audio.serverOnly');
+    e.textContent = t('audio.none');
     audioMenu.append(e);
     return;
   }
@@ -1344,18 +1077,9 @@ function buildAudioMenu() {
 function pickAudio(opt) {
   const it = cur();
   if (!it) return;
-  if (opt.native) {
-    const nat = video.audioTracks;
-    for (let i = 0; i < nat.length; i++) nat[i].enabled = i === opt.id;
-    syncAudioButton();
-    toast(t('audio.current', { name: opt.main }));
-    return;
-  }
-  if (it.audioIndex === opt.id) return;
-  it.audioIndex = opt.id;
-  it.audioPicked = true;          // for this file the choice was made by hand
-  it.carried = false;
-  rememberTrack(it, opt.id);
+  if (it.dub && it.dub.key === opt.id) return;
+  state.dubKey = opt.id;
+  if (state.series) post(`/api/state/dub?series=${state.series.id}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
   hideNotice();
   toast(t('audio.current', { name: opt.main }));
   switchTrack(it);
@@ -1369,7 +1093,7 @@ function pickAudio(opt) {
    hold pictures, not characters, and cannot be converted. */
 function subOptions() {
   const it = cur();
-  if (!it || it.kind !== 'server' || !it.subs) return [];
+  if (!it || !it.subs) return [];
   return it.subs.map(tr => {
     const name = langName(tr.lang);
     const title = (tr.title || '').trim();
@@ -1409,7 +1133,7 @@ function buildSubsMenu() {
     menuTitle(subsMenu, t('subs.title'));
     const e = document.createElement('div');
     e.className = 'menu__empty';
-    e.textContent = t(state.server ? 'subs.none' : 'subs.serverOnly');
+    e.textContent = t('subs.none');
     subsMenu.append(e);
     return;
   }
@@ -1477,9 +1201,10 @@ function preferredSub(it) {
 /* the track is attached to video as a separate track element */
 async function applySubs(it) {
   video.querySelectorAll('track').forEach(x => x.remove());
-  if (!it || it.subIndex == null || it.kind !== 'server') return;
+  if (!it || it.subIndex == null || !it.subs) return;
 
-  const url = `/api/subs?path=${encodeURIComponent(it.path)}&s=${it.subIndex}`;
+  const url = (it.subs.find(x => x.index === it.subIndex) || {}).url;
+  if (!url) return;
   try {
     /* fetched in advance so an error can be caught and shown, not swallowed */
     const r = await fetch(url);
@@ -1631,9 +1356,7 @@ const KEYS_UI = [
    right now is left alone when clearing: the browser holds it open and
    the next seek would go nowhere. */
 function playingKey() {
-  const src = cur() && cur().loadedSrc;
-  const m = src && /\/api\/media\?key=([a-f0-9]+)/.exec(src);
-  return m ? m[1] : '';
+  return cur() && cur().stream ? cur().stream.id : '';
 }
 
 const GB = 1024 ** 3;
@@ -1694,7 +1417,7 @@ function cacheRow(col) {
     const want = limitGb;
     sent = want;
     try {
-      const r = await fetch('/api/cache/limit?gb=' + want, { method: 'POST', headers: { 'x-pip': '1' } });
+      const r = await fetch('/api/cache/limit?gb=' + want, { method: 'POST', headers: { 'x-lapka': '1' } });
       const answer = await r.json();
       if (sent === want) take(answer);     // a later change wins over an earlier answer
     } catch (_) { toast(t('set.cacheFail')); }
@@ -1727,7 +1450,7 @@ function cacheRow(col) {
     clear.disabled = true;
     try {
       const r = await fetch('/api/cache?keep=' + playingKey(),
-        { method: 'POST', headers: { 'x-pip': '1' } });
+        { method: 'POST', headers: { 'x-lapka': '1' } });
       const answer = await r.json();
       take(answer);
       toast(t('toast.cacheCleared', { size: fmtSize(answer.freed.bytes) }));
@@ -1793,7 +1516,7 @@ function buildGearMenu() {
       buildGearMenu();
     });
   }
-  if (state.server && state.server.ffmpeg) cacheRow(opts);
+  cacheRow(opts);
 
   gearMenu.append(keys, opts, langs);
 }
@@ -1837,35 +1560,10 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#deckPack')) closePack();
 });
 
-/* ── diagnosing "there is no sound" ────────────────────────── */
-let audioCheckT;
-function armAudioCheck() {
-  clearTimeout(audioCheckT);
-  audioCheckT = setTimeout(() => {
-    const it = cur();
-    if (!it || video.paused) return;
-    const decoded = video.webkitAudioDecodedByteCount;
-    if (decoded === undefined || decoded > 0) return;
-    if (it.kind === 'server') return;   // the server has already re-encoded the audio
-    showNotice(t(
-      state.server && state.server.ffmpeg && it.kind === 'local' ? 'notice.direct'
-      : state.server ? 'hint.noFfmpeg'   // without ffprobe there is no track list to pick from
-      : 'notice.codec'));
-  }, 3500);
-}
-function showNotice(text) {
-  noticeText.textContent = text;
-  const canBridge = state.server && state.server.ffmpeg && cur() && cur().kind === 'local';
-  $('#noticeAction').textContent = t(canBridge ? 'notice.bridge' : 'notice.fix');
-  notice.classList.add('show');
-}
-function hideNotice() { notice.classList.remove('show'); clearTimeout(audioCheckT); }
+/* ── the notice over the picture ───────────────────────────── */
+function hideNotice() { notice.classList.remove('show'); }
 $('#noticeClose').onclick = hideNotice;
-$('#noticeAction').onclick = () => {
-  const it = cur();
-  if (state.server && state.server.ffmpeg && it && it.kind === 'local') resolveOnDisk([it], { loud: true });
-  else helpModal.classList.add('open');
-};
+$('#noticeAction').onclick = hideNotice;
 
 /* ═══════════════ queue ═══════════════ */
 function render() {
@@ -2114,128 +1812,34 @@ function putThumb(li, src) {
   img.src = src;
 }
 
-/* ── thumbnails ───────────────────────────────────────────────
-   Frames are taken only for rows and tiles that are actually visible: a
-   season can hold close to a hundred files, and there is no point
-   running ffmpeg on all of them at once. */
-let tileWatcher = null;
-
+/* ── frames ───────────────────────────────────────────────────
+   A stream has no file to take a frame from, so the series cover
+   stands in for every row and tile until the episode has played. */
 function watchThumbs() {
-  if (tileWatcher) tileWatcher.disconnect();
-  tileWatcher = null;
-
-  /* The first screenful is requested straight away by hand: the observer
-     reports visibility only from the next frame on, and tiles already in
-     front of the eyes should fill without that pause. */
-  const box = queueList.getBoundingClientRect();
-  const rest = [];
-  for (const li of queueList.children) {
-    const r = li.getBoundingClientRect();
-    if (r.bottom > box.top - 250 && r.top < box.bottom + 250) askThumb(li);
-    else rest.push(li);
-  }
-  if (!rest.length) return;
-
-  if (!('IntersectionObserver' in window)) {
-    for (const li of rest) askThumb(li);
-    return;
-  }
-  tileWatcher = new IntersectionObserver(entries => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      tileWatcher.unobserve(e.target);
-      askThumb(e.target);
-    }
-  }, { root: queueList, rootMargin: '250px' });
-  for (const li of rest) tileWatcher.observe(li);
+  for (const li of queueList.children) askThumb(li);
 }
-
 function askThumb(li) {
   const it = byId(li.dataset.id);
-  if (!it || it.thumb || it.noThumb) return;
-  if (it.kind === 'server') {
-    it.thumb = '/api/thumb?path=' + encodeURIComponent(it.path);
-    putThumb(li, it.thumb);
-    return;
-  }
-  grabFrame(it).then(url => {
-    if (!url) { it.noThumb = true; return; }
-    it.thumb = url;
-    if (li.isConnected) putThumb(li, url);
-  });
-}
-
-/* A dropped file has no path on disk and cannot be handed to the
-   server, so the frame is grabbed here through a canvas. Strictly one
-   at a time: parallel seeks in one video element cancel each other, and
-   holding ten of them means ten decoders. */
-let thumbChain = Promise.resolve();
-function grabFrame(it) {
-  thumbChain = thumbChain.then(() => oneFrame(it)).catch(() => null);
-  return thumbChain;
-}
-
-function oneFrame(it) {
-  return new Promise(resolve => {
-    const v = document.createElement('video');
-    v.muted = true; v.preload = 'metadata'; v.playsInline = true;
-    let done = false;
-    const finish = url => {
-      if (done) return;
-      done = true;
-      clearTimeout(guard);
-      v.removeAttribute('src'); v.load();
-      resolve(url);
-    };
-    const guard = setTimeout(() => finish(null), 7000);
-
-    v.addEventListener('loadeddata', () => {
-      const d = isFinite(v.duration) ? v.duration : 0;
-      /* 12 %: past the opening titles, not yet the middle of the episode */
-      v.currentTime = d ? Math.min(d - 0.1, d * 0.12) : 0;
-    }, { once: true });
-
-    v.addEventListener('seeked', () => {
-      if (!v.videoWidth) return finish(null);      // an audio file
-      try {
-        const w = 320, h = Math.max(1, Math.round(w * v.videoHeight / v.videoWidth));
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(v, 0, 0, w, h);
-        finish(c.toDataURL('image/jpeg', 0.72));
-      } catch (_) { finish(null); }
-    }, { once: true });
-
-    v.addEventListener('error', () => finish(null), { once: true });
-    v.src = it.url;
-  });
+  if (!it || it.thumb || !state.series || !state.series.cover) return;
+  it.thumb = state.series.cover;
+  putThumb(li, it.thumb);
 }
 
 function paintMeta() {
   queueTotal.textContent = fmtLong(state.list.reduce((a, b) => a + (b.dur || 0), 0));
   for (const li of queueList.children) {
-    const it = state.list.find(x => String(x.id) === li.dataset.id);
-    if (it) { paintPos(li, it); paintShape(li, it); }   // both need what the probe brings
-    const box = it && li.querySelector('.item__meta');
+    const it = byId(li.dataset.id);
+    if (!it) continue;
+    paintPos(li, it); paintShape(li, it);
+    const box = li.querySelector('.item__meta');
     if (!box) continue;
-    /* the first two columns have a fixed width so the rows line up */
-    const fixed =
-      `<span class="item__m item__m--dur">${it.dur ? fmt(it.dur) : '—'}</span>` +
-      `<span class="item__m item__m--size">${it.size ? fmtSize(it.size) : '—'}</span>`;
-
+    const fixed = `<span class="item__m item__m--dur">${it.dur ? fmt(it.dur) : '—'}</span>`;
     const rest = [];
     if (it.err) rest.push(`<b>${t('queue.bad')}</b>`);
-    if (it.kind === 'server' && it.tracks) {
-      rest.push(it.tracks.length > 1
-        ? t('queue.tracks', { n: it.tracks.length })
-        : (it.tracks[0] ? it.tracks[0].codec.toUpperCase() : ''));
-    }
-    if (state.server && state.server.ffmpeg) {
-      rest.push(it.kind === 'server' && !it.direct
-        ? `<b class="route">${t('queue.viaBridge')}</b>`
-        : `<span class="route route--off">${t('queue.direct')}</span>`);
-    }
-    box.innerHTML = fixed + rest.filter(Boolean).map(b => `<span>${b}</span>`).join('');
+    if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
+    if (it.stream) rest.push(`<span class="route">${it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
+    if (it.source) rest.push(`<span class="route route--off">${it.source.player}</span>`);
+    box.innerHTML = fixed + rest.map(b => `<span>${b}</span>`).join('');
   }
 }
 
@@ -2250,7 +1854,6 @@ queueList.addEventListener('click', e => {
 
 function removeItem(it) {
   const i = idxOf(it), wasCurrent = it === cur();
-  if (it.url) URL.revokeObjectURL(it.url);
   state.list.splice(i, 1);
   if (wasCurrent) {
     const nx = state.list[i] || state.list[i - 1] || null;
@@ -2692,7 +2295,7 @@ function mediaMeta(it) {
   if (!('mediaSession' in navigator)) return;
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: it.name, artist: 'PIP Player',
+      title: it.name, artist: state.series ? state.series.title : 'Lapka',
       album: `${idxOf(it) + 1} / ${state.list.length}`,
     });
   } catch (_) {}
@@ -2738,7 +2341,7 @@ function paintPlay() {
 
 video.addEventListener('play', () => {
   paintPlay(); pipPoke(); pipGhost.classList.add('playing');
-  pulse(true); syncStatus(); markPlaying(true); armAudioCheck();
+  pulse(true); syncStatus(); markPlaying(true);
   deckShow(false);
 });
 video.addEventListener('pause', () => {
@@ -2748,7 +2351,7 @@ video.addEventListener('pause', () => {
      is not a stop the user asked for. The ended handler decides. */
   if (video.ended) return;
   const it = cur();
-  if (it) markPos(it.path, video.currentTime);
+  if (it) markPos(it, video.currentTime);
   deckShow(true);
 });
 let posT = 0;
@@ -2758,7 +2361,7 @@ video.addEventListener('timeupdate', () => {
   if (now - posT < 5000) return;
   posT = now;
   const it = cur();
-  if (it && !video.paused) markPos(it.path, video.currentTime);
+  if (it && !video.paused) markPos(it, video.currentTime);
 });
 video.addEventListener('progress', paintSeek);
 video.addEventListener('seeked', () => { state.seekPreview = null; paintSeek(); });
@@ -2766,6 +2369,7 @@ video.addEventListener('loadedmetadata', () => {
   state.seekPreview = null;
   const it = cur();
   if (it && isFinite(video.duration) && video.duration) it.dur = video.duration;
+  if (it && video.videoWidth && video.videoHeight) it.aspect = video.videoWidth / video.videoHeight;
   paintSeek(); paintMeta(); syncAudioButton(); syncSubsButton();
 });
 let volT = null;
@@ -2798,10 +2402,21 @@ video.addEventListener('ended', () => {
   next(true);
 });
 
+/* A stream that fails is not the end: the same dub may come from
+   another player. The failed stream is handed back to the server,
+   which marks its source dead and picks again. Only when that has
+   been tried does the episode count as broken and the queue moves on. */
 video.addEventListener('error', () => {
   stage.classList.remove('fading');
   const it = cur();
-  if (!it || !video.getAttribute('src')) return;
+  if (!it || !it.loadedSrc) return;
+  const failed = it.stream && it.stream.id;
+  if (failed && it.retried !== failed) {
+    it.retried = failed; it.avoid = failed;
+    toast(t('toast.otherSource'));
+    playItem(it, true, false);
+    return;
+  }
   it.err = true;
   render();
   toast(t('toast.playFail', { name: it.name }));
@@ -2813,7 +2428,7 @@ video.addEventListener('error', () => {
 function paintTitle() {
   const it = cur();
   titleName.textContent = it ? it.name : '—';
-  titlePath.textContent = it ? folderOf(it) : '';
+  titlePath.textContent = state.series ? state.series.title : '';
 }
 /* A line cut short shows itself whole in the ordinary tooltip. Only a
    cut one: over a line that fits, the tooltip would repeat it. */
@@ -2825,7 +2440,7 @@ function markPlaying(on) {
 }
 function syncStatus() {
   const it = cur();
-  document.title = it ? `${it.name} · PIP Player` : 'PIP Player';
+  document.title = it ? `${it.name} · Lapka` : 'Lapka';
   paintFavicon();
 }
 
@@ -2909,114 +2524,47 @@ btnAuto.onclick = () => {
 
 $('#btnRestart').onclick = () => { endCard.classList.remove('show'); if (state.list.length) playItem(state.list[0]); };
 $('#btnEndClose').onclick = () => endCard.classList.remove('show');
-$('#helpClose').onclick = () => helpModal.classList.remove('open');
-helpModal.onclick = e => { if (e.target === helpModal) helpModal.classList.remove('open'); };
 
-/* ── choosing files ────────────────────────────────────────── */
-const pickFiles = () => filePick.click();
-const pickFolder = () => dirPick.click();
-$('#btnAddFiles').onclick = pickFiles;
-$('#btnEmptyFiles').onclick = pickFiles;
-$('#btnAddFolder').onclick = pickFolder;
-$('#btnEmptyFolder').onclick = pickFolder;
-filePick.onchange = e => { addLocalFiles(e.target.files); e.target.value = ''; };
-dirPick.onchange = e => { addLocalFiles(e.target.files); e.target.value = ''; };
+/* ── the link ──────────────────────────────────────────────────
+   Typed on the start screen or in the queue's footer, dragged in
+   from another window, or pasted anywhere on the page. */
+linkForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const u = linkInput.value.trim();
+  if (u) openLink(u);
+});
+queueLinkForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const u = queueLinkInput.value.trim();
+  if (u) { queueLinkInput.value = ''; openLink(u); }
+});
 
-/* ── dragging in from outside ──────────────────────────────── */
+const linkIn = dt => {
+  if (!dt) return null;
+  const text = dt.getData('text/uri-list') || dt.getData('text/plain') || '';
+  const line = text.split('\n').map(l => l.trim()).find(l => /^https?:\/\//i.test(l));
+  return line || null;
+};
 let dragDepth = 0;
 window.addEventListener('dragenter', e => {
-  if (dragEl || !e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+  if (dragEl || !e.dataTransfer || ![...e.dataTransfer.types].some(x => x === 'text/uri-list' || x === 'text/plain')) return;
   dragDepth++; dropveil.classList.add('show');
 });
 window.addEventListener('dragover', e => { if (!dragEl) e.preventDefault(); });
 window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; dropveil.classList.remove('show'); } });
-window.addEventListener('drop', async e => {
+window.addEventListener('drop', e => {
   if (dragEl) return;
   e.preventDefault();
   dragDepth = 0; dropveil.classList.remove('show');
-  const dt = e.dataTransfer;
-  if (!dt) return;
-  const entries = [...(dt.items || [])].map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null).filter(Boolean);
-  if (entries.length) {
-    const out = [];
-    for (const en of entries) await walkEntry(en, out);
-    addLocalFiles(out);
-  } else addLocalFiles(dt.files);
+  const u = linkIn(e.dataTransfer);
+  if (u) openLink(u);
 });
-
-/* ═══════════════ disk browser (server mode) ═══════════════ */
-function openBrowser() {
-  browserModal.classList.add('open');
-  loadDir(state.browserDir || (state.server.places[0] && state.server.places[0].path));
-}
-btnDisk.onclick = openBrowser;
-btnEmptyDisk.onclick = openBrowser;
-$('#brClose').onclick = () => browserModal.classList.remove('open');
-browserModal.onclick = e => { if (e.target === browserModal) browserModal.classList.remove('open'); };
-$('#brUp').onclick = () => { if (state.browserData && state.browserData.parent) loadDir(state.browserData.parent); };
-$('#brAddAll').onclick = () => {
-  const d = state.browserData;
-  if (!d) return;
-  addServerFiles(d.files);
-  browserModal.classList.remove('open');
-};
-
-async function loadDir(path) {
-  if (!path) return;
-  try {
-    const r = await fetch('/api/ls?path=' + encodeURIComponent(path));
-    const data = await r.json();
-    if (data.error) return toast(data.error);
-    state.browserDir = data.path;
-    state.browserData = data;
-    brPath.textContent = data.path;
-    renderPlaces();
-    renderBrowser(data);
-  } catch (_) { toast(t('browse.fail')); }
-}
-
-function renderPlaces() {
-  brPlaces.replaceChildren();
-  for (const p of state.server.places) {
-    const b = document.createElement('button');
-    b.className = 'brow' + (p.path === state.browserDir ? ' sel' : '');
-    b.innerHTML = phSvg(PH.folder) + '<span class="brow__name"></span>';
-    b.querySelector('.brow__name').textContent = p.key ? t('place.' + p.key) : p.name;
-    b.onclick = () => loadDir(p.path);
-    brPlaces.append(b);
-  }
-}
-
-function renderBrowser(d) {
-  brList.replaceChildren();
-  if (!d.dirs.length && !d.files.length) {
-    const e = document.createElement('li');
-    e.className = 'browser__empty';
-    e.textContent = t('browse.empty');
-    brList.append(e);
-    return;
-  }
-  for (const dir of d.dirs) {
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.className = 'brow';
-    b.innerHTML = phSvg(PH.folder) + '<span class="brow__name"></span>' + phSvg(PH.caretRight);
-    b.querySelector('.brow__name').textContent = dir.name;
-    b.onclick = () => loadDir(dir.path);
-    li.append(b); brList.append(li);
-  }
-  for (const f of d.files) {
-    const li = document.createElement('li');
-    const b = document.createElement('button');
-    b.className = 'brow';
-    b.innerHTML = phSvg(PH.fileVideo) +
-      '<span class="brow__name"></span><span class="brow__size"></span>';
-    b.querySelector('.brow__name').textContent = f.name;
-    b.querySelector('.brow__size').textContent = fmtSize(f.size);
-    b.onclick = () => { addServerFiles([f]); browserModal.classList.remove('open'); };
-    li.append(b); brList.append(li);
-  }
-}
+document.addEventListener('paste', e => {
+  const el = e.target;
+  if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+  const u = ((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
+  if (/^https?:\/\//i.test(u)) { e.preventDefault(); openLink(u); }
+});
 
 /* ═══════════════ keyboard ═══════════════ */
 function onKey(e) {
@@ -3024,11 +2572,6 @@ function onKey(e) {
   if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
   if (el === seek || el === volBar) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
-  if (browserModal.classList.contains('open') || helpModal.classList.contains('open')) {
-    if (e.key === 'Escape') { browserModal.classList.remove('open'); helpModal.classList.remove('open'); }
-    return;
-  }
-
   /* We read e.code, the physical key, rather than the character typed.
      The letters used to be listed in Latin/Cyrillic pairs, and on any
      third layout half the shortcuts fell away: on AZERTY the Q key
@@ -3074,15 +2617,6 @@ document.addEventListener('keyup', e => {
 });
 
 /* ═══════════════ boot ═══════════════ */
-async function detectServer() {
-  if (!location.protocol.startsWith('http')) return null;
-  try {
-    const r = await fetch('/api/ping');
-    if (!r.ok) return null;
-    return await r.json();
-  } catch (_) { return null; }
-}
-
 (async function boot() {
   video.volume = state.vol;
   document.documentElement.lang = lang;
@@ -3093,53 +2627,32 @@ async function detectServer() {
   btnAudio.hidden = true;
   btnSubs.hidden = true;
 
-  state.server = await detectServer();
+  /* what the server remembers: positions and the dub per series */
+  try {
+    const st = await api('/api/state');
+    state.remote = st;
+    for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = v.t;
+  } catch (_) { /* the server may be starting */ }
 
-  if (state.server) {
-    btnDisk.hidden = false;
-    btnEmptyDisk.hidden = false;
-  }
-  /* The primary button depends on the mode: with a server it is the disk
-     browser, without one it is choosing files. It is assigned once,
-     before the screen is first shown; the markup used to declare one
-     button filled and boot immediately unfilled it and swapped the
-     buttons around, all of it visible to the eye. */
-  const primary = state.server && state.server.ffmpeg ? btnEmptyDisk : $('#btnEmptyFiles');
-  primary.classList.add('btn--solid');
-
-  /* The queue of the previous session comes back only in server mode,
-     where the files have a path on disk. What is restored is not
-     started: the watch position returns by itself when the file is
-     played. */
-  if (state.server && state.server.ffmpeg && !state.list.length) {
-    const back = restoreSession();
-    if (back) { probeServer(); toast(t('toast.restored', { n: back })); }
-  }
   sessionReady = true;
-
   paintModeHint();
-  fitFoot();         // the disk button may have just appeared
+  fitFoot();
   booted = true;
   paintLoop();
   render();          // the screen can be shown now: it is correct already
+
+  /* The series of the previous session comes back, not started. */
+  if (await restoreSession()) toast(t('toast.restored'));
 })();
 
-/* Which mode is running, as a hint under the empty screen buttons. It
-   is a function of its own because it has to be rebuilt after a
-   language change. */
 function paintModeHint() {
-  modeHint.innerHTML = t(
-    state.server && state.server.ffmpeg ? 'hint.bridge'
-    : state.server ? 'hint.noFfmpeg'
-    : hasDocPip ? 'hint.local'
-    : 'hint.localNoPip');
+  modeHint.innerHTML = t('hint.link');
 }
 
 window.addEventListener('beforeunload', () => {
   const it = cur();
-  if (it && video.currentTime) markPos(it.path, video.currentTime);
+  if (it && video.currentTime) markPos(it, video.currentTime);
   if (state.pipWin) state.pipWin.close();
-  state.list.forEach(i => i.url && URL.revokeObjectURL(i.url));
 });
 
 })();

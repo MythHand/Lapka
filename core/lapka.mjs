@@ -11,7 +11,7 @@
 import { createSession } from './session/index.mjs';
 import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
 import { loadExtractors, extractorFor } from './extract/index.mjs';
-import { createSeries, merge, allDubs, findEpisode, markHealth } from './catalog/index.mjs';
+import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream } from './catalog/index.mjs';
 
 export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), ...opts });
@@ -64,6 +64,85 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     }
   }
 
+  /* Streams get an address the player can ask for. */
+  function registerStreams(series) {
+    if (!delivery) return;
+    for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) for (const st of s.streams) {
+      if (st.id) continue;
+      st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+      st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
+    }
+  }
+
+  /* The players of one episode page, opened, into the series. */
+  async function openPlayers(series, report) {
+    const number = report.episode.value;
+    const embeds = report.players.filter(p => !p.stream);
+    const results = await Promise.all(embeds.map(p => openPlayer(p, number, report.url)));
+    const opened = [];
+    for (const r of results) {
+      opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null,
+        streams: r.contribution ? r.contribution.episodes[0].dubs.reduce((n, d) => n + d.sources[0].streams.length, 0) : 0 });
+      if (r.contribution) merge(series, r.contribution);
+    }
+    const ep = findEpisode(series, number);
+    if (ep) for (const d of ep.dubs) for (const s of d.sources) {
+      const r = results.find(x => x.player.url === s.embedUrl);
+      if (r) markHealth(s, !r.error, r.error);
+    }
+    const steps = [];
+    if (embeds.length) {
+      const ok = results.filter(r => r.contribution).length;
+      steps.push(ok === embeds.length ? `Открыла ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}, потоки есть`
+        : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
+      for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
+    }
+    if (ep) ep.opened = true;
+    registerStreams(series);
+    return { opened, steps };
+  }
+
+  const series = id => seen.get(id) || null;
+
+  /* One episode of a known series, its page read and its players opened. */
+  async function openEpisode(seriesId, number) {
+    const s = seen.get(seriesId);
+    if (!s) throw Object.assign(new Error('unknown series; look at its page first'), { code: 404 });
+    const ep = findEpisode(s, number);
+    if (!ep) throw Object.assign(new Error('unknown episode'), { code: 404 });
+    if (ep.opened) return ep;
+    if (!ep.sourceUrl) { ep.opened = true; return ep; }
+    const report = await readPage(ep.sourceUrl, s.sourceUrl);
+    if (report.kind === 'episode' && report.episode.value === null) report.episode.value = number;
+    merge(s, toContribution(report));
+    if (report.kind === 'episode') await openPlayers(s, report);
+    ep.opened = true;
+    registerStreams(s);
+    return ep;
+  }
+
+  /* What to play: the episode opened if it is not yet, the dub the
+     user wants or the nearest thing to it, a live source, its best
+     stream. `avoid` is a stream that just failed: its source is
+     marked dead and another is picked. */
+  async function resolve({ seriesId, number, dubKey = null, avoid = null }) {
+    const s = seen.get(seriesId);
+    if (!s) throw Object.assign(new Error('unknown series; look at its page first'), { code: 404 });
+    const ep = await openEpisode(seriesId, number);
+    if (avoid) for (const d of ep.dubs) for (const src of d.sources) if (src.streams.some(st => st.id === avoid)) markHealth(src, false, 'playback failed');
+    const dub = pickDub(ep, dubKey ? { name: dubKey } : null);
+    const source = dub ? pickSource(dub) : null;
+    const stream = source ? bestStream(source) : null;
+    return {
+      series: { id: s.id, title: s.title },
+      episode: { number: ep.number, title: ep.title, sourceUrl: ep.sourceUrl },
+      dubs: ep.dubs.map(d => ({ key: d.key, name: d.name, alive: d.sources.filter(x => x.health.ok !== false && x.streams.length).length, sources: d.sources.length })),
+      dub: dub ? { key: dub.key, name: dub.name } : null,
+      source: source ? { id: source.id, player: source.player, extractor: source.extractor } : null,
+      stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play } : null,
+    };
+  }
+
   /* One address in, a catalog and the reports behind it out. */
   async function look(url) {
     const reports = [];
@@ -80,41 +159,22 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     for (const r of [...reports].reverse()) merge(series, toContribution(r));
 
     const steps = [...new Set(reports.flatMap(r => r.steps))];
-    const opened = [];
+    let opened = [];
     const number = first.episode.value;
     if (first.kind === 'episode' && number !== null) {
-      const embeds = first.players.filter(p => !p.stream);
-      const results = await Promise.all(embeds.map(p => openPlayer(p, number, first.url)));
-      for (const r of results) {
-        opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null,
-          streams: r.contribution ? r.contribution.episodes[0].dubs.reduce((n, d) => n + d.sources[0].streams.length, 0) : 0 });
-        if (r.contribution) merge(series, r.contribution);
-      }
-      /* health: a player that answered with streams is alive, one that did not is not */
-      const ep = findEpisode(series, number);
-      if (ep) for (const d of ep.dubs) for (const s of d.sources) {
-        const r = results.find(x => x.player.url === s.embedUrl);
-        if (r) markHealth(s, !r.error, r.error);
-      }
-      if (embeds.length) {
-        const ok = results.filter(r => r.contribution).length;
-        steps.push(ok === embeds.length ? `Открыла ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}, потоки есть`
-          : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
-        for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
-      }
+      const got = await openPlayers(series, first);
+      opened = got.opened; steps.push(...got.steps);
     }
 
     /* every stream we now hold gets an address the player can ask for */
-    if (delivery) for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) for (const st of s.streams) {
-      st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
-      st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
-    }
+    registerStreams(series);
     seen.set(series.id, series);
 
-    return { series, reports, opened, steps, dubs: allDubs(series).map(d => d.name) };
+    return { series, reports, opened, steps, dubs: allDubs(series).map(d => d.name),
+      start: first.kind === 'episode' && number !== null ? { episode: number } : null };
   }
 
-  return { look, readPage, context, session, extractors };
+  return { look, readPage, context, series, openEpisode, resolve, session, extractors };
 }
 
 function plural(n, one, few, many) {

@@ -67,15 +67,30 @@ export async function openStore({ home = defaultHome(), limitGb = 24 } = {}) {
       cache.touch(streamId);
       evictSoon();
     },
+    /* What the cache holds, and how far it could grow: the disk's free
+       space plus what it already takes is the top of the scale. */
     async stat() {
-      let bytes = 0, streams = 0;
+      let bytes = 0, streams = 0, files = 0;
       for (const d of await fsp.readdir(cacheDir).catch(() => [])) {
         const dir = path.join(cacheDir, d);
         let n = 0;
         for (const f of await fsp.readdir(dir).catch(() => [])) { try { bytes += (await fsp.stat(path.join(dir, f))).size; n++; } catch { /* gone */ } }
-        if (n) streams++;
+        if (n) { streams++; files += n; }
       }
-      return { bytes, streams, limit, dir: cacheDir };
+      let free = null, total = null, max = null;
+      try { const st = await fsp.statfs(cacheDir); free = st.bavail * st.bsize; total = st.blocks * st.bsize; max = bytes + free; } catch { /* no statfs here */ }
+      return { bytes, streams, files, limit, min: LIMIT_MIN_GB * GB, free, total, max, dir: cacheDir };
+    },
+    /* everything but the stream being watched */
+    async clear(keep = null) {
+      let freed = 0, dropped = 0;
+      for (const d of await fsp.readdir(cacheDir).catch(() => [])) {
+        if (keep && d === safeName(keep)) continue;
+        const dir = path.join(cacheDir, d);
+        for (const f of await fsp.readdir(dir).catch(() => [])) { try { freed += (await fsp.stat(path.join(dir, f))).size; } catch { /* gone */ } }
+        await fsp.rm(dir, { recursive: true, force: true }); dropped++; used.delete(d);
+      }
+      return { bytes: freed, files: dropped };
     },
     limit: () => limit,
     async setLimit(gb) {

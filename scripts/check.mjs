@@ -3,14 +3,14 @@
    Integrity check to run before opening the page in a browser.
    It catches what has already bitten twice, such as a popup layer
    clipped by an ancestor with overflow:hidden.
-   Run:  node check.mjs
+   Run:  node scripts/check.mjs
    ═══════════════════════════════════════════════════════════ */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const read = f => fs.readFileSync(path.join(HERE, f), 'utf8');
+const read = f => fs.readFileSync(path.join(HERE, '..', 'web', f), 'utf8');
 const html = read('index.html'), css = read('styles.css'), js = read('app.js');
 const i18nSrc = read('i18n.js');
 

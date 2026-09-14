@@ -1426,3 +1426,17 @@ video::cue{
   .browser{ grid-template-columns:1fr; }
   .browser__places{ display:none; }
 }
+
+
+/* ── the link ───────────────────────────────────────────────── */
+.linkform{ display:flex; gap:8px; width:100%; max-width:560px; margin:0 auto; }
+.linkform__in{
+  flex:1; min-width:0; height:40px; padding:0 14px;
+  font:inherit; font-size:calc(14px + var(--fs)); letter-spacing:var(--track);
+  color:var(--tx-1); background:var(--glass-soft); border:1px solid var(--line-2);
+  border-radius:var(--r-md); outline:none;
+}
+.linkform__in::placeholder{ color:var(--tx-3); }
+.linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
+.linkform--foot{ max-width:none; flex:1; }
+.linkform--foot .linkform__in{ height:32px; padding:0 10px; font-size:calc(13px + var(--fs)); }

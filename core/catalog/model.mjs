@@ -48,9 +48,11 @@ const now = () => Date.now();
 
 export function createSeries({ sourceUrl, title = '', altTitles = [], cover = null, year = null } = {}) {
   if (!sourceUrl) throw new Error('a series needs a sourceUrl');
+  /* the id is the canonical address; the address kept is the one that
+     actually answered, because a site may want its trailing slash */
   return {
     id: seriesId(sourceUrl),
-    sourceUrl: canonicalUrl(sourceUrl),
+    sourceUrl: String(sourceUrl).replace(/#.*$/, ''),
     title, altTitles: [...altTitles], cover, year,
     episodes: [],
     provenance: [],
@@ -60,7 +62,7 @@ export function createSeries({ sourceUrl, title = '', altTitles = [], cover = nu
 
 export function createEpisode({ number, title = '', sourceUrl = null }) {
   if (!Number.isFinite(number)) throw new Error('an episode needs a number');
-  return { number, title, sourceUrl, dubs: [] };
+  return { number, title, sourceUrl, dubs: [], opened: false };
 }
 
 export function createDub({ name, studio = null, lang = null, kind = 'dub' }) {

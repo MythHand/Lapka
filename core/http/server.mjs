@@ -74,8 +74,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
     let m;
     if (!fromLoopback(req, { navigation: !p.startsWith('/api/') })) return json(res, 403, { error: 'loopback only' });
     try {
-      if (req.method === 'GET' && p === '/') return serveStatic(res, 'inspect.html');
-      if (req.method === 'GET' && /^\/[\w.-]+\.(?:html|js|mjs|css|svg|png|woff2)$/.test(p)) return serveStatic(res, p.slice(1));
+      if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
+      if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
       if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', home: store?.home || null });
       if (req.method === 'GET' && VENDOR[p.slice('/vendor/'.length)] && p.startsWith('/vendor/')) {
         const file = VENDOR[p.slice('/vendor/'.length)];
@@ -83,11 +83,29 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
         return fs.createReadStream(file).pipe(res);
       }
       if (req.method === 'GET' && p === '/api/cache' && store) return json(res, 200, await store.cache.stat());
+      if (req.method === 'GET' && (m = /^\/api\/series\/([a-f0-9]{12})$/.exec(p))) {
+        const s = lapka.series(m[1]);
+        return s ? json(res, 200, { series: s }) : json(res, 404, { error: 'unknown series' });
+      }
+      if (req.method === 'GET' && p === '/api/resolve') {
+        const q = url.searchParams;
+        try {
+          return json(res, 200, await lapka.resolve({ seriesId: q.get('series'), number: Number(q.get('episode')), dubKey: q.get('dub') || null, avoid: q.get('avoid') || null }));
+        } catch (e) { return json(res, e.code || 500, { error: e.message }); }
+      }
 
       /* anything that changes the machine wants a header a cross-site form cannot set */
       const mutating = req.method === 'POST';
       if (mutating && req.headers['x-lapka'] !== '1') return json(res, 403, { error: 'x-lapka header required' });
 
+      if (store && mutating && p === '/api/cache/limit') {
+        await store.cache.setLimit(Number(url.searchParams.get('gb')));
+        return json(res, 200, await store.cache.stat());
+      }
+      if (store && mutating && p === '/api/cache') {
+        const freed = await store.cache.clear(url.searchParams.get('keep') || null);
+        return json(res, 200, { ...(await store.cache.stat()), freed });
+      }
       if (saver && mutating && p === '/api/save') {
         const ctx = lapka.context(url.searchParams.get('stream') || '');
         if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first' });

@@ -13,7 +13,7 @@ import { createSession } from './session/index.mjs';
 export const PORT = Number(process.env.PORT) || 8800;
 export const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
 
-export async function start({ port = PORT, home } = {}) {
+export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   const store = await openStore({ home });
   const state = await openState(store.own);
   const library = openLibrary(store.home);
@@ -21,7 +21,7 @@ export async function start({ port = PORT, home } = {}) {
   const delivery = createDelivery({ session, cache: store.cache });
   const saver = createSaver({ delivery, cache: store.cache, library });
   const lapka = await bootLapka({ session, delivery });
-  const server = await startServer({ port, webDir: WEB_DIR, lapka, delivery, store, state, library, saver });
+  const server = await startServer({ port, webDir, lapka, delivery, store, state, library, saver });
   const close = async () => { await server.close(); await state.close(); };
   return { lapka, store, state, library, delivery, saver, ...server, close };
 }

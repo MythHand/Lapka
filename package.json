@@ -19,7 +19,7 @@
     "start": "node core/main.mjs",
     "dev": "node scripts/dev.mjs",
     "site": "node test/site/serve.mjs",
-    "check": "node check.mjs",
+    "check": "node scripts/check.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {

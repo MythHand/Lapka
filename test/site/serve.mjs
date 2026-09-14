@@ -39,7 +39,7 @@ export function startSite({ port = 0, media } = {}) {
 
     if (p === '/') return html(res, renderHome());
 
-    if ((m = /^\/s\/([a-z]+)\/$/.exec(p))) {
+    if ((m = /^\/s\/([a-z]+)\/?$/.exec(p))) {
       const c = caseById(m[1]);
       return c ? html(res, renderSeries(c)) : notFound(res);
     }

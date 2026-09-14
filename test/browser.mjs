@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(HERE, '..');
+const WEB = path.join(ROOT, 'web');
 
 const CHROMES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -128,13 +129,11 @@ export const stalledAt = r => 'the page script stopped at: ' + r.stalled + '\n' 
 
 /* Copies the shipping files next to a page that carries the test
    script. Returns the directory. */
-export async function stage(name, script, { fonts = false, seed = null, server = false, budget = 5000 } = {}) {
-  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'pip-player-ui-' + name + '-'));
-  for (const f of CLIENT) await fsp.copyFile(path.join(ROOT, f), path.join(dir, f));
+export async function stage(name, script, { fonts = false, seed = null, budget = 5000 } = {}) {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-ui-' + name + '-'));
+  for (const f of CLIENT) await fsp.copyFile(path.join(WEB, f), path.join(dir, f));
   if (fonts) for (const f of FONTS)
-    await fsp.cp(path.join(ROOT, f), path.join(dir, f), { recursive: true });
-
-  if (server) await fsp.copyFile(path.join(ROOT, 'server.mjs'), path.join(dir, 'server.mjs'));
+    await fsp.cp(path.join(WEB, f), path.join(dir, f), { recursive: true });
 
   /* Anything the player is supposed to remember has to be in storage
      before app.js runs, so the seed goes into the head. Setting it from
@@ -146,7 +145,9 @@ catch (e) { /* storage refused, the test will say so */ }
 </script>` : '';
 
   let html = await fsp.readFile(path.join(dir, 'index.html'), 'utf8');
-  html = html.replace('</head>', STILL + CATCH + primed + '\n</head>');
+  /* function replacements: a string one would read $$ and $& in the
+     test script as patterns of its own */
+  html = html.replace('</head>', () => STILL + CATCH + primed + '\n</head>');
   /* The script is wrapped rather than trusted to report by itself: when
      it throws halfway through, an unwrapped one reports nothing at all
      and the failure reads as "the page said nothing", which points at
@@ -154,7 +155,8 @@ catch (e) { /* storage refused, the test will say so */ }
   const wrapped = '<script>(async () => { try {\n' + script +
     '\n} catch (e) { window.__report({ fatal: String((e && e.stack) || e),' +
     ' errors: window.__errors }); } })();</script>';
-  html = html.replace('</body>', report(budget, await holdServer()) + '\n' + wrapped + '\n</body>');
+  const tail = report(budget, await holdServer()) + '\n' + wrapped + '\n</body>';
+  html = html.replace('</body>', () => tail);
   await fsp.writeFile(path.join(dir, 'index.html'), html, 'utf8');
   return dir;
 }
@@ -210,58 +212,22 @@ export async function visit(url, { width = 1280, height = 800, budget = 5000 } =
 
 /* The player has to work opened straight from a file, so most of the
    interface tests need no server at all. */
-export async function openFile(name, script, opts = {}) {
-  const dir = await stage(name, script, opts);
+/* The page, served by Lapka itself from the staged copy, with a folder
+   of its own for the cache and the state. The test's page script gets
+   `site`, the address of the synthetic site, as a literal. */
+export async function openLapka(name, script, { site = '', home = null, ...opts } = {}) {
+  const { start } = await import('../core/main.mjs');
+  const dir = await stage(name, `const site = ${JSON.stringify(site)};\n` + script, opts);
+  const ownHome = !home;
+  if (!home) home = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-home-'));
+  const lapka = await start({ port: 0, home, webDir: dir });
   try {
-    return await visit('file://' + path.join(dir, 'index.html'), opts);
+    return await visit(lapka.base + '/' + (opts.query || ''), opts);
   } finally {
-    if (!process.env.KEEP_STAGE)
+    await lapka.close();
+    if (!process.env.KEEP_STAGE) {
       await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
-/* The other half of the tests needs the ffmpeg server. It is started
-   from the staged copy, so the page and the server are the same files
-   that ship, and the only extra root it is given is the fixture folder.
-   `ready` is a list of files to prepare before the browser starts: the
-   virtual clock runs far faster than ffmpeg, and a page that waits for
-   a conversion would be dumped long before it finishes. */
-export async function openServed(name, script, { port = 8782, root, warm = [], ...opts } = {}) {
-  const dir = await stage(name, script, { ...opts, server: true });
-  const cache = path.join(dir, 'cache');
-  const base = `http://127.0.0.1:${port}`;
-  const child = spawn(process.execPath, [path.join(dir, 'server.mjs'), root], {
-    env: { ...process.env, PORT: String(port), PIP_CACHE: cache },
-    stdio: 'ignore',
-  });
-  const head = { host: `127.0.0.1:${port}`, origin: base, 'sec-fetch-site': 'same-origin' };
-  try {
-    let up = false;
-    for (let i = 0; i < 100 && !up; i++) {
-      try { up = (await fetch(base + '/api/ping', { headers: head })).ok; } catch { /* not yet */ }
-      if (!up) await new Promise(r => setTimeout(r, 100));
+      if (ownHome) await fsp.rm(home, { recursive: true, force: true }).catch(() => {});
     }
-    if (!up) throw new Error('the staged server did not come up');
-
-    for (const file of warm) {
-      const url = base + '/api/prepare?path=' + encodeURIComponent(file);
-      for (let i = 0; i < 200; i++) {
-        const r = await (await fetch(url, { headers: head })).json();
-        if (r.state === 'ready' || r.state === 'direct') break;
-        if (r.state === 'error') throw new Error('could not prepare ' + file + ': ' + r.error);
-        await new Promise(r => setTimeout(r, 100));
-      }
-    }
-    return await visit(base + '/', opts);
-  } finally {
-    /* Waited for, not just signalled. A run started right after this one
-       takes the same port, and while the old server was still going the
-       new page was answered by it, from a staged folder already deleted:
-       the page came up without its scripts and reported nothing. */
-    const gone = new Promise(r => child.once('exit', r));
-    child.kill();
-    await Promise.race([gone, new Promise(r => setTimeout(r, 2000))]);
-    if (!process.env.KEEP_STAGE)
-      await fsp.rm(dir, { recursive: true, force: true }).catch(() => {});
   }
 }
