@@ -22,13 +22,18 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const GB = 1024 ** 3;
 export const HOT_MS = 10 * 60 * 1000;
 const LIMIT_MIN_GB = 1;
 
+/* Where the Lapka folder is. Choosing it is the user's, at first
+   start, and that comes with the UI; until then it is inside the
+   project, under .dev/, so nothing lands anywhere else on the
+   machine. LAPKA_HOME overrides. */
 export function defaultHome() {
-  return process.env.LAPKA_HOME || path.join(os.homedir(), 'Lapka');
+  return process.env.LAPKA_HOME || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.dev', 'home');
 }
 
 export async function openStore({ home = defaultHome(), limitGb = 24 } = {}) {

@@ -5,3 +5,6 @@ node_modules/
 *.mkv
 *.mp4
 test/site/The Legend of Vox Machina*/
+
+# working data during development, never in the repo
+.dev/

@@ -10,7 +10,7 @@
 | `discover/` | Разбор страницы в отчёт: сериал, серии, плееры, переключатели озвучек и плееров | `discover({html, url, profile}) → Report`, `toContribution(report)` | готов для трёх случаев сайта и одной «дикой» страницы, `test/discover.test.mjs` |
 | `extract/` | Экстракторы встроенных плееров, по файлу на плеер в `extract/players/` | `match(url)`, `extract(embedUrl, {referer}, session) → {streams, dubs}`; реестр `loadExtractors()` | `generic` готов: видео в атрибуте, поток в скрипте, список озвучек в скрипте; `test/extract.test.mjs` |
 | `deliver/` | Доставка потока в браузер: прокси HLS со сквозной записью в кэш, mp4 с Range | `createDelivery({session, cache})`: `register(stream)`, `/api/stream/<id>.m3u8`, `/<id>/seg?u=`, `/<id>.mp4` | готов; ремукс в mp4 для библиотеки — шов; `test/deliver.test.mjs`, `test/play.test.mjs` |
-| `store/` | Папка Lapka: кэш по потокам с лимитом и вытеснением, место для библиотеки, состояния и знания | `openStore({home})` → `cache.write/has/read/evict/setLimit/stat` | кэш готов; `pinned`, состояние, знание — шов. Папка по умолчанию `~/Lapka` или `LAPKA_HOME`, выбор папки придёт с UI |
+| `store/` | Папка Lapka: кэш по потокам с лимитом и вытеснением, место для библиотеки, состояния и знания | `openStore({home})` → `cache.write/has/read/evict/setLimit/stat` | кэш готов; `pinned`, состояние, знание — шов. Папка на время разработки `.dev/home` в проекте или `LAPKA_HOME`, выбор папки придёт с UI |
 | `knowledge/` | Профили сайтов, поставляемые и выученные; здоровье источников | профиль как данные, см. `docs/ARCHITECTURE.md` §4 и §8 | шов |
 | `http/` | Маршруты локального сервера, проверка loopback | `startServer({port, webDir, lapka})`; `/api/look?url=` | готов с одним маршрутом |
 
