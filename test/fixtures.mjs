@@ -16,6 +16,9 @@
      legacy.avi    MPEG-4 + MP3 in AVI       video re-encoded
      long.mkv      the same as release.mkv,  long enough to test
                    three minutes of it       returning to a position
+     hls/          six seconds of H.264+AAC  what a streaming site
+                   as an HLS playlist with   serves; the synthetic
+                   three segments            site in test/site plays it
 
    The clips are two seconds of a test pattern, a few dozen kilobytes
    each. They are built once and reused: rebuilding costs seconds.
@@ -74,10 +77,12 @@ export async function build() {
     long: at('long.mkv'),
     subs: at('lines.srt'),
     subsLong: at('lines-long.srt'),
+    hls: at('hls'),
+    hlsIndex: at(path.join('hls', 'index.m3u8')),
   };
 
   /* already built by an earlier run */
-  if ([made.native, made.release, made.legacy, made.long].every(f => fs.existsSync(f)))
+  if ([made.native, made.release, made.legacy, made.long, made.hlsIndex].every(f => fs.existsSync(f)))
     return made;
 
   /* Nothing is written into place directly. The suites that need media
@@ -145,9 +150,26 @@ export async function build() {
       '-metadata:s:s:0', 'language=eng',
       w('long.mkv')]);
 
+    /* Six seconds in two-second segments: a playlist with more than
+       one segment is the difference between "served the file" and
+       "followed the playlist". */
+    await fsp.mkdir(w('hls'));
+    await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
+      ...src(6), ...tone(440, 6),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+      /* a segment can only start on a keyframe; x264's default is one
+         every 250 frames, which at 10 fps is one keyframe in the whole
+         clip and therefore one segment */
+      '-g', '20', '-keyint_min', '20', '-sc_threshold', '0',
+      '-f', 'hls', '-hls_time', '2', '-hls_list_size', '0',
+      '-hls_segment_filename', w(path.join('hls', 'seg%02d.ts')),
+      w(path.join('hls', 'index.m3u8'))]);
+
     /* On Windows a file another run already has open cannot be replaced;
-       that one is whole too, so it stays. */
-    for (const n of ['lines.srt', 'lines-long.srt', 'native.mp4', 'release.mkv', 'legacy.avi', 'long.mkv'])
+       that one is whole too, so it stays. The hls folder is moved as one
+       piece for the same reason the files are: a half-moved folder is a
+       playlist pointing at segments that are not there yet. */
+    for (const n of ['lines.srt', 'lines-long.srt', 'native.mp4', 'release.mkv', 'legacy.avi', 'long.mkv', 'hls'])
       await fsp.rename(w(n), at(n)).catch(e => { if (!fs.existsSync(at(n))) throw e; });
   } finally {
     await fsp.rm(work, { recursive: true, force: true });

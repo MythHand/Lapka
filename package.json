@@ -18,6 +18,6 @@
   "scripts": {
     "start": "node server.mjs",
     "check": "node check.mjs",
-    "test": "node --test"
+    "test": "node --test test/*.test.mjs"
   }
 }
