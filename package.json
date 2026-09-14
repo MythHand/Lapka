@@ -1,0 +1,23 @@
+{
+  "name": "lapka",
+  "version": "1.0.0",
+  "description": "Local anime player: paste a link, pick a dub, watch the whole series.",
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://github.com/MythHand/Lapka#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MythHand/Lapka.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MythHand/Lapka/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node check.mjs",
+    "test": "node --test"
+  }
+}

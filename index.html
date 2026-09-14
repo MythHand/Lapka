@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PIP Player</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" id="favicon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='15' fill='%230b0b0c'/><circle cx='16' cy='16' r='9' fill='none' stroke='%23fff' stroke-width='1.5'/><circle cx='16' cy='16' r='3' fill='%23fff'/></svg>">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ───────────── workspace ───────────── -->
+  <main class="workspace" id="workspace">
+
+    <section class="stage-host" id="stageHost">
+      <div class="stage" id="stage" tabindex="0">
+        <video id="video" playsinline></video>
+
+        <!-- While the picture plays in a PiP window, this stands in its place
+             here, over the video area and under the rest of the player,
+             which stays at hand in this tab. -->
+        <div class="ghost hide-in-pip" id="pipGhost">
+          <div class="ghost__box">
+            <div class="ghost__eq"><i></i><i></i><i></i><i></i><i></i></div>
+            <div class="ghost__label" data-i18n="ghost.label">Playing in a separate window</div>
+            <div class="ghost__name" id="ghostName">—</div>
+            <button class="btn btn--solid" id="btnPipBack" data-i18n="ghost.back">Bring it back</button>
+          </div>
+        </div>
+
+        <!-- soft gradient at the top, mirrors the one at the bottom -->
+        <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+        <!-- file name, top left corner -->
+        <div class="titlechip" id="titleChip">
+          <div class="titlechip__row">
+            <span class="titlechip__name" id="titleName">—</span>
+          </div>
+          <div class="titlechip__path" id="titlePath"></div>
+        </div>
+
+        <!-- player settings -->
+        <div class="menuwrap gear hide-in-pip" id="gearWrap">
+          <button class="rb" id="btnGear" data-i18n-title="set.title">
+            <svg class="ph ico-gear" viewBox="-1.4 -1.4 258.8 258.8"><path d="M216,130.16q.06-2.16,0-4.32l14.92-18.64a8,8,0,0,0,1.48-7.06,107.6,107.6,0,0,0-10.88-26.25,8,8,0,0,0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186,40.54a8,8,0,0,0-3.94-6,107.29,107.29,0,0,0-26.25-10.86,8,8,0,0,0-7.06,1.48L130.16,40Q128,40,125.84,40L107.2,25.11a8,8,0,0,0-7.06-1.48A107.6,107.6,0,0,0,73.89,34.51a8,8,0,0,0-3.93,6L67.32,64.27q-1.56,1.49-3,3L40.54,70a8,8,0,0,0-6,3.94,107.71,107.71,0,0,0-10.87,26.25,8,8,0,0,0,1.49,7.06L40,125.84Q40,128,40,130.16L25.11,148.8a8,8,0,0,0-1.48,7.06,107.6,107.6,0,0,0,10.88,26.25,8,8,0,0,0,6,3.93l23.72,2.64q1.49,1.56,3,3L70,215.46a8,8,0,0,0,3.94,6,107.71,107.71,0,0,0,26.25,10.87,8,8,0,0,0,7.06-1.49L125.84,216q2.16.06,4.32,0l18.64,14.92a8,8,0,0,0,7.06,1.48,107.21,107.21,0,0,0,26.25-10.88,8,8,0,0,0,3.93-6l2.64-23.72q1.56-1.48,3-3L215.46,186a8,8,0,0,0,6-3.94,107.71,107.71,0,0,0,10.87-26.25,8,8,0,0,0-1.49-7.06ZM128,168a40,40,0,1,1,40-40A40,40,0,0,1,128,168Z"/></svg>
+          </button>
+          <div class="menu menu--down" id="gearMenu"></div>
+        </div>
+
+        <!-- The way to the project description while nothing is loaded,
+             mirrored to the settings. The description lives in the queue
+             panel, so this opens the panel; shown only while it is shut. -->
+        <div class="info hide-in-pip">
+          <button class="rb" id="btnInfo" data-i18n-title="queue.about">
+            <svg class="ph ico-gear" viewBox="-1.0 -1.0 258.0 258.0"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm-4,48a12,12,0,1,1-12,12A12,12,0,0,1,124,72Zm12,112a16,16,0,0,1-16-16V128a8,8,0,0,1,0-16,16,16,0,0,1,16,16v40a8,8,0,0,1,0,16Z"/></svg>
+          </button>
+        </div>
+
+        <div class="pulse" id="pulse" aria-hidden="true">
+          <svg class="ph" viewBox="4.3 4.3 247.4 247.4" id="pulseIcon"><path d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></svg>
+        </div>
+        <div class="flash" id="flash" aria-hidden="true"></div>
+
+        <!-- warning about audio the browser cannot decode -->
+        <div class="notice" id="notice">
+          <svg class="ph notice__ico" viewBox="-3.5 -3.5 262.9 262.9"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm-12-80V80a12,12,0,0,1,24,0v52a12,12,0,0,1-24,0Zm28,40a16,16,0,1,1-16-16A16,16,0,0,1,144,172Z"/></svg>
+          <span class="notice__text" id="noticeText"></span>
+          <button class="notice__act" id="noticeAction" data-i18n="notice.fix">How to fix</button>
+          <button class="notice__x" id="noticeClose" data-i18n-aria="a11y.hide">
+            <svg class="ph" viewBox="12.0 12.0 231.9 231.9"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg>
+          </button>
+        </div>
+
+        <!-- file being prepared -->
+        <div class="prep" id="prep">
+          <div class="prep__box">
+            <div class="prep__head">
+              <span class="spin" aria-hidden="true"></span>
+              <span data-i18n="prep.head">Preparing the file for the browser</span>
+            </div>
+            <div class="prep__file">
+              <div class="prep__name" id="prepName">—</div>
+              <div class="prep__track" id="prepTrack"></div>
+            </div>
+            <ol class="prep__steps" id="prepSteps"></ol>
+            <div class="prep__cmd" id="prepCmd"></div>
+            <div class="prep__note" data-i18n="prep.note"></div>
+          </div>
+        </div>
+
+        <!-- end of queue -->
+        <div class="endcard" id="endCard">
+          <div class="endcard__box">
+            <div class="endcard__ring"><svg class="ph" viewBox="6.9 6.9 242.2 242.2"><path d="M224.49,136.49l-72,72a12,12,0,0,1-17-17L187,140H40a12,12,0,0,1,0-24H187L135.51,64.48a12,12,0,0,1,17-17l72,72A12,12,0,0,1,224.49,136.49Z"/></svg></div>
+            <h2 data-i18n="end.title">End of the queue</h2>
+            <p id="endMeta">—</p>
+            <div class="row">
+              <button class="btn btn--solid" id="btnRestart" data-i18n="end.restart">Watch from the start</button>
+              <button class="btn" id="btnEndClose" data-i18n="common.close">Close</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── control deck ── -->
+        <div class="deck" id="deck">
+          <div class="deck__scrub">
+            <span class="deck__t" id="tCur">0:00</span>
+            <div class="seek" id="seek" role="slider" tabindex="0"
+                 data-i18n-aria="a11y.seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div class="seek__rail">
+                <div class="seek__buf" id="seekBuffer"></div>
+                <div class="seek__fill" id="seekFill"></div>
+              </div>
+              <div class="seek__knob" id="seekKnob"></div>
+              <div class="seek__tip" id="seekTip">0:00</div>
+            </div>
+            <span class="deck__t deck__t--dim" id="tDur">0:00</span>
+          </div>
+
+          <div class="deck__ctrls">
+            <div class="deck__side deck__side--left">
+              <span class="deck__grp hide-in-pip">
+                <button class="rb" id="btnList" data-i18n-title="deck.queue">
+                  <svg class="ph" viewBox="4.9 4.9 246.1 246.1"><path d="M28,64A12,12,0,0,1,40,52H216a12,12,0,0,1,0,24H40A12,12,0,0,1,28,64Zm104,52H40a12,12,0,0,0,0,24h92a12,12,0,0,0,0-24Zm0,64H40a12,12,0,0,0,0,24h92a12,12,0,0,0,0-24Zm120-20a12,12,0,0,1-5.64,10.18l-64,40A12,12,0,0,1,164,200V120a12,12,0,0,1,18.36-10.18l64,40A12,12,0,0,1,252,160Zm-34.64,0L188,141.65v36.7Z"/></svg>
+                </button>
+              </span>
+              <span class="deck__grp">
+                <div class="menuwrap">
+                  <button class="rb rb--wide" id="btnAudio" data-i18n-title="audio.title">
+                    <svg class="ph" viewBox="1.7 1.7 252.6 252.6"><path d="M60,96v64a12,12,0,0,1-24,0V96a12,12,0,0,1,24,0ZM88,20A12,12,0,0,0,76,32V224a12,12,0,0,0,24,0V32A12,12,0,0,0,88,20Zm40,32a12,12,0,0,0-12,12V192a12,12,0,0,0,24,0V64A12,12,0,0,0,128,52Zm40,32a12,12,0,0,0-12,12v64a12,12,0,0,0,24,0V96A12,12,0,0,0,168,84Zm40-16a12,12,0,0,0-12,12v96a12,12,0,0,0,24,0V80A12,12,0,0,0,208,68Z"/></svg>
+                    <span id="audioLabel"></span>
+                  </button>
+                  <div class="menu menu--left" id="audioMenu"></div>
+                </div>
+                <div class="menuwrap">
+                  <button class="rb" id="btnSubs" data-i18n-title="subs.title"> <svg class="ph" viewBox="2.3 2.3 251.3 251.3"><path d="M224,44H32A20,20,0,0,0,12,64V192a20,20,0,0,0,20,20H224a20,20,0,0,0,20-20V64A20,20,0,0,0,224,44Zm-4,144H36V68H220ZM48,128a12,12,0,0,1,12-12H76a12,12,0,0,1,0,24H60A12,12,0,0,1,48,128Zm56,0a12,12,0,0,1,12-12h80a12,12,0,0,1,0,24H116A12,12,0,0,1,104,128ZM48,164a12,12,0,0,1,12-12h80a12,12,0,0,1,0,24H60A12,12,0,0,1,48,164Zm160,0a12,12,0,0,1-12,12H180a12,12,0,0,1,0-24h16A12,12,0,0,1,208,164Z"/></svg>
+                  </button>
+                  <div class="menu menu--left" id="subsMenu"></div>
+                </div>
+              </span>
+            </div>
+            <div class="deck__center">
+              <button class="rb" id="btnPrev" data-i18n-title="deck.prev">
+                <svg class="ph" viewBox="9.6 9.6 236.8 236.8"><path d="M208,47.88V208.12a16,16,0,0,1-24.43,13.43L64,146.77V216a8,8,0,0,1-16,0V40a8,8,0,0,1,16,0v69.23L183.57,34.45A15.95,15.95,0,0,1,208,47.88Z"/></svg>
+              </button>
+              <button class="rb rb--main" id="btnPlay" data-i18n-title="deck.pause">
+                <svg class="ph" viewBox="4.3 4.3 247.4 247.4" id="playIcon"><path d="M240,128a15.74,15.74,0,0,1-7.6,13.51L88.32,229.65a16,16,0,0,1-16.2.3A15.86,15.86,0,0,1,64,216.13V39.87a15.86,15.86,0,0,1,8.12-13.82,16,16,0,0,1,16.2.3L232.4,114.49A15.74,15.74,0,0,1,240,128Z"/></svg>
+              </button>
+              <button class="rb" id="btnNext" data-i18n-title="deck.next">
+                <svg class="ph" viewBox="9.6 9.6 236.8 236.8"><path d="M208,40V216a8,8,0,0,1-16,0V146.77L72.43,221.55A15.95,15.95,0,0,1,48,208.12V47.88A15.95,15.95,0,0,1,72.43,34.45L192,109.23V40a8,8,0,0,1,16,0Z"/></svg>
+              </button>
+            </div>
+            <div class="deck__side deck__side--right">
+              <!-- volume: used while watching, it never folds away -->
+              <span class="deck__grp">
+                <div class="vol" id="vol">
+                  <button class="rb" id="btnMute" data-i18n-title="deck.mute">
+                    <svg class="ph" viewBox="-5.2 -5.2 266.5 266.5" id="volIcon"><path d="M165.27,21.22a12,12,0,0,0-12.64,1.31L83.88,76H40A20,20,0,0,0,20,96v64a20,20,0,0,0,20,20H83.88l68.75,53.47A12,12,0,0,0,172,224V32A12,12,0,0,0,165.27,21.22ZM148,199.47,95.37,158.53A12,12,0,0,0,88,156H44V100H88a12,12,0,0,0,7.37-2.53L148,56.54ZM212,104v48a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Zm36-16v80a12,12,0,0,1-24,0V88a12,12,0,0,1,24,0Z"/></svg>
+                  </button>
+                  <div class="vol__bar" id="volBar" role="slider" tabindex="0" data-i18n-aria="a11y.volume">
+                    <div class="vol__rail">
+                      <div class="vol__fill" id="volFill"></div>
+                    </div>
+                  </div>
+                </div>
+              </span>
+              <!-- Speed and the queue behaviour: set now and then, so when the
+                   row runs short they are the first to fold, into one gear
+                   that opens them on hover. Not in the PiP window: there the
+                   right side keeps only the volume and the way out. -->
+              <span class="deck__grp deck__pack hide-in-pip" id="deckPack">
+                <button class="rb deck__more" id="btnPack" data-i18n-title="deck.more" aria-expanded="false">
+                  <svg class="ph" viewBox="-3.8 -3.8 263.7 263.7"><path d="M128,76a52,52,0,1,0,52,52A52.06,52.06,0,0,0,128,76Zm0,80a28,28,0,1,1,28-28A28,28,0,0,1,128,156Zm92-27.21v-1.58l14-17.51a12,12,0,0,0,2.23-10.59A111.75,111.75,0,0,0,225,71.89,12,12,0,0,0,215.89,66L193.61,63.5l-1.11-1.11L190,40.1A12,12,0,0,0,184.11,31a111.67,111.67,0,0,0-27.23-11.27A12,12,0,0,0,146.3,22L128.79,36h-1.58L109.7,22a12,12,0,0,0-10.59-2.23A111.75,111.75,0,0,0,71.89,31.05,12,12,0,0,0,66,40.11L63.5,62.39,62.39,63.5,40.1,66A12,12,0,0,0,31,71.89,111.67,111.67,0,0,0,19.77,99.12,12,12,0,0,0,22,109.7l14,17.51v1.58L22,146.3a12,12,0,0,0-2.23,10.59,111.75,111.75,0,0,0,11.29,27.22A12,12,0,0,0,40.11,190l22.28,2.48,1.11,1.11L66,215.9A12,12,0,0,0,71.89,225a111.67,111.67,0,0,0,27.23,11.27A12,12,0,0,0,109.7,234l17.51-14h1.58l17.51,14a12,12,0,0,0,10.59,2.23A111.75,111.75,0,0,0,184.11,225a12,12,0,0,0,5.91-9.06l2.48-22.28,1.11-1.11L215.9,190a12,12,0,0,0,9.06-5.91,111.67,111.67,0,0,0,11.27-27.23A12,12,0,0,0,234,146.3Zm-24.12-4.89a70.1,70.1,0,0,1,0,8.2,12,12,0,0,0,2.61,8.22l12.84,16.05A86.47,86.47,0,0,1,207,166.86l-20.43,2.27a12,12,0,0,0-7.65,4,69,69,0,0,1-5.8,5.8,12,12,0,0,0-4,7.65L166.86,207a86.47,86.47,0,0,1-10.49,4.35l-16.05-12.85a12,12,0,0,0-7.5-2.62c-.24,0-.48,0-.72,0a70.1,70.1,0,0,1-8.2,0,12.06,12.06,0,0,0-8.22,2.6L99.63,211.33A86.47,86.47,0,0,1,89.14,207l-2.27-20.43a12,12,0,0,0-4-7.65,69,69,0,0,1-5.8-5.8,12,12,0,0,0-7.65-4L49,166.86a86.47,86.47,0,0,1-4.35-10.49l12.84-16.05a12,12,0,0,0,2.61-8.22,70.1,70.1,0,0,1,0-8.2,12,12,0,0,0-2.61-8.22L44.67,99.63A86.47,86.47,0,0,1,49,89.14l20.43-2.27a12,12,0,0,0,7.65-4,69,69,0,0,1,5.8-5.8,12,12,0,0,0,4-7.65L89.14,49a86.47,86.47,0,0,1,10.49-4.35l16.05,12.85a12.06,12.06,0,0,0,8.22,2.6,70.1,70.1,0,0,1,8.2,0,12,12,0,0,0,8.22-2.6l16.05-12.85A86.47,86.47,0,0,1,166.86,49l2.27,20.43a12,12,0,0,0,4,7.65,69,69,0,0,1,5.8,5.8,12,12,0,0,0,7.65,4L207,89.14a86.47,86.47,0,0,1,4.35,10.49l-12.84,16.05A12,12,0,0,0,195.88,123.9Z"/></svg>
+                </button>
+                <span class="deck__tray">
+                  <div class="menuwrap">
+                    <button class="rb rb--wide" id="btnRate" data-i18n-title="rate.title">1×</button>
+                    <div class="menu" id="rateMenu"></div>
+                  </div>
+                  <button class="rb" id="btnLoop" data-i18n-title="loop.queue">
+                    <svg class="ph" viewBox="-1.0 -1.0 257.9 257.9"><path d="M20,128A76.08,76.08,0,0,1,96,52h99l-3.52-3.51a12,12,0,1,1,17-17l24,24a12,12,0,0,1,0,17l-24,24a12,12,0,0,1-17-17L195,76H96a52.06,52.06,0,0,0-52,52,12,12,0,0,1-24,0Zm204-12a12,12,0,0,0-12,12,52.06,52.06,0,0,1-52,52H61l3.52-3.51a12,12,0,1,0-17-17l-24,24a12,12,0,0,0,0,17l24,24a12,12,0,1,0,17-17L61,204h99a76.08,76.08,0,0,0,76-76A12,12,0,0,0,224,116Z"/></svg>
+                  </button>
+                  <button class="rb" id="btnAuto" data-i18n-title="auto.on">
+                    <svg class="ph" viewBox="4.5 4.5 246.9 246.9"><path d="M232.49,160.49l-48,48a12,12,0,0,1-17-17L195,164H128A108.12,108.12,0,0,1,20,56a12,12,0,0,1,24,0,84.09,84.09,0,0,0,84,84h67l-27.52-27.51a12,12,0,0,1,17-17l48,48A12,12,0,0,1,232.49,160.49Z"/></svg>
+                  </button>
+                </span>
+              </span>
+              <!-- window mode: edge of the deck, where every player keeps it -->
+              <span class="deck__grp">
+                <div class="menuwrap seg" id="pipSeg">
+                  <button class="rb seg__main" id="btnPip" data-i18n-title="pip.title">
+                    <svg class="ph" viewBox="4.6 4.6 246.9 246.9"><path d="M216,44H40A20,20,0,0,0,20,64V192a20,20,0,0,0,20,20H216a20,20,0,0,0,20-20V64A20,20,0,0,0,216,44ZM44,68H212v48H136a12,12,0,0,0-12,12v60H44ZM148,188V140h64v48Z"/></svg>
+                  </button>
+                  <button class="rb seg__more hide-in-pip" id="btnPipMode" data-i18n-title="pip.mode">
+                    <svg class="ph" viewBox="-29.8 -29.8 315.7 315.7"><path d="M216.49,168.49a12,12,0,0,1-17,0L128,97,56.49,168.49a12,12,0,0,1-17-17l80-80a12,12,0,0,1,17,0l80,80A12,12,0,0,1,216.49,168.49Z"/></svg>
+                  </button>
+                  <div class="menu" id="pipMenu"></div>
+                </div>
+                <button class="rb hide-in-pip" id="btnFull" data-i18n-title="deck.full">
+                  <svg class="ph" viewBox="6.7 6.7 242.7 242.7"><path d="M220,48V88a12,12,0,0,1-24,0V60H168a12,12,0,0,1,0-24h40A12,12,0,0,1,220,48ZM88,196H60V168a12,12,0,0,0-24,0v40a12,12,0,0,0,12,12H88a12,12,0,0,0,0-24Zm120-40a12,12,0,0,0-12,12v28H168a12,12,0,0,0,0,24h40a12,12,0,0,0,12-12V168A12,12,0,0,0,208,156ZM88,36H48A12,12,0,0,0,36,48V88a12,12,0,0,0,24,0V60H88a12,12,0,0,0,0-24Z"/></svg>
+                </button>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- empty state -->
+        <div class="empty hide" id="empty">
+          <div class="empty__box">
+            <a class="brand brand--wide" href="https://mythhand.space/" target="_blank" rel="noopener noreferrer" aria-label="MythHand" title="mythhand.space"><svg class="brand__sym-i" viewBox="0 0 19 19" aria-hidden="true"><path d="M10.4377 5.18182H12.1798V6.90909H13.9218V8.63636H17.4059V10.3636H13.9218V12.0909H12.1798V13.8182H10.4377V17.2727H8.69568V13.8182H6.95365V12.0909H5.21161V10.3636H1.72754V8.63636H5.21161V6.90909H6.95365V5.18182H8.69568V1.72727H10.4377V5.18182ZM17.4059 15.5455H15.6638V13.8182H17.4059V15.5455ZM4.34059 6.04545H2.59856V4.31818H4.34059V6.04545ZM14.7928 3.45455H13.0508V1.72727H14.7928V3.45455ZM12.1798 1.72727H10.4377V0H12.1798V1.72727Z"/></svg><svg class="brand__word-i" viewBox="0 0 180 19" aria-hidden="true"><path d="M157.973 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H160.348H162.723H165.098H167.473H169.848H172.223H174.598V2.375H176.973V4.75V7.125V9.5V11.875V14.25V16.625H174.598V19H172.223H169.848H167.473H165.098H162.723H160.348H157.973ZM162.723 14.25H165.098H167.473H169.848H172.223V11.875V9.5V7.125V4.75H169.848H167.473H165.098H162.723V7.125V9.5V11.875V14.25Z" fill="currentColor"/><path d="M135.836 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H138.211H140.586V2.375H142.961V4.75H145.336V7.125H147.711V9.5H150.086V7.125V4.75V2.375V0H152.461H154.836V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H152.461H150.086V16.625H147.711V14.25H145.336V11.875H142.961V9.5H140.586V11.875V14.25V16.625V19H138.211H135.836Z" fill="currentColor"/><path d="M113.703 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375H116.078V0H118.453H120.828H123.203H125.578H127.953H130.328V2.375H132.703V4.75V7.125V9.5V11.875V14.25V16.625V19H130.328H127.953V16.625V14.25H125.578H123.203H120.828H118.453V16.625V19H116.078H113.703ZM118.453 9.5H120.828H123.203H125.578H127.953V7.125V4.75H125.578H123.203H120.828H118.453V7.125V9.5Z" fill="currentColor"/><path d="M91.5664 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H93.9414H96.3164V2.375V4.75V7.125H98.6914H101.066H103.441H105.816V4.75V2.375V0H108.191H110.566V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H108.191H105.816V16.625V14.25V11.875H103.441H101.066H98.6914H96.3164V14.25V16.625V19H93.9414H91.5664Z" fill="currentColor"/><path d="M69.4336 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H71.8086H74.1836V2.375V4.75V7.125H76.5586H78.9336H81.3086H83.6836V4.75V2.375V0H86.0586H88.4336V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H86.0586H83.6836V16.625V14.25V11.875H81.3086H78.9336H76.5586H74.1836V14.25V16.625V19H71.8086H69.4336Z" fill="currentColor"/><path d="M47.2969 4.75V2.375V0H49.6719H52.0469H54.4219H56.7969H59.1719H61.5469H63.9219H66.2969V2.375V4.75H63.9219H61.5469H59.1719V7.125V9.5V11.875V14.25V16.625V19H56.7969H54.4219V16.625V14.25V11.875V9.5V7.125V4.75H52.0469H49.6719H47.2969Z" fill="currentColor"/><path d="M25.1641 7.125V4.75V2.375V0H27.5391H29.9141V2.375V4.75H32.2891V7.125H34.6641H37.0391V4.75H39.4141V2.375V0H41.7891H44.1641V2.375V4.75V7.125H41.7891V9.5H39.4141V11.875H37.0391V14.25V16.625V19H34.6641H32.2891V16.625V14.25V11.875H29.9141V9.5H27.5391V7.125H25.1641Z" fill="currentColor"/><path d="M3.02734 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H5.40234H7.77734V2.375H10.1523V4.75H12.5273H14.9023V2.375H17.2773V0H19.6523H22.0273V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H19.6523H17.2773V16.625V14.25V11.875V9.5H14.9023V11.875H12.5273H10.1523V9.5H7.77734V11.875V14.25V16.625V19H5.40234H3.02734Z" fill="currentColor"/></svg></a>
+            <h1 data-i18n="empty.title">Choose what to watch</h1>
+            <p data-i18n-html="empty.text"></p>
+            <div class="row">
+              <button class="btn" id="btnEmptyDisk" data-i18n="browse.title" hidden>Browse disk</button>
+              <button class="btn" id="btnEmptyFiles" data-i18n="empty.files">Choose files</button>
+              <button class="btn" id="btnEmptyFolder" data-i18n="empty.folder">Choose folder</button>
+            </div>
+            <div class="empty__hint" id="modeHint"></div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ───────────── queue ───────────── -->
+    <aside class="queue" id="queue">
+      <div class="queue__tools">
+        <!-- while the queue is empty the view and order controls have
+             nothing to act on, and the header names what the panel shows -->
+        <span class="queue__title" data-i18n="queue.about">About</span>
+        <div class="toolgrp">
+          <span class="toolgrp__cap" data-i18n="view.head">View</span>
+          <div class="segbar">
+          <button class="segbar__b" id="btnViewRows" data-i18n-title="view.rows">
+            <svg class="ph" viewBox="8.4 8.4 239.2 239.2"><path d="M76,64A12,12,0,0,1,88,52H216a12,12,0,0,1,0,24H88A12,12,0,0,1,76,64Zm140,52H88a12,12,0,0,0,0,24H216a12,12,0,0,0,0-24Zm0,64H88a12,12,0,0,0,0,24H216a12,12,0,0,0,0-24ZM44,112a16,16,0,1,0,16,16A16,16,0,0,0,44,112Zm0-64A16,16,0,1,0,60,64,16,16,0,0,0,44,48Zm0,128a16,16,0,1,0,16,16A16,16,0,0,0,44,176Z"/></svg>
+          </button>
+          <button class="segbar__b" id="btnViewGrid" data-i18n-title="view.grid">
+            <svg class="ph" viewBox="6.7 6.7 242.7 242.7"><path d="M100,36H56A20,20,0,0,0,36,56v44a20,20,0,0,0,20,20h44a20,20,0,0,0,20-20V56A20,20,0,0,0,100,36ZM96,96H60V60H96ZM200,36H156a20,20,0,0,0-20,20v44a20,20,0,0,0,20,20h44a20,20,0,0,0,20-20V56A20,20,0,0,0,200,36Zm-4,60H160V60h36Zm-96,40H56a20,20,0,0,0-20,20v44a20,20,0,0,0,20,20h44a20,20,0,0,0,20-20V156A20,20,0,0,0,100,136Zm-4,60H60V160H96Zm104-60H156a20,20,0,0,0-20,20v44a20,20,0,0,0,20,20h44a20,20,0,0,0,20-20V156A20,20,0,0,0,200,136Zm-4,60H160V160h36Z"/></svg>
+          </button>
+        </div>
+        </div>
+        <div class="toolgrp">
+          <span class="toolgrp__cap" data-i18n="order.head">Order</span>
+          <div class="segbar">
+          <button class="segbar__b" id="btnSort" data-i18n-title="queue.sort">
+            <svg class="ph" viewBox="6.9 6.9 242.2 242.2"><path d="M128,128a12,12,0,0,1-12,12H48a12,12,0,0,1,0-24h68A12,12,0,0,1,128,128ZM48,76H180a12,12,0,0,0,0-24H48a12,12,0,0,0,0,24Zm52,104H48a12,12,0,0,0,0,24h52a12,12,0,0,0,0-24Zm132.49-20.49a12,12,0,0,0-17,0L196,179V112a12,12,0,0,0-24,0v67l-19.51-19.52a12,12,0,0,0-17,17l40,40a12,12,0,0,0,17,0l40-40A12,12,0,0,0,232.49,159.51Z"/></svg>
+          </button>
+          <button class="segbar__b" id="btnReverse" data-i18n-title="queue.reverse">
+            <svg class="ph" viewBox="6.7 6.7 242.7 242.7"><path d="M120.49,167.51a12,12,0,0,1,0,17l-32,32a12,12,0,0,1-17,0l-32-32a12,12,0,1,1,17-17L68,179V48a12,12,0,0,1,24,0V179l11.51-11.52A12,12,0,0,1,120.49,167.51Zm96-96-32-32a12,12,0,0,0-17,0l-32,32a12,12,0,0,0,17,17L164,77V208a12,12,0,0,0,24,0V77l11.51,11.52a12,12,0,0,0,17-17Z"/></svg>
+          </button>
+          <button class="segbar__b" id="btnShuffle" data-i18n-title="queue.shuffle">
+            <svg class="ph" viewBox="0.5 0.5 254.9 254.9"><path d="M240.49,175.51a12,12,0,0,1,0,17l-24,24a12,12,0,0,1-17-17L203,196h-2.09a76.17,76.17,0,0,1-61.85-31.83L97.38,105.78A52.1,52.1,0,0,0,55.06,84H32a12,12,0,0,1,0-24H55.06a76.17,76.17,0,0,1,61.85,31.83l41.71,58.39A52.1,52.1,0,0,0,200.94,172H203l-3.52-3.51a12,12,0,0,1,17-17Zm-95.62-72.62a12,12,0,0,0,16.93-1.13A52,52,0,0,1,200.94,84H203l-3.52,3.51a12,12,0,0,0,17,17l24-24a12,12,0,0,0,0-17l-24-24a12,12,0,0,0-17,17L203,60h-2.09a76,76,0,0,0-57.2,26A12,12,0,0,0,144.87,102.89Zm-33.74,50.22a12,12,0,0,0-16.93,1.13A52,52,0,0,1,55.06,172H32a12,12,0,0,0,0,24H55.06a76,76,0,0,0,57.2-26A12,12,0,0,0,111.13,153.11Z"/></svg>
+          </button>
+          </div>
+        </div>
+        <div class="spacer"></div>
+        <!-- scrolls the list to the file playing, in a long season it is easy to lose -->
+        <button class="rb rb--sm" id="btnLocate" data-i18n-title="queue.locate">
+          <svg class="ph" viewBox="-3.5 -3.5 262.9 262.9"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm12,191.13V184a12,12,0,0,0-24,0v27.13A84.18,84.18,0,0,1,44.87,140H72a12,12,0,0,0,0-24H44.87A84.18,84.18,0,0,1,116,44.87V72a12,12,0,0,0,24,0V44.87A84.18,84.18,0,0,1,211.13,116H184a12,12,0,0,0,0,24h27.13A84.18,84.18,0,0,1,140,211.13Z"/></svg>
+        </button>
+        <button class="rb rb--sm" id="btnQueueClose" data-i18n-title="queue.hide">
+          <svg class="ph" viewBox="12.0 12.0 231.9 231.9"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg>
+        </button>
+      </div>
+
+      <ol class="queue__list" id="queueList"></ol>
+
+      <div class="queue__foot">
+        <div class="queue__side">
+          <div class="brand brand--mini"><svg class="brand__sym-i" viewBox="0 0 19 19" aria-hidden="true"><path d="M10.4377 5.18182H12.1798V6.90909H13.9218V8.63636H17.4059V10.3636H13.9218V12.0909H12.1798V13.8182H10.4377V17.2727H8.69568V13.8182H6.95365V12.0909H5.21161V10.3636H1.72754V8.63636H5.21161V6.90909H6.95365V5.18182H8.69568V1.72727H10.4377V5.18182ZM17.4059 15.5455H15.6638V13.8182H17.4059V15.5455ZM4.34059 6.04545H2.59856V4.31818H4.34059V6.04545ZM14.7928 3.45455H13.0508V1.72727H14.7928V3.45455ZM12.1798 1.72727H10.4377V0H12.1798V1.72727Z"/></svg><span class="brand__word"><svg class="brand__word-i" viewBox="0 0 180 19" aria-hidden="true"><path d="M157.973 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H160.348H162.723H165.098H167.473H169.848H172.223H174.598V2.375H176.973V4.75V7.125V9.5V11.875V14.25V16.625H174.598V19H172.223H169.848H167.473H165.098H162.723H160.348H157.973ZM162.723 14.25H165.098H167.473H169.848H172.223V11.875V9.5V7.125V4.75H169.848H167.473H165.098H162.723V7.125V9.5V11.875V14.25Z" fill="currentColor"/><path d="M135.836 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H138.211H140.586V2.375H142.961V4.75H145.336V7.125H147.711V9.5H150.086V7.125V4.75V2.375V0H152.461H154.836V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H152.461H150.086V16.625H147.711V14.25H145.336V11.875H142.961V9.5H140.586V11.875V14.25V16.625V19H138.211H135.836Z" fill="currentColor"/><path d="M113.703 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375H116.078V0H118.453H120.828H123.203H125.578H127.953H130.328V2.375H132.703V4.75V7.125V9.5V11.875V14.25V16.625V19H130.328H127.953V16.625V14.25H125.578H123.203H120.828H118.453V16.625V19H116.078H113.703ZM118.453 9.5H120.828H123.203H125.578H127.953V7.125V4.75H125.578H123.203H120.828H118.453V7.125V9.5Z" fill="currentColor"/><path d="M91.5664 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H93.9414H96.3164V2.375V4.75V7.125H98.6914H101.066H103.441H105.816V4.75V2.375V0H108.191H110.566V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H108.191H105.816V16.625V14.25V11.875H103.441H101.066H98.6914H96.3164V14.25V16.625V19H93.9414H91.5664Z" fill="currentColor"/><path d="M69.4336 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H71.8086H74.1836V2.375V4.75V7.125H76.5586H78.9336H81.3086H83.6836V4.75V2.375V0H86.0586H88.4336V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H86.0586H83.6836V16.625V14.25V11.875H81.3086H78.9336H76.5586H74.1836V14.25V16.625V19H71.8086H69.4336Z" fill="currentColor"/><path d="M47.2969 4.75V2.375V0H49.6719H52.0469H54.4219H56.7969H59.1719H61.5469H63.9219H66.2969V2.375V4.75H63.9219H61.5469H59.1719V7.125V9.5V11.875V14.25V16.625V19H56.7969H54.4219V16.625V14.25V11.875V9.5V7.125V4.75H52.0469H49.6719H47.2969Z" fill="currentColor"/><path d="M25.1641 7.125V4.75V2.375V0H27.5391H29.9141V2.375V4.75H32.2891V7.125H34.6641H37.0391V4.75H39.4141V2.375V0H41.7891H44.1641V2.375V4.75V7.125H41.7891V9.5H39.4141V11.875H37.0391V14.25V16.625V19H34.6641H32.2891V16.625V14.25V11.875H29.9141V9.5H27.5391V7.125H25.1641Z" fill="currentColor"/><path d="M3.02734 19V16.625V14.25V11.875V9.5V7.125V4.75V2.375V0H5.40234H7.77734V2.375H10.1523V4.75H12.5273H14.9023V2.375H17.2773V0H19.6523H22.0273V2.375V4.75V7.125V9.5V11.875V14.25V16.625V19H19.6523H17.2773V16.625V14.25V11.875V9.5H14.9023V11.875H12.5273H10.1523V9.5H7.77734V11.875V14.25V16.625V19H5.40234H3.02734Z" fill="currentColor"/></svg></span></div>
+          <div class="queue__sum">
+            <span id="queueFiles"></span>
+            <span id="queueTotal">0:00:00</span>
+          </div>
+        </div>
+        <div class="queue__add">
+          <button class="tag" id="btnDisk" hidden>
+            <svg class="ph" viewBox="4.1 4.1 247.8 247.8"><path d="M208,36H48A20,20,0,0,0,28,56V200a20,20,0,0,0,20,20H208a20,20,0,0,0,20-20V56A20,20,0,0,0,208,36Zm-4,24v56H52V60ZM52,196V140H204v56ZM160,88a16,16,0,1,1,16,16A16,16,0,0,1,160,88Zm32,80a16,16,0,1,1-16-16A16,16,0,0,1,192,168Z"/></svg>
+            <span data-i18n="browse.title">Browse disk</span>
+          </button>
+          <button class="tag" id="btnAddFiles">
+            <svg class="ph" viewBox="1.7 1.7 252.6 252.6"><path d="M216.49,79.51l-56-56A12,12,0,0,0,152,20H56A20,20,0,0,0,36,40V216a20,20,0,0,0,20,20H200a20,20,0,0,0,20-20V88A12,12,0,0,0,216.49,79.51ZM160,57l23,23H160ZM60,212V44h76V92a12,12,0,0,0,12,12h48V212Zm104-60a12,12,0,0,1-12,12H140v12a12,12,0,0,1-24,0V164H104a12,12,0,0,1,0-24h12V128a12,12,0,0,1,24,0v12h12A12,12,0,0,1,164,152Z"/></svg>
+            <span data-i18n="queue.files">Files</span>
+          </button>
+          <button class="tag" id="btnAddFolder">
+            <svg class="ph" viewBox="1.0 1.0 253.9 253.9"><path d="M216,68H133.39l-26-29.29a20,20,0,0,0-15-6.71H40A20,20,0,0,0,20,52V200.62A19.41,19.41,0,0,0,39.38,220H216.89A19.13,19.13,0,0,0,236,200.89V88A20,20,0,0,0,216,68ZM90.61,56l10.67,12H44V56ZM212,196H44V92H212Zm-72-76v12h12a12,12,0,0,1,0,24H140v12a12,12,0,0,1-24,0V156H104a12,12,0,0,1,0-24h12V120a12,12,0,0,1,24,0Z"/></svg>
+            <span data-i18n="queue.folder">Folder</span>
+          </button>
+          <button class="tag tag--quiet" id="btnClear" data-i18n="queue.clear">Clear</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- ───────────── disk browser (server mode) ───────────── -->
+<div class="modal" id="browserModal">
+  <div class="modal__card modal__card--wide">
+    <div class="modal__head">
+      <h2 data-i18n="browse.title">Browse disk</h2>
+      <button class="rb rb--sm" id="brClose"><svg class="ph" viewBox="12.0 12.0 231.9 231.9"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button>
+    </div>
+    <div class="browser">
+      <nav class="browser__places" id="brPlaces"></nav>
+      <div class="browser__main">
+        <div class="browser__bar">
+          <button class="rb rb--sm" id="brUp" data-i18n-title="browse.up"><svg class="ph" viewBox="6.9 6.9 242.2 242.2"><path d="M208.49,120.49a12,12,0,0,1-17,0L140,69V216a12,12,0,0,1-24,0V69L64.49,120.49a12,12,0,0,1-17-17l72-72a12,12,0,0,1,17,0l72,72A12,12,0,0,1,208.49,120.49Z"/></svg></button>
+          <div class="browser__path" id="brPath">—</div>
+          <button class="btn btn--solid btn--sm" id="brAddAll" data-i18n="browse.addAll">Add the whole folder</button>
+        </div>
+        <ul class="browser__list" id="brList"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ───────────── help: why there is no sound ───────────── -->
+<div class="modal" id="helpModal">
+  <div class="modal__card">
+    <div class="modal__head">
+      <h2 data-i18n="help.title">Why there is no sound</h2>
+      <button class="rb rb--sm" id="helpClose"><svg class="ph" viewBox="12.0 12.0 231.9 231.9"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg></button>
+    </div>
+    <div class="prose">
+      <p data-i18n-html="help.p1"></p>
+      <p data-i18n-html="help.p2"></p>
+      <div class="code" id="helpCmd">node server.mjs</div>
+      <p class="prose__dim" data-i18n-html="help.p3"></p>
+    </div>
+  </div>
+</div>
+
+<div class="dropveil" id="dropveil"><div class="dropveil__box" data-i18n="drop.label">Release to add to the queue</div></div>
+<div class="toast" id="toast"></div>
+
+<input type="file" id="filePick" multiple accept="video/*,audio/*,.mkv,.avi,.mov,.m4v,.webm,.mp4,.ogv,.mp3,.m4a,.flac,.opus" hidden>
+<input type="file" id="dirPick" webkitdirectory directory multiple hidden>
+<video id="prober" preload="metadata" hidden muted></video>
+
+<script src="i18n.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
