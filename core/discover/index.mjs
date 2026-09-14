@@ -11,12 +11,13 @@
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
 import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText } from './series.mjs';
+import { numberFromText } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
-import { findPlayers } from './players.mjs';
+import { findPlayers, qualityOf } from './players.mjs';
+import { template } from './numbers.mjs';
+import { UNNAMED_DUB } from '../catalog/model.mjs';
 
-/* What a page with one player and no dub switch offers: a dub Lapka
-   cannot name. The user sees this name until an extractor does better. */
-export const UNNAMED_DUB = 'Основной';
+export { UNNAMED_DUB };
 
 export function discover({ html, url, profile = null }) {
   const { document: doc } = parseHTML(String(html));
@@ -29,11 +30,29 @@ export function discover({ html, url, profile = null }) {
   const seriesUrl = findSeriesUrl(doc, url);
   const current = findCurrentEpisode(doc, url);
 
-  const kind = players.length ? 'episode' : episodes.items.length ? 'series' : 'unknown';
+  /* A player element on the page makes it an episode page. Streams
+     found only in scripts do not: a series page may carry the
+     streams of every episode in its data. There the list of
+     episodes decides, unless the page names which episode it is. */
+  const inline = players.some(p => p.kind !== 'script');
+  const kind = inline ? 'episode'
+    : episodes.items.length >= 2 && !current.length ? 'series'
+    : players.length ? 'episode'
+    : episodes.items.length ? 'series' : 'unknown';
 
-  /* on an episode page the heading carries the number; the series title is what is left */
+  /* On an episode page the heading carries the episode; the series is
+     what is left. Parts split by a dash or a bar: the part with the
+     episode goes, and the series is the first part unless the episode
+     came first, then it is the last ("Episode 8 | its name | Series"). */
   const titleValue = title[0]?.value || '';
-  const seriesTitle = kind === 'episode' ? (titleFromText(titleValue.split(/\s+[—–|]\s+/)[0]) || titleValue) : titleValue;
+  let seriesTitle = titleValue;
+  if (kind === 'episode' && titleValue) {
+    const parts = titleValue.split(/\s+[—–|]\s+/);
+    const hasNumber = p => numberFromText(p) !== null;
+    const rest = parts.filter(p => !hasNumber(p));
+    if (parts.length > 1 && rest.length) seriesTitle = hasNumber(parts[0]) ? rest[rest.length - 1] : rest[0];
+    else seriesTitle = titleFromText(parts[0]) || titleValue;
+  }
 
   if (seriesTitle) steps.push(`Сериал: ${seriesTitle}`);
   if (episodes.items.length) steps.push(`Нашла ${episodes.items.length} ${plural(episodes.items.length, 'серию', 'серии', 'серий')}`);
@@ -46,7 +65,7 @@ export function discover({ html, url, profile = null }) {
   if (kind === 'unknown') steps.push('Не нашла на странице ни серий, ни плеера');
 
   return {
-    url, kind, profile: profile?.match || null,
+    url, kind, profile: profile?.match || null, defaultDub: profile?.dub || null,
     title: { value: seriesTitle, candidates: title },
     cover: { value: cover[0]?.value || null, candidates: cover },
     seriesUrl: { value: kind === 'episode' ? seriesUrl[0]?.value || null : null, candidates: seriesUrl },
@@ -83,18 +102,33 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
     const dub = name => { let d = ep.dubs.find(x => x.name === name); if (!d) { d = { name, sources: [] }; ep.dubs.push(d); } return d; };
 
     const named = report.players.filter(p => p.dubLabel);
-    const direct = report.players.filter(p => p.stream && !p.dubLabel);
+    const direct = ownStreams(report.players.filter(p => p.stream && !p.dubLabel), number);
     const unnamedEmbeds = report.players.filter(p => !p.dubLabel && !p.stream);
 
-    for (const p of named) dub(p.dubLabel).sources.push({ player: p.id, embedUrl: p.url, streams: p.stream ? [{ kind: p.stream, url: p.url }] : undefined });
-    /* a stream on the page itself, nobody named it: the page is the player */
+    for (const p of named) dub(p.dubLabel).sources.push({ player: p.id, embedUrl: p.url, streams: p.stream ? [{ kind: p.stream, url: p.url, quality: qualityOf(p.url) }] : undefined });
+    /* a stream on the page itself, nobody named it: the page is the
+       player, and the dub is what the profile calls it, if anything */
     if (direct.length && !named.length && !unnamedEmbeds.length) {
-      const d = dub(UNNAMED_DUB);
-      d.sources.push({ player: 'page', embedUrl: report.url, streams: direct.map(p => ({ kind: p.stream, url: p.url })) });
+      const d = dub(report.defaultDub || UNNAMED_DUB);
+      d.sources.push({ player: 'page', embedUrl: report.url, streams: direct.map(p => ({ kind: p.stream, url: p.url, quality: qualityOf(p.url) })) });
     }
     if (!ep.dubs.length) delete ep.dubs;
   }
   return c;
+}
+
+/* A page may carry the streams of every episode of the series in its
+   data. The ones that name this episode as a folder of their path,
+   while their look-alikes name other numbers, are this episode's;
+   the rest belong to the others. */
+function ownStreams(streams, number) {
+  if (streams.length < 2 || number === null) return streams;
+  const segs = u => { try { return new URL(u).pathname.split('/'); } catch { return []; } };
+  const mine = streams.filter(p => segs(p.url).includes(String(number)));
+  if (!mine.length) return streams;
+  const shapes = new Set(mine.map(p => template(segs(p.url).join('/'))));
+  const rivals = streams.filter(p => !mine.includes(p) && shapes.has(template(segs(p.url).join('/'))));
+  return rivals.length ? mine : streams;
 }
 
 export { findTitle, findCover, findSeriesUrl, findCurrentEpisode, findEpisodes, findPlayers };

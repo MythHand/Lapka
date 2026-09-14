@@ -10,7 +10,7 @@ const WORD = '(?:серия|серии|сер\\.?|эпизод|episode|ep\\.?|�
 const TEXT_AFTER = new RegExp(`(?:^|[^\\d])(\\d{1,4})(?:\\s*-?\\s*[яй])?\\s*${WORD}(?![\\p{L}])`, 'iu');
 const TEXT_BEFORE = new RegExp(`${WORD}\\s*[#№]?\\s*(\\d{1,4})(?![\\d])`, 'iu');
 const BARE = /^\s*[#№]?\s*(\d{1,4})\s*$/;
-const URL_NUM = /(?:^|[/_\-=?&.])(?:s\d{1,2}e|ep|episode|seriya|serie|series|e)[-_/=]?(\d{1,4})(?![\d])/i;
+const URL_NUM = /(?:^|[/_\-=?&.])(?:s\d{1,2}e|ep|episode|seriya|serie|series|e)[-_/=]?(\d{1,4})(?![\dA-Za-z])/i;
 
 export function numberFromText(text) {
   const t = String(text || '').trim();
@@ -33,14 +33,24 @@ export function numberFromUrl(url) {
 
 /* The text with its episode number taken out: what is left is the
    title, if the page gave one. "3 серия — Возвращение" → "Возвращение". */
+const DURATION = /(?:^|\s)\d{1,2}:\d{2}(?::\d{2})?(?=\s|$)/g;
 export function titleFromText(text) {
   if (BARE.test(text)) return '';
   return String(text || '')
     .replace(TEXT_AFTER, ' ').replace(TEXT_BEFORE, ' ')
+    .replace(DURATION, ' ')
+    .replace(/\s+/g, ' ')
     .replace(/^[\s\-–—:·|]+|[\s\-–—:·|]+$/g, '')
     .trim();
 }
 
-/* The address with its digits made anonymous: two links with the same
-   template are two of the same thing. */
-export const template = url => String(url).replace(/\d+/g, '#');
+/* The address with every segment that carries a number, a uuid or a
+   hash made anonymous: two links with the same template are two of
+   the same thing. Whole segments, not digits: a uuid has a different
+   pattern of digits in every link, and then nothing matches anything. */
+export function template(url) {
+  let u; try { u = new URL(url); } catch { return String(url).replace(/[^/?&=#]*\d[^/?&=#]*/g, '#'); }
+  const path = u.pathname.split('/').map(seg => /\d/.test(seg) ? '#' : seg).join('/');
+  const search = u.search.replace(/\d+/g, '#');
+  return u.origin + path + search;
+}

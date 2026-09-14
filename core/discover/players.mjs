@@ -14,6 +14,7 @@
    serves fifty sites, and one page can carry three players.
    ═══════════════════════════════════════════════════════════ */
 import { studioFor } from '../catalog/studios.mjs';
+import { textOf } from './text.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-player-url', 'data-link', 'data-file', 'data-video'];
@@ -21,6 +22,21 @@ const STREAM_RE = /https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?
 const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server)\b/i;
 
 export const streamKind = u => /\.m3u8(\?|$)/i.test(u) ? 'hls' : /\.mpd(\?|$)/i.test(u) ? 'dash' : /\.mp4(\?|$)/i.test(u) ? 'mp4' : null;
+
+/* "720p" in the file name, or a bare 480/720/1080 as a folder of the
+   path: the two ways a CDN names a quality. */
+export function qualityOf(url) {
+  let u; try { u = new URL(url); } catch { return null; }
+  const segs = u.pathname.split('/').filter(Boolean);
+  const name = (segs.pop() || '').replace(/\.[a-z0-9]+$/i, '');
+  /* a whole token of the name, "720p" or "720", never digits inside a hash */
+  for (const tok of name.split(/[-_. ]+/)) {
+    const m = /^(\d{3,4})p?$/i.exec(tok);
+    if (m && Number(m[1]) >= 240 && Number(m[1]) <= 4320) return `${m[1]}p`;
+  }
+  const fromPath = segs.map(Number).reverse().find(n => [240, 360, 480, 540, 720, 1080, 1440, 2160, 4320].includes(n));
+  return fromPath ? `${fromPath}p` : null;
+}
 
 export function playerId(embedUrl, pageUrl) {
   let u, p;
@@ -77,7 +93,7 @@ export function findPlayers(doc, url, { profile } = {}) {
     if (!embed) continue;
     const parent = el.parentNode;
     if (!groups.has(parent)) groups.set(parent, []);
-    groups.get(parent).push({ el, embed, label: clean(el.textContent) || clean(el.getAttribute('title')) });
+    groups.get(parent).push({ el, embed, label: textOf(el) || clean(el.getAttribute('title')) });
   }
 
   for (const [parent, items] of groups) {

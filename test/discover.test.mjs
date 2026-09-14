@@ -11,7 +11,11 @@ import assert from 'node:assert/strict';
 import { discover, toContribution, UNNAMED_DUB } from '../core/discover/index.mjs';
 import { numberFromText, numberFromUrl, titleFromText } from '../core/discover/numbers.mjs';
 import { createSeries, merge } from '../core/catalog/index.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { caseById } from './site/cases.mjs';
+import { qualityOf } from '../core/discover/players.mjs';
 import { renderSeries, renderEpisode } from './site/render.mjs';
 
 const BASE = 'http://127.0.0.1:8801';
@@ -119,7 +123,7 @@ describe('into the catalog', () => {
     assert.equal(ep.dubs.length, 1);
     assert.equal(ep.dubs[0].name, UNNAMED_DUB);
     assert.equal(ep.dubs[0].sources[0].player, 'page');
-    assert.deepEqual(ep.dubs[0].sources[0].streams, [{ kind: 'hls', url: `${BASE}/media/hls/index.m3u8` }]);
+    assert.deepEqual(ep.dubs[0].sources[0].streams, [{ kind: 'hls', url: `${BASE}/media/hls/index.m3u8`, quality: null }]);
   });
 });
 
@@ -191,5 +195,61 @@ describe('a profile as a hint', () => {
     assert.deepEqual(fixed.episodes.items.map(e => [e.number, e.url]), [[1, 'https://tricky.example/watch/77/1'], [2, 'https://tricky.example/watch/77/2'], [3, 'https://tricky.example/watch/77/3']]);
     assert.equal(fixed.episodes.by, 'profile');
     assert.equal(fixed.profile, 'tricky.example');
+  });
+});
+
+/* ── a real site, from its saved pages, with no adapter and no API ──
+   What the general reading gets out of aniliberty.top on its own: the
+   series page names the series and lists the episodes (their links
+   carry no number, the number is in the text of a card glued out of
+   spans); the episode page names its number in the title, not in the
+   uuid of its address; the page data holds the streams of every
+   episode, and only this episode's are taken. */
+const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'aniliberty');
+const snap = f => fs.readFileSync(path.join(SNAP, f), 'utf8');
+const REL = 'https://aniliberty.top/anime/releases/release/re-creators/episodes';
+const EPI = 'https://aniliberty.top/anime/video/episode/95b4eca9-789e-11ec-ae92-0242ac120002';
+
+describe('aniliberty.top, read generally', () => {
+  const rel = discover({ html: snap('release.html'), url: REL });
+  const epi = discover({ html: snap('episode.html'), url: EPI });
+
+  test('the release page is a series page with its episodes', () => {
+    assert.equal(rel.kind, 'series');
+    assert.equal(rel.title.value, 'Возрождающие');
+    assert.match(rel.cover.value, /^https:\/\/cdn\.anilibria\.top\/.*\.jpg$/);
+    assert.deepEqual(rel.episodes.items.map(e => e.number), Array.from({ length: 22 }, (_, i) => i + 1));
+    assert.equal(rel.episodes.items[21].title, 'Финал');
+    assert.match(rel.episodes.items[0].url, /\/anime\/video\/episode\/[0-9a-f-]{36}$/);
+    assert.ok(rel.episodes.confidence >= 0.9, String(rel.episodes.confidence));
+  });
+
+  test('the episode page knows which episode it is, from the title and not from the uuid', () => {
+    assert.equal(epi.kind, 'episode');
+    assert.equal(epi.episode.value, 8);
+    assert.match(epi.title.value, /Возрождающие/);
+  });
+
+  test('of the streams of every episode in the page data, this episode gets its own three', () => {
+    const c = toContribution(epi);
+    const ep = c.episodes.find(e => e.number === 8);
+    assert.equal(ep.dubs.length, 1);
+    assert.equal(ep.dubs[0].name, UNNAMED_DUB);
+    const streams = ep.dubs[0].sources[0].streams;
+    assert.deepEqual(streams.map(s => s.quality).sort(), ['1080p', '480p', '720p']);
+    for (const s of streams) assert.match(s.url, /\/3993\/8\//);
+  });
+
+  test('a profile names the dub the page does not', () => {
+    const r = discover({ html: snap('episode.html'), url: EPI, profile: { match: 'aniliberty.top', dub: 'AniLibria' } });
+    const ep = toContribution(r).episodes.find(e => e.number === 8);
+    assert.equal(ep.dubs[0].name, 'AniLibria');
+  });
+
+  test('qualities are read from a file name or a folder', () => {
+    assert.equal(qualityOf('https://x/v/720p.mp4'), '720p');
+    assert.equal(qualityOf('https://x/v/1080/abc.m3u8?x=1'), '1080p');
+    assert.equal(qualityOf('https://x/v/3993/8/480/abc.m3u8'), '480p');
+    assert.equal(qualityOf('https://x/v/index.m3u8'), null);
   });
 });

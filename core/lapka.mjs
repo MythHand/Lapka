@@ -11,13 +11,15 @@
 import { createSession } from './session/index.mjs';
 import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
 import { loadExtractors, extractorFor } from './extract/index.mjs';
+import { loadSites, siteFor } from './sites/index.mjs';
+import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
 import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream } from './catalog/index.mjs';
 
 export async function bootLapka(opts = {}) {
-  return createLapka({ extractors: await loadExtractors(), ...opts });
+  return createLapka({ extractors: await loadExtractors(), sites: await loadSites(), profiles: await loadProfiles(), ...opts });
 }
 
-export function createLapka({ session = createSession(), profiles = [], extractors = [], delivery = null } = {}) {
+export function createLapka({ session = createSession(), profiles = [], extractors = [], sites = [], delivery = null } = {}) {
   /* every series looked at this run, so a stream id can be traced back
      to its series, episode, dub and source when the user saves it */
   const seen = new Map();
@@ -33,10 +35,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     return stream ? { series, episode, dub, source, stream } : null;
   }
 
-  const profileFor = url => {
-    let host; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
-    return profiles.find(p => p.match === host || (p.match instanceof RegExp && p.match.test(url))) || null;
-  };
+  const profileFor = url => profileOf(profiles, url);
 
   async function readPage(url, referer = null) {
     const res = await session.fetch(url, { referer });
@@ -149,13 +148,23 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const first = await readPage(url);
     reports.push(first);
 
-    const seriesUrl = first.kind === 'episode' && first.seriesUrl.value ? first.seriesUrl.value : first.url;
-    const series = createSeries({ sourceUrl: seriesUrl, title: first.title.value });
-
-    if (first.kind === 'episode' && first.seriesUrl.value) {
-      try { reports.push(await readPage(first.seriesUrl.value, first.url)); } catch (e) { first.steps.push(`Страница сериала не открылась: ${e.message}`); }
+    /* a site Lapka knows through its API adds what the page cannot say */
+    const site = siteFor(sites, url);
+    let extra = null;
+    if (site) {
+      try { extra = await site.look(url, session); if (extra) first.steps.push(`Сайт знаком: ${site.name}`); }
+      catch (e) { first.steps.push(`${site.name}: ${e.message}`); }
     }
-    /* the series page names the series best; the episode page adds its dubs */
+
+    const seriesUrl = (first.kind === 'episode' && first.seriesUrl.value) || (extra && extra.seriesUrl) || first.url;
+    /* no title yet: the adapter, then the series page, then the episode page fill it in that order */
+    const series = createSeries({ sourceUrl: seriesUrl });
+
+    if (first.kind === 'episode' && seriesUrl !== first.url) {
+      try { reports.push(await readPage(seriesUrl, first.url)); } catch (e) { first.steps.push(`Страница сериала не открылась: ${e.message}`); }
+    }
+    /* the adapter names things best, then the series page, then the episode page */
+    if (extra) merge(series, extra);
     for (const r of [...reports].reverse()) merge(series, toContribution(r));
 
     const steps = [...new Set(reports.flatMap(r => r.steps))];
@@ -170,11 +179,12 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     registerStreams(series);
     seen.set(series.id, series);
 
+    const startAt = first.kind === 'episode' && number !== null ? number : extra && extra.start != null ? extra.start : null;
     return { series, reports, opened, steps, dubs: allDubs(series).map(d => d.name),
-      start: first.kind === 'episode' && number !== null ? { episode: number } : null };
+      start: startAt !== null ? { episode: startAt } : null };
   }
 
-  return { look, readPage, context, series, openEpisode, resolve, session, extractors };
+  return { look, readPage, context, series, openEpisode, resolve, session, extractors, sites, profiles };
 }
 
 function plural(n, one, few, many) {

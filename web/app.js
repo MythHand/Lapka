@@ -1677,81 +1677,12 @@ btnLocate.onclick = revealCurrent;
    by importance to the goal: first what the whole thing was started
    for, then what it cannot work without, and only at the end the
    trimmings. */
-const FEAT_GROUPS = [
-  ['pip', 3],       // why the project exists
-  ['audio', 5],     // without a track choice a release cannot be watched
-  ['bridge', 7],    // what makes any of it play at all
-  ['play', 8],      // the mechanics of watching a series
-  ['ui', 6],        // the trimmings
-];
-
 function aboutBlock() {
   const li = document.createElement('li');
   li.className = 'queue__about';
-  /* Prose, then the note about MKV, then the list. The AC-3 paragraph
-     covers one particular case, so it is not in the main flow but a
-     separate note at the end of the description. */
-  li.innerHTML =
-    '<p class="queue__drop"></p>' +
-    '<hr class="queue__rule">' +
-    '<h2></h2>' +
-    '<p class="queue__lede"></p>' +
-    '<p class="queue__lede"></p>' +
-    '<aside class="queue__case"></aside>' +
-    '<h3 class="queue__featshead"></h3>' +
-    '<div class="queue__feats"></div>';
-
+  li.innerHTML = '<p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
   li.querySelector('.queue__drop').innerHTML = t('queue.empty');
-  li.querySelector('h2').textContent = t('about.lead');
-  li.querySelector('.queue__case').textContent = t('about.p2');
-  li.querySelector('.queue__featshead').textContent = t('about.feats');
-
-  const ps = li.querySelectorAll('.queue__lede');
-  ps[0].textContent = t('about.p1');
-  ps[1].textContent = t('about.p3');
-
-  /* the link is the tail of the first paragraph, not a line of its own */
-  if (REPO) {
-    const a = document.createElement('a');
-    a.className = 'queue__repo';
-    a.href = REPO;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    a.innerHTML = `<span></span>${phSvg(PH.linkOut)}`;
-    a.querySelector('span').textContent = t('about.repo');
-    ps[0].append(' ', a);
-  }
-
-  /* The keys come in families, feat.<group> and feat.<group>.N; listing
-     them one by one would mean keeping the list in two places.
-
-     A point can have points of its own, feat.<group>.N.M. They belong to
-     that point and not to the group: hotkeys in the floating window and
-     the address bar are about the extended mode, so they sit under it
-     instead of standing as equals next to it. The English dictionary is
-     the full set of keys, so it decides whether a sub-point exists. */
-  const feats = li.querySelector('.queue__feats');
-  const has = key => LANG_DICT.en[key] !== undefined;
-  for (const [group, n] of FEAT_GROUPS) {
-    const h = document.createElement('h4');
-    h.textContent = t('feat.' + group);
-    const ul = document.createElement('ul');
-    for (let i = 1; i <= n; i++) {
-      const item = document.createElement('li');
-      item.textContent = t(`feat.${group}.${i}`);
-      if (has(`feat.${group}.${i}.1`)) {
-        const sub = document.createElement('ul');
-        for (let j = 1; has(`feat.${group}.${i}.${j}`); j++) {
-          const s = document.createElement('li');
-          s.textContent = t(`feat.${group}.${i}.${j}`);
-          sub.append(s);
-        }
-        item.append(sub);
-      }
-      ul.append(item);
-    }
-    feats.append(h, ul);
-  }
+  li.querySelector('.queue__lede').textContent = t('about.placeholder');
   return li;
 }
 

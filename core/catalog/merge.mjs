@@ -23,7 +23,7 @@
    ═══════════════════════════════════════════════════════════ */
 import {
   createEpisode, createDub, createSource, createStream,
-  findEpisode, findDub, findSource,
+  findEpisode, findDub, findSource, dubKey, UNNAMED_DUB,
 } from './model.mjs';
 
 const has = v => v !== undefined && v !== null && v !== '';
@@ -50,9 +50,15 @@ export function merge(series, contribution) {
   for (const ep of c.episodes || []) {
     let episode = findEpisode(series, ep.number);
     if (!episode) { episode = createEpisode(ep); series.episodes.push(episode); added.episodes++; }
-    else fill(episode, ep, ['title', 'sourceUrl']);
+    else fill(episode, ep, ['title', 'sourceUrl', 'duration']);
 
     for (const d of ep.dubs || []) {
+      /* an unnamed dub whose streams a named dub already has is that
+         dub seen twice, not a second one */
+      if (dubKey(d.name) === dubKey(UNNAMED_DUB)) {
+        const urls = new Set((d.sources || []).flatMap(s => (s.streams || []).map(st => st.url)));
+        if (urls.size && episode.dubs.some(x => x.key !== dubKey(UNNAMED_DUB) && x.sources.some(s => s.streams.some(st => urls.has(st.url))))) continue;
+      }
       let dub = findDub(episode, d.name);
       if (!dub) { dub = createDub(d); episode.dubs.push(dub); added.dubs++; }
       else fill(dub, d, ['studio', 'lang']);

@@ -10,6 +10,7 @@
    what else was considered.
    ═══════════════════════════════════════════════════════════ */
 import { numberFromText, numberFromUrl, titleFromText, template } from './numbers.mjs';
+import { textOf } from './text.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 
@@ -31,23 +32,23 @@ function candidatesFrom(doc, url, profile) {
       if (!href) continue;
       let abs; try { abs = new URL(href, url).toString(); } catch { continue; }
       const raw = numAttr ? el.getAttribute(numAttr) : null;
-      const number = raw !== null && raw !== undefined ? Number(raw) : (numberFromText(el.textContent) ?? numberFromUrl(abs));
+      const number = raw !== null && raw !== undefined ? Number(raw) : (numberFromText(textOf(el)) ?? numberFromUrl(abs));
       if (!Number.isFinite(number)) continue;
-      out.push({ number, title: titleFromText(el.textContent), url: abs, by: 'profile', where: profile.episodes.list });
+      out.push({ number, title: titleFromText(textOf(el)), url: abs, by: 'profile', where: profile.episodes.list });
     }
     if (out.length) return out;
   }
 
-  for (const a of doc.querySelectorAll('a[href]')) push(a, a.getAttribute('href'), a.textContent, 'link');
+  for (const a of doc.querySelectorAll('a[href]')) push(a, a.getAttribute('href'), textOf(a), 'link');
   for (const o of doc.querySelectorAll('option[value]')) {
     const v = o.getAttribute('value');
-    if (/^\/|^https?:/i.test(v)) push(o, v, o.textContent, 'option');
+    if (/^\/|^https?:/i.test(v)) push(o, v, textOf(o), 'option');
   }
   for (const el of doc.querySelectorAll('[data-episode][data-url], [data-episode][data-href], [data-episode][data-src]')) {
     const href = el.getAttribute('data-url') || el.getAttribute('data-href') || el.getAttribute('data-src');
     let abs; try { abs = new URL(href, url).toString(); } catch { continue; }
     const number = Number(el.getAttribute('data-episode'));
-    if (Number.isFinite(number)) out.push({ number, title: titleFromText(el.textContent), url: abs, by: 'data-episode', where: el.tagName.toLowerCase() });
+    if (Number.isFinite(number)) out.push({ number, title: titleFromText(textOf(el)), url: abs, by: 'data-episode', where: el.tagName.toLowerCase() });
   }
   return out;
 }

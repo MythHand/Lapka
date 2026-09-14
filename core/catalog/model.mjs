@@ -44,6 +44,10 @@ export function dubKey(name) {
 
 export const sourceId = (player, embedUrl) => hash(`${player}|${embedUrl}`);
 
+/* What a page with a stream and no dub switch offers: a dub nobody
+   named. The user sees this until a profile or an adapter does better. */
+export const UNNAMED_DUB = 'Основной';
+
 const now = () => Date.now();
 
 export function createSeries({ sourceUrl, title = '', altTitles = [], cover = null, year = null } = {}) {
@@ -60,9 +64,9 @@ export function createSeries({ sourceUrl, title = '', altTitles = [], cover = nu
   };
 }
 
-export function createEpisode({ number, title = '', sourceUrl = null }) {
+export function createEpisode({ number, title = '', sourceUrl = null, duration = null }) {
   if (!Number.isFinite(number)) throw new Error('an episode needs a number');
-  return { number, title, sourceUrl, dubs: [], opened: false };
+  return { number, title, sourceUrl, duration, dubs: [], opened: false };
 }
 
 export function createDub({ name, studio = null, lang = null, kind = 'dub' }) {

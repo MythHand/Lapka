@@ -6,6 +6,7 @@
    with a confidence and the place it was found.
    ═══════════════════════════════════════════════════════════ */
 import { numberFromText, numberFromUrl, titleFromText } from './numbers.mjs';
+import { textOf } from './text.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 
@@ -18,7 +19,7 @@ export function findTitle(doc, { profile } = {}) {
   const add = (value, by, confidence, where) => { value = clean(value); if (value) out.push({ value, by, confidence, where }); };
   if (profile?.series?.title) for (const el of doc.querySelectorAll(profile.series.title)) add(el.textContent, 'profile', 1, profile.series.title);
   add(doc.querySelector('meta[property="og:title"]')?.getAttribute('content'), 'og:title', 0.9, 'meta[property="og:title"]');
-  const h1 = doc.querySelector('h1'); if (h1) add(h1.textContent, 'h1', 0.8, 'h1');
+  const h1 = doc.querySelector('h1'); if (h1) add(textOf(h1), 'h1', 0.8, 'h1');
   add(stripSite(doc.querySelector('title')?.textContent), 'title', 0.5, 'title');
   out.sort((a, b) => b.confidence - a.confidence);
   return out;
@@ -76,7 +77,7 @@ export function findCurrentEpisode(doc, url) {
   const out = [];
   const fromUrl = numberFromUrl(url);
   if (fromUrl !== null) out.push({ value: fromUrl, by: 'url', confidence: 0.6, where: url });
-  const h1 = clean(doc.querySelector('h1')?.textContent);
+  const h1 = doc.querySelector('h1') ? textOf(doc.querySelector('h1')) : '';
   const fromH1 = numberFromText(h1);
   if (fromH1 !== null) out.push({ value: fromH1, by: 'h1', confidence: 0.6, where: 'h1' });
   const fromTitle = numberFromText(doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || doc.querySelector('title')?.textContent);

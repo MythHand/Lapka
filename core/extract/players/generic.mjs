@@ -9,14 +9,13 @@
    extractor to be written.
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
-import { streamKind } from '../../discover/players.mjs';
+import { streamKind, qualityOf as quality } from '../../discover/players.mjs';
 
 const STREAM_RE = /(?:https?:)?\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?|(?<![\w/])\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?/g;
 const NAME_KEYS = ['name', 'title', 'label', 'translation', 'voice', 'studio'];
 const FILE_KEYS = ['file', 'src', 'url', 'hls', 'm3u8', 'mp4', 'link'];
 
 const abs = (v, base) => { try { return new URL(v, base).toString(); } catch { return null; } };
-const quality = u => { const m = /(\d{3,4})p?(?=[^\d]|$)/.exec(new URL(u).pathname.split('/').pop() || ''); return m && Number(m[1]) >= 240 && Number(m[1]) <= 4320 ? `${m[1]}p` : null; };
 
 /* Object literals in a script, whether JSON or JavaScript: keys
    without quotes, single quotes, trailing commas are all made into

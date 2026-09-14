@@ -300,6 +300,7 @@ en: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -571,6 +572,7 @@ ru: {
   'toast.openFail': 'Не открылась: {name}',
   'toast.noStream': 'Нет потока: {name}',
   'toast.otherSource': 'Источник не пошёл, пробую другой…',
+  'about.placeholder': 'тут будет описание',
 
 },
 
@@ -842,6 +844,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -1113,6 +1116,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -1384,6 +1388,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -1655,6 +1660,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -1926,6 +1932,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -2197,6 +2204,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -2468,6 +2476,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
@@ -2739,6 +2748,7 @@ ru: {
   'toast.openFail': 'Could not open: {name}',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
+  'about.placeholder': 'description to come',
 
 },
 
