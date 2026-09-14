@@ -60,7 +60,7 @@ function show(data) {
     '<div>Озвучки: ' + (data.dubs.length ? data.dubs.map(esc).join(', ') : '<span class="cand">пока не названы</span>') + '</div>' +
     (data.opened.length ? '<div class="cand">Плееры: ' + data.opened.map(o => esc(o.player) + ' · ' + (o.error ? '<span class="wait">' + esc(o.error) + '</span>' : '<span class="ok">' + o.streams + ' ▶ через ' + esc(o.extractor) + '</span>')).join(' · ') + '</div>' : '') +
     '</section>' +
-    '<section><h2>Серии</h2>' + (eps || '<span class="cand">нет</span>') + '</section>' +
+    '<section><h2>Серии: найдено ' + s.episodes.length + '</h2><div class="cand">▶ — поток, который должен играть, откроется на голой странице воспроизведения · ✕ — плеер не ответил · серия без пометок ещё не открывалась, Lapka открывает только ту, по которой пришла ссылка</div>' + (eps || '<span class="cand">нет</span>') + '</section>' +
     '<section><h2>Отчёт разбора</h2>' + data.reports.map(r =>
       '<div><b>' + esc(r.kind) + '</b> · ' + esc(r.url) + '</div>' +
       '<div class="cand">заголовок: ' + r.title.candidates.map(c => esc(c.value) + ' (' + c.by + ' ' + c.confidence + ')').join(' · ') + '</div>' +
