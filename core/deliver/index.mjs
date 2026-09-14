@@ -94,7 +94,7 @@ export function createDelivery({ session, cache }) {
     return res;
   }
 
-  return { register, get, playlist, piece, file, rewrite, streams };
+  return { register, get, playlist, piece, file, rewrite, streams, fetchOrigin, nameFor };
 }
 
 export const contentType = url => /\.m3u8(\?|$)/i.test(url) ? 'application/vnd.apple.mpegurl'

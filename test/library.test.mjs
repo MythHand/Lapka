@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════════
+   The library and the state.
+
+   A stream of the synthetic site is saved through Lapka: the HLS one
+   from segments that are partly in the cache already, the mp4 one
+   whole. What is guarded: the file is one playable MP4 of the right
+   length, the sidecar and the series snapshot are beside it with
+   human names, the cache folder is gone afterwards, the library lists
+   it back, the file is served by byte range and only from inside the
+   folder, and the state remembers positions and the dub choice across
+   a restart.
+   ═══════════════════════════════════════════════════════════ */
+import { test, before, after, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { build, haveFfmpeg } from './fixtures.mjs';
+import { startSite } from './site/serve.mjs';
+import { start } from '../core/main.mjs';
+import { openState } from '../core/store/state.mjs';
+import { fileNameFor, safeName } from '../core/store/library.mjs';
+
+const ffmpeg = await haveFfmpeg();
+let site, lapka, home;
+const get = (p, headers = {}) => fetch(lapka.base + p, { headers });
+const post = p => fetch(lapka.base + p, { method: 'POST', headers: { 'x-lapka': '1' } });
+const duration = file => new Promise((ok, bad) => execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], (e, out) => e ? bad(e) : ok(Number(out))));
+
+before(async () => {
+  if (!ffmpeg) return;
+  const fx = await build();
+  site = await startSite({ media: fx.show });
+  home = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-home-'));
+  lapka = await start({ port: 0, home });
+});
+after(async () => {
+  if (lapka) await lapka.close();
+  if (site) await site.close();
+  if (home) await fsp.rm(home, { recursive: true, force: true });
+});
+
+describe('names', () => {
+  test('a file name a person and a file system accept', () => {
+    assert.equal(safeName('Ван-Пис: Начало / Конец?'), 'Ван-Пис· Начало · Конец·');
+    assert.equal(fileNameFor({}, { number: 3, title: 'Возвращение' }, { name: 'AniLibria' }), '03 · Возвращение [AniLibria].mp4');
+    assert.equal(fileNameFor({}, { number: 12, title: '' }, { name: 'Dream Cast' }), '12 [Dream Cast].mp4');
+  });
+});
+
+describe('saving', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  let hls, mp4, seriesId;
+
+  test('an HLS stream becomes one MP4 in the series folder', async () => {
+    const r = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/select/ep-1')}`)).json();
+    seriesId = r.series.id;
+    const al = r.series.episodes.find(e => e.number === 1).dubs.find(d => d.key === 'anilibria');
+    hls = al.sources.find(s => s.player === 'embed/beta').streams[0];
+    mp4 = al.sources.find(s => s.player === 'embed/alpha').streams[0];
+    /* one segment watched already */
+    const pl = await (await get(hls.play)).text();
+    await get(pl.split('\n').find(l => l && !l.startsWith('#')));
+
+    const started = await post(`/api/save?stream=${hls.id}`);
+    assert.equal(started.status, 202);
+    let job = await started.json();
+    for (let i = 0; i < 200 && job.state === 'working'; i++) { await new Promise(r => setTimeout(r, 100)); job = await (await get(`/api/save/${job.id}`)).json(); }
+    assert.equal(job.state, 'done', job.error);
+    assert.equal(path.basename(job.file), '01 [AniLibria].mp4');
+    assert.equal(path.basename(path.dirname(job.file)), 'Сериал Селект');
+    const d = await duration(job.file);
+    assert.ok(d > 5.5 && d < 6.5, `duration ${d}`);
+    /* the sidecar and the snapshot are beside it */
+    const side = JSON.parse(await fsp.readFile(job.file.replace(/\.mp4$/, '.json'), 'utf8'));
+    assert.equal(side.seriesId, seriesId);
+    assert.equal(side.episode, 1);
+    assert.equal(side.dubKey, 'anilibria');
+    assert.equal(side.player, 'embed/beta');
+    assert.equal(side.file, '01 [AniLibria].mp4');
+    const snap = JSON.parse(await fsp.readFile(path.join(path.dirname(job.file), 'series.json'), 'utf8'));
+    assert.equal(snap.id, seriesId);
+    assert.equal(snap.episodes.length, 4);
+    /* the cache folder for the stream is gone: the bytes are the file now */
+    await assert.rejects(fsp.stat(lapka.store.cache.dirFor(hls.id)));
+  });
+
+  test('an mp4 stream is fetched whole', async () => {
+    let job = await (await post(`/api/save?stream=${mp4.id}`)).json();
+    for (let i = 0; i < 200 && job.state === 'working'; i++) { await new Promise(r => setTimeout(r, 100)); job = await (await get(`/api/save/${job.id}`)).json(); }
+    assert.equal(job.state, 'done', job.error);
+    const whole = Buffer.from(await (await fetch(site.base + '/media/native.mp4')).arrayBuffer());
+    assert.equal(job.size, whole.length);
+    /* same dub, other player: it is the same file name, so the second save replaced the first */
+    assert.equal(path.basename(job.file), '01 [AniLibria].mp4');
+  });
+
+  test('the library lists what is on disk and serves it by range', async () => {
+    const lib = await (await get('/api/library')).json();
+    assert.equal(lib.home, home);
+    assert.equal(lib.series.length, 1);
+    assert.equal(lib.series[0].title, 'Сериал Селект');
+    assert.deepEqual(lib.series[0].episodes.map(e => [e.episode, e.dub]), [[1, 'AniLibria']]);
+    const file = lib.series[0].episodes[0].path;
+    const r = await get(`/api/library/file?path=${encodeURIComponent(file)}`, { range: 'bytes=0-9' });
+    assert.equal(r.status, 206);
+    assert.equal((await r.arrayBuffer()).byteLength, 10);
+    /* nothing outside the folder, nothing that is not an mp4 */
+    assert.equal((await get(`/api/library/file?path=${encodeURIComponent(path.join(home, '..', 'x.mp4'))}`)).status, 403);
+    assert.equal((await get(`/api/library/file?path=${encodeURIComponent(file.replace(/\.mp4$/, '.json'))}`)).status, 403);
+    assert.equal((await get(`/api/library/file?path=${encodeURIComponent(path.join(home, 'nope.mp4'))}`)).status, 404);
+  });
+
+  test('saving needs the header and a stream that was looked at', async () => {
+    assert.equal((await fetch(lapka.base + `/api/save?stream=${mp4.id}`, { method: 'POST' })).status, 403);
+    assert.equal((await post('/api/save?stream=0000000000000000')).status, 404);
+  });
+});
+
+describe('the state', () => {
+  test('positions and the dub choice survive a restart', async () => {
+    const own = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-state-'));
+    const a = await openState(own);
+    a.setPosition('s1', 3, 'anilibria', 754.5);
+    a.setPosition('s1', 4, 'anilibria', 12);
+    a.setDub('s1', 'anilibria');
+    a.setSetting('cacheGb', 40);
+    assert.equal(a.position('s1', 3, 'anilibria'), 754.5);
+    await a.close();
+    const b = await openState(own);
+    assert.equal(b.position('s1', 3, 'anilibria'), 754.5);
+    assert.equal(b.position('s1', 4, 'anilibria'), 12);
+    assert.equal(b.position('s1', 5, 'anilibria'), null);
+    assert.equal(b.dub('s1'), 'anilibria');
+    assert.equal(b.setting('cacheGb'), 40);
+    b.setPosition('s1', 3, 'anilibria', null);
+    assert.equal(b.position('s1', 3, 'anilibria'), null);
+    await b.close();
+    await fsp.rm(own, { recursive: true, force: true });
+  });
+
+  test('the routes write it', async () => {
+    assert.equal((await post('/api/state/position?series=s9&episode=2&dub=jam&t=33')).status, 200);
+    assert.equal((await post('/api/state/dub?series=s9&dub=jam')).status, 200);
+    const st = await (await get('/api/state')).json();
+    assert.equal(st.positions['s9/2/jam'].t, 33);
+    assert.equal(st.dubs.s9, 'jam');
+    assert.equal((await fetch(lapka.base + '/api/state/dub?series=s9&dub=x', { method: 'POST' })).status, 403);
+  });
+});

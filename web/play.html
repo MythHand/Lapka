@@ -23,7 +23,9 @@ const id = q.get('stream'), kind = q.get('kind') || 'hls';
 const v = document.getElementById('v'), status = document.getElementById('status');
 document.getElementById('title').textContent = q.get('title') || '';
 const say = t => { status.textContent = t; };
-if (!id) say('нет потока');
+const file = q.get('file');
+if (file) { v.src = '/api/library/file?path=' + encodeURIComponent(file); say('файл из библиотеки'); }
+else if (!id) say('нет потока');
 else if (kind === 'mp4') { v.src = `/api/stream/${id}.mp4`; say('mp4 через Lapka'); }
 else if (window.Hls && Hls.isSupported()) {
   const h = new Hls({ enableWorker: true });

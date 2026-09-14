@@ -31,7 +31,21 @@ export function json(res, code, data) {
   res.end(body);
 }
 
-export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery = null, store = null }) {
+/* A local file with byte ranges, the way a browser asks for video. */
+function serveRange(req, res, file, size, type) {
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  if (range && (range[1] || range[2])) {
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start > end || start >= size) { res.writeHead(416, { 'content-range': `bytes */${size}` }); return res.end(); }
+    res.writeHead(206, { 'content-type': type, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${size}`, 'accept-ranges': 'bytes', 'cache-control': 'no-store' });
+    return fs.createReadStream(file, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { 'content-type': type, 'content-length': size, 'accept-ranges': 'bytes', 'cache-control': 'no-store' });
+  return fs.createReadStream(file).pipe(res);
+}
+
+export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery = null, store = null, state = null, library = null, saver = null }) {
   const hosts = new Set();
   const fromLoopback = (req, { navigation = false } = {}) => {
     if (!hosts.has(String(req.headers.host || '').toLowerCase())) return false;
@@ -57,6 +71,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${host}`);
     const p = url.pathname;
+    let m;
     if (!fromLoopback(req, { navigation: !p.startsWith('/api/') })) return json(res, 403, { error: 'loopback only' });
     try {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'inspect.html');
@@ -69,7 +84,37 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
       }
       if (req.method === 'GET' && p === '/api/cache' && store) return json(res, 200, await store.cache.stat());
 
-      let m;
+      /* anything that changes the machine wants a header a cross-site form cannot set */
+      const mutating = req.method === 'POST';
+      if (mutating && req.headers['x-lapka'] !== '1') return json(res, 403, { error: 'x-lapka header required' });
+
+      if (saver && mutating && p === '/api/save') {
+        const ctx = lapka.context(url.searchParams.get('stream') || '');
+        if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first' });
+        return json(res, 202, saver.start(ctx.stream.id, ctx));
+      }
+      if (saver && req.method === 'GET' && (m = /^\/api\/save\/([\w-]+)$/.exec(p))) {
+        const job = saver.job(m[1]);
+        return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });
+      }
+      if (library && req.method === 'GET' && p === '/api/library') return json(res, 200, { home: library.home, series: await library.list() });
+      if (library && req.method === 'GET' && p === '/api/library/file') {
+        const file = path.resolve(url.searchParams.get('path') || '');
+        if (!library.inside(file) || !/\.mp4$/i.test(file)) return json(res, 403, { error: 'not in the library' });
+        let st; try { st = await fsp.stat(file); } catch { return json(res, 404, { error: 'not found' }); }
+        return serveRange(req, res, file, st.size, 'video/mp4');
+      }
+      if (state && req.method === 'GET' && p === '/api/state') return json(res, 200, state.get());
+      if (state && mutating && p === '/api/state/position') {
+        const q = url.searchParams;
+        state.setPosition(q.get('series'), Number(q.get('episode')), q.get('dub'), q.has('t') ? Number(q.get('t')) : null);
+        return json(res, 200, { ok: true });
+      }
+      if (state && mutating && p === '/api/state/dub') {
+        state.setDub(url.searchParams.get('series'), url.searchParams.get('dub') || null);
+        return json(res, 200, { ok: true });
+      }
+
       if (delivery && (m = /^\/api\/stream\/([a-f0-9]{16})(?:\.(m3u8|mp4)|\/(pl|seg|key))$/.exec(p))) {
         const entry = delivery.get(m[1]);
         if (!entry) return json(res, 404, { error: 'unknown stream' });

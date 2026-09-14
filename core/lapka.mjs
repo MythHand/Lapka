@@ -18,6 +18,21 @@ export async function bootLapka(opts = {}) {
 }
 
 export function createLapka({ session = createSession(), profiles = [], extractors = [], delivery = null } = {}) {
+  /* every series looked at this run, so a stream id can be traced back
+     to its series, episode, dub and source when the user saves it */
+  const seen = new Map();
+  function context(streamId) {
+    const entry = delivery && delivery.get(streamId);
+    if (!entry) return null;
+    const series = seen.get(entry.meta.seriesId);
+    if (!series) return null;
+    const episode = series.episodes.find(e => e.number === entry.meta.episode);
+    const dub = episode && episode.dubs.find(d => d.key === entry.meta.dub);
+    const source = dub && dub.sources.find(s => s.id === entry.meta.sourceId);
+    const stream = source && source.streams.find(st => st.id === streamId);
+    return stream ? { series, episode, dub, source, stream } : null;
+  }
+
   const profileFor = url => {
     let host; try { host = new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
     return profiles.find(p => p.match === host || (p.match instanceof RegExp && p.match.test(url))) || null;
@@ -94,11 +109,12 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
       st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
     }
+    seen.set(series.id, series);
 
     return { series, reports, opened, steps, dubs: allDubs(series).map(d => d.name) };
   }
 
-  return { look, readPage, session, extractors };
+  return { look, readPage, context, session, extractors };
 }
 
 function plural(n, one, few, many) {
