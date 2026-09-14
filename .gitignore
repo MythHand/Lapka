@@ -1,3 +1,7 @@
 .DS_Store
 *.log
 node_modules/
+# real video dropped in for looking at by hand, never part of the repo
+*.mkv
+*.mp4
+test/site/The Legend of Vox Machina*/

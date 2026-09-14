@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lapka · инспектор</title>
+<style>
+  :root { color-scheme: light dark; --line: #8884; --dim: #888; --ok: #2a7; --wait: #d90; }
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 1rem; } h1 small { color: var(--dim); font-weight: 400; }
+  form { display: flex; gap: .5rem; } input { flex: 1; font: inherit; padding: .5rem .7rem; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; }
+  button { font: inherit; padding: .5rem 1rem; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+  #steps { margin: 1rem 0; color: var(--dim); min-height: 1.5em; } #steps b { color: inherit; font-weight: 500; }
+  section { border-top: 1px solid var(--line); padding: 1rem 0; } h2 { font-size: 1rem; margin: 0 0 .5rem; }
+  .ep { display: grid; grid-template-columns: 3rem 1fr; gap: .2rem .8rem; padding: .25rem 0; border-bottom: 1px dashed var(--line); }
+  .ep .n { color: var(--dim); } .dub { display: inline-block; margin: .1rem .4rem .1rem 0; padding: .05rem .5rem; border: 1px solid var(--line); border-radius: 999px; font-size: .9em; }
+  .dub small { color: var(--dim); } .wait { color: var(--wait); } .ok { color: var(--ok); }
+  details { margin-top: .5rem; } summary { cursor: pointer; color: var(--dim); } pre { font-size: .8em; overflow: auto; max-height: 60vh; background: #8881; padding: .8rem; border-radius: 8px; }
+  .cand { color: var(--dim); font-size: .9em; }
+</style>
+</head>
+<body>
+<h1>Lapka <small>· инспектор: что Lapka видит по ссылке</small></h1>
+<form id="f"><input id="url" placeholder="https://… страница сериала или серии" autofocus><button>Посмотреть</button></form>
+<div id="steps"></div>
+<div id="out"></div>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function look(url) {
+  $('#steps').innerHTML = 'Открываю страницу…';
+  $('#out').innerHTML = '';
+  history.replaceState(null, '', '?url=' + encodeURIComponent(url));
+  let data;
+  try {
+    const r = await fetch('/api/look?url=' + encodeURIComponent(url));
+    data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.status);
+  } catch (e) { $('#steps').innerHTML = '<span class="wait">Не вышло: ' + esc(e.message) + '</span>'; return; }
+
+  const steps = data.steps;
+  $('#steps').innerHTML = steps.map(s => '<b>' + esc(s) + '</b>').join(' → ') + ' <span class="cand">(' + data.ms + ' мс)</span>';
+
+  const s = data.series;
+  const eps = s.episodes.map(e => {
+    const dubs = e.dubs.map(d => '<span class="dub">' + esc(d.name) + ' <small>' + d.sources.map(x => x.player + (x.streams.length ? ' ▶' : '')).join(', ') + '</small></span>').join('');
+    return '<div class="ep"><span class="n">' + e.number + '</span><span>' + esc(e.title || '') + (dubs ? '<div>' + dubs + '</div>' : '') + '</span></div>';
+  }).join('');
+  const pending = data.reports.flatMap(r => r.players.filter(p => !p.dubLabel && !p.stream));
+
+  $('#out').innerHTML =
+    '<section><h2>' + esc(s.title || 'Без названия') + '</h2>' +
+    (s.cover ? '<div class="cand">обложка: ' + esc(s.cover) + '</div>' : '') +
+    '<div class="cand">' + esc(s.sourceUrl) + ' · id ' + s.id + '</div>' +
+    '<div>Озвучки: ' + (data.dubs.length ? data.dubs.map(esc).join(', ') : '<span class="cand">пока не названы</span>') + '</div>' +
+    (pending.length ? '<div class="wait">Ждут экстрактор: ' + pending.map(p => esc(p.id)).join(', ') + '</div>' : '') +
+    '</section>' +
+    '<section><h2>Серии</h2>' + (eps || '<span class="cand">нет</span>') + '</section>' +
+    '<section><h2>Отчёт разбора</h2>' + data.reports.map(r =>
+      '<div><b>' + esc(r.kind) + '</b> · ' + esc(r.url) + '</div>' +
+      '<div class="cand">заголовок: ' + r.title.candidates.map(c => esc(c.value) + ' (' + c.by + ' ' + c.confidence + ')').join(' · ') + '</div>' +
+      '<div class="cand">серии: ' + r.episodes.candidates.map(c => c.by + ' ' + esc(c.template) + ' ×' + c.count + ' (' + c.confidence.toFixed(2) + ')').join(' · ') + '</div>' +
+      '<div class="cand">плееры: ' + r.players.map(p => esc(p.id) + '[' + p.kind + (p.dubLabel ? ' · ' + esc(p.dubLabel) : '') + (p.stream ? ' · ' + p.stream : '') + ']').join(' · ') + '</div>' +
+      '<div class="cand">переключатели: ' + r.switches.map(w => w.kind + (w.scope ? '@' + esc(w.scope) : '') + ' ' + w.items.map(i => esc(i.label)).join('/')).join(' · ') + '</div>'
+    ).join('<hr>') +
+    '<details><summary>Полный JSON</summary><pre>' + esc(JSON.stringify(data, null, 2)) + '</pre></details></section>';
+}
+
+$('#f').addEventListener('submit', e => { e.preventDefault(); const u = $('#url').value.trim(); if (u) look(u); });
+const initial = new URLSearchParams(location.search).get('url');
+if (initial) { $('#url').value = initial; look(initial); }
+</script>
+</body>
+</html>

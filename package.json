@@ -16,8 +16,13 @@
     "node": ">=18"
   },
   "scripts": {
-    "start": "node server.mjs",
+    "start": "node core/main.mjs",
+    "dev": "node scripts/dev.mjs",
+    "site": "node test/site/serve.mjs",
     "check": "node check.mjs",
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "linkedom": "^0.18.13"
   }
 }

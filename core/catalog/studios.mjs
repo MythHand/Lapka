@@ -27,12 +27,15 @@ export const STUDIOS = [
 const byName = new Map();
 for (const s of STUDIOS) for (const n of s.names) byName.set(n, s);
 
-/* Lower-case, no accents, no punctuation, no spaces. "AniLibria.TV"
-   and "[Анилибрия]" both survive this as something the table knows. */
+/* Lower-case, no accents on Latin letters, no punctuation, no spaces.
+   "AniLibria.TV" and "[Анилибрия]" both survive this as something the
+   table knows. Only Latin letters lose their marks: in Cyrillic the
+   mark is the letter, and "й" must not turn into "и". */
 export function normalizeName(name) {
   return String(name || '')
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/(?<=[a-zA-Z])[\u0300-\u036f]/g, '')
+    .normalize('NFC')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, '');
 }
