@@ -1442,7 +1442,7 @@ video::cue{
 }
 .linkform__in::placeholder{ color:var(--tx-3); }
 .linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
-.linkform--foot{ max-width:none; flex:1 1 0; min-width:0; }   /* basis nought: the field takes what is left and never pushes the button to a second line */
+.linkform--foot{ max-width:none; flex:none; }
 .linkform--foot .linkform__in{ height:32px; padding:0 10px; font-size:calc(13px + var(--fs)); }
 
 /* ── skipping the opening or the ending ─────────────────────── */
@@ -1603,8 +1603,8 @@ video::cue{
 .menu--float[hidden]{ display:none; }
 
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
-.queue__add{ flex:1 1 auto; min-width:0; }
-.linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
+/* the field is a little wider than a bare input, not the whole line: the footer keeps its shape */
+.linkform__wrap{ position:relative; display:flex; flex:0 0 230px; min-width:0; }
 .linkform__wrap .linkform__in{ width:100%; padding-right:34px; }
 .linkform__enter{
   position:absolute; right:8px; top:50%; transform:translateY(-50%);

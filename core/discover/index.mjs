@@ -10,7 +10,7 @@
    right.
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
-import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, findFranchise } from './series.mjs';
+import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, findFranchise, franchiseFromBlock } from './series.mjs';
 import { numberFromText } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
@@ -30,7 +30,9 @@ export function discover({ html, url, profile = null }) {
   const seriesUrl = findSeriesUrl(doc, url);
   const current = findCurrentEpisode(doc, url);
   const ownSeason = seasonFromText(title[0]?.value || '');
-  const franchise = findFranchise(doc, url, ownSeason, title[0]?.value || '');
+  /* season links first; without them, a block the site heads as the franchise */
+  const bySeasons = findFranchise(doc, url, ownSeason, title[0]?.value || '');
+  const franchise = bySeasons.length ? bySeasons : franchiseFromBlock(doc, url, title[0]?.value || '');
 
   /* A player element on the page makes it an episode page. Streams
      found only in scripts do not: a series page may carry the

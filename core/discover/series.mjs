@@ -151,4 +151,43 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
   return list.length >= 2 ? list : [];
 }
 
+/* A block the page heads "Франшиза", "Все части по порядку", "Порядок
+   просмотра", "Хронология", "Franchise", "Watch order": the parts of
+   the franchise laid out by the site itself, each with its year, this
+   page among them without a link. That is the franchise as the site
+   knows it, films and spin-offs included, ordered by year and then as
+   the site lists them. Looked at only when no season links say
+   otherwise. */
+const FRANCHISE_HEAD = /^(франшиза|все части|порядок просмотра|хронология|связанные|franchise|watch order|related)/i;
+const YEAR = /^\s*((?:19|20)\d{2})\s*$/;
+export function franchiseFromBlock(doc, url, title = '') {
+  const page = (() => { try { const u = new URL(url); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return url; } })();
+  const same = href => { try { const u = new URL(href, url); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return null; } };
+  const heads = [...doc.querySelectorAll('h1, h2, h3, h4, div, span, p')].filter(el => el.children.length <= 1 && FRANCHISE_HEAD.test(textOf(el)) && textOf(el).length < 40);
+  for (const head of heads) {
+    let up = head;
+    for (let depth = 0; depth < 4 && up.parentElement; depth++) {
+      up = up.parentElement;
+      /* the items: a year each, a link for every part but this page */
+      const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && YEAR.test(el.textContent || ''));
+      if (years.length < 2) continue;
+      const parts = [];
+      for (const y of years) {
+        const item = y.parentElement; if (!item) continue;
+        const a = item.querySelector('a[href]');
+        const name = clean(a ? textOf(a) : (item.textContent || '').replace(y.textContent, ''));
+        if (!name) continue;
+        const href = a ? same(a.getAttribute('href')) : null;
+        if (a && !href) continue;
+        parts.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : String(url).replace(/#.*$/, ''), year: Number(YEAR.exec(y.textContent)[1]), self: !a || href === page,
+          kind: /фильм|movie|film/i.test(name) ? 'movie' : /\b(ova|ona)\b/i.test(name) ? 'ova' : /спешл|special/i.test(name) ? 'special' : 'tv' });
+      }
+      if (parts.length < 2 || !parts.some(p => p.self) || !parts.some(p => !p.self)) continue;
+      parts.sort((a, b) => a.year - b.year);   // stable: the site's order within a year stays
+      return parts.map((p, i) => ({ order: i + 1, ...p }));
+    }
+  }
+  return [];
+}
+
 export { titleFromText };

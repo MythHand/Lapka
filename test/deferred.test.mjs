@@ -64,10 +64,21 @@ describe('reading the page', () => {
     assert.equal(r.episodes.items.length, 0);
     assert.equal(r.episode.value, null);
   });
-  test('the name without its tail for search engines, the cover, no franchise out of the recommendations', () => {
+  test('the name without its tail for search engines, the cover', () => {
     assert.equal(r.title.value, 'Клинок, рассекающий демонов');
     assert.match(r.cover.value, /klinokk-rassekajuschij-demonov2_poster/);
-    assert.deepEqual(r.franchise, []);
+  });
+  test('the franchise is the block the site heads "Франшиза": every part by year, this page among them, not the recommendations', () => {
+    assert.equal(r.franchise.length, 10);
+    assert.deepEqual(r.franchise.slice(0, 3).map(f => [f.order, f.year, f.kind, f.self, f.title]), [
+      [1, 2019, 'tv', true, 'Клинок, рассекающий демонов'],
+      [2, 2020, 'movie', false, 'Клинок, рассекающий демонов: Бесконечный поезд. Фильм'],
+      [3, 2021, 'tv', false, 'Академия клинка: День святого Валентина'],
+    ]);
+    assert.equal(r.franchise[0].url, PAGE);
+    assert.match(r.franchise[9].url, /beskonechnyj-zamok-3\.html$/);
+    assert.equal(r.season, 1);
+    assert.ok(!r.franchise.some(f => /слизь|невест|подземелье/.test(f.title)));
   });
 });
 
