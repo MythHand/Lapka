@@ -2190,28 +2190,48 @@ btnLocate.onclick = revealCurrent;
    for, then what it cannot work without, and only at the end the
    trimmings. */
 const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co'];
-const SITES_PART = [];
-const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at', 'animeflv.or.at'];
+const SITES_PART = [{ site: 'animeflv.or.at', note: 'about.partOne' }];
+const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at'];
+/* The left side while nothing is open: the seal, the state as a
+   terminal would say it, what Lapka is in two paragraphs, and the
+   doors tried so far in three rows. The system speaks in the
+   monospace, the description in the text face. */
 function aboutBlock() {
   const li = document.createElement('li');
   li.className = 'queue__about';
-  /* the same mark as on the stage: the paw and the name, one seal */
-  li.innerHTML = '<div class="mark mark--left" aria-hidden="true"><pre class="paw mono-art"></pre><pre class="banner mono-art"></pre></div><p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
-  li.querySelector('.paw').textContent = PAW_FRAMES[0];
-  li.querySelector('.banner').textContent = BANNER;
-  li.querySelector('.queue__drop').innerHTML = t('queue.empty');
-  /* the sites tried so far, in three groups: it works, it works in
-     part, the door is shut. Data, not words: the names are the same
-     in every language */
-  const lede = li.querySelector('.queue__lede');
-  lede.replaceChildren();
-  for (const [key, sites] of [['about.sitesOk', SITES_OK], ['about.sitesPart', SITES_PART], ['about.sitesShut', SITES_SHUT]]) {
-    if (!sites.length) continue;   // an empty group is not shown
-    const h = document.createElement('p'); h.className = 'queue__sites-head'; h.textContent = t(key);
-    const ul = document.createElement('ul'); ul.className = 'queue__sites';
-    for (const s of sites) { const item = document.createElement('li'); item.textContent = s; ul.append(item); }
-    lede.append(h, ul);
-  }
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  const mark = el('div', 'mark mark--left'); mark.setAttribute('aria-hidden', 'true');
+  mark.append(el('pre', 'paw mono-art', PAW_FRAMES[0]), el('pre', 'banner mono-art', BANNER));
+
+  const state = el('div', 'about__state about__mono');
+  state.append(el('p', 'about__line about__line--now', '› ' + t('about.state')), el('p', 'about__line about__line--hint', '  ' + t('about.hint')));
+
+  const desc = el('div', 'about__desc');
+  desc.append(el('p', null, t('about.desc1')), el('p', null, t('about.desc2')));
+
+  const doors = el('div', 'about__doors about__mono');
+  doors.append(el('p', 'about__head', t('about.doors')));
+  const dl = el('dl', 'about__list');
+  const row = (key, sites) => {
+    if (!sites.length) return;
+    dl.append(el('dt', null, t(key)));
+    const dd = el('dd');
+    /* a site and the dot after it never part at a line's end */
+    sites.forEach((x, i) => {
+      const unit = el('span', 'about__unit');
+      if (typeof x === 'string') unit.append(el('span', 'about__site', x));
+      else { unit.append(el('span', 'about__site', x.site)); unit.append(el('span', 'about__note', ' — ' + t(x.note))); }
+      if (i < sites.length - 1) unit.append(el('span', 'about__sep', ' · '));
+      dd.append(unit);
+    });
+    dl.append(dd);
+  };
+  row('about.doorOk', SITES_OK); row('about.doorPart', SITES_PART); row('about.doorShut', SITES_SHUT);
+  doors.append(dl);
+
+  const rule = () => { const r = el('p', 'about__rule about__mono', '─'.repeat(80)); r.setAttribute('aria-hidden', 'true'); return r; };
+  li.append(mark, state, rule(), desc, rule(), doors);
   return li;
 }
 

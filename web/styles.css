@@ -670,12 +670,7 @@ svg.ph{ fill:currentColor; stroke:none; }
    --tx-3: at --tx-3 they sank into the panel, at --tx-2 they would match
    the group headings. The drop hint, the note and the sub-points set
    --tx-3 of their own and stay one step quieter. */
-.queue__about{ padding:22px 24px 34px; color:#a0a1a8; }
-/* the invitation to drop files comes first and quietly: it is a hint,
-   not part of the description */
-.queue__about .queue__drop{
-  font-size:calc(12.5px + var(--fs)); line-height:1.39; color:var(--tx-3); opacity:.75;
-}
+.queue__about{ padding:22px 24px 34px; color:var(--tx-2); }
 .queue__rule{ height:1px; border:0; background:var(--line); margin:18px 0 22px; }
 .queue__about h2{
   font-size:calc(15.5px + var(--fs)); font-weight:560; line-height:1.35;
@@ -1648,11 +1643,6 @@ video::cue{
 .notice.notice--busy .notice__ico{ animation:notice-spin 1s linear infinite; }
 @keyframes notice-spin{ to{ transform:rotate(360deg); } }
 
-/* ── the sites tried, three lists on the empty queue ── */
-.queue__sites-head{ margin:14px 0 4px; color:var(--tx-2); font-weight:500; }
-.queue__sites-head:first-child{ margin-top:0; }
-.queue__sites{ margin:0 0 6px; padding-left:18px; color:var(--tx-3); line-height:1.6; }
-.queue__sites li{ margin:0; }
 
 /* ── the mark: characters on a grid ───────────────────────────
    The paw and the name are one seal, drawn in characters on one
@@ -1674,3 +1664,25 @@ video::cue{
 }
 .mark .paw, .mark .banner{ color:var(--tx-1); }   /* one seal, one colour */
 .mark--left{ justify-content:flex-start; margin:0 0 1.5em; }
+
+/* ── the left side while nothing is open ───────────────────────
+   Two voices: the system speaks in the monospace (the state, the
+   doors, the rules), the description in the text face. Distances in
+   the monospace parts are rows of it. */
+:root{ --mono:"Iosevka Charon Mono", "DejaVu Sans Mono", Menlo, monospace; }
+.about__mono{ font-family:var(--mono); font-size:calc(12px + var(--fs)); line-height:1.5; letter-spacing:0; font-variant-ligatures:none; }
+.about__state{ margin:0; }
+.about__line{ margin:0; white-space:pre-wrap; }
+.about__line--now{ color:var(--tx-1); }
+.about__line--hint{ color:var(--tx-3); }
+.about__rule{ margin:1em 0; color:var(--line-3); overflow:hidden; white-space:nowrap; user-select:none; }
+.about__desc{ font-size:calc(13px + var(--fs)); line-height:1.5; color:var(--tx-2); }
+.about__desc p{ margin:0; }
+.about__desc p + p{ margin-top:0.7em; }
+.about__head{ margin:0 0 0.5em; color:var(--tx-3); }
+.about__list{ display:grid; grid-template-columns:max-content 1fr; column-gap:2ch; row-gap:0.35em; margin:0; }
+.about__list dt{ color:var(--tx-3); }
+.about__list dd{ margin:0; color:var(--tx-2); }
+.about__unit{ white-space:nowrap; }
+.about__sep{ color:var(--tx-3); }
+.about__note{ color:var(--tx-3); }
