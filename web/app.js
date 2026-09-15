@@ -639,34 +639,34 @@ function hideProgress() {
    prefers-reduced-motion it stands still on the first frame. The
    name is set the way software greets in a terminal. */
 const PAW_FRAMES = [
-`    ▄▄  ▄▄    
-   ████████   
- ▄▄ ▀▀▀▀▀▀ ▄▄ 
- ██        ██ 
- ▀▀ ▄████▄ ▀▀ 
-   ████████   
-    ▀████▀    `,
-`              
-    ▄▄  ▄▄    
- ▄▄ ██████ ▄▄ 
- ██ ▀▀▀▀▀▀ ██ 
- ▀▀ ▄████▄ ▀▀ 
-   ████████   
-    ▀████▀    `,
-`              
-              
- ▄▄  ▄▄▄▄  ▄▄ 
- ██ ▄████▄ ██ 
- ▀▀ ██████ ▀▀ 
-   ████████   
-    ▀████▀    `,
-`              
-              
-              
- ▄▄▄▄▄  ▄▄▄▄▄ 
- ▀▀▀▄████▄▀▀▀ 
-   ████████   
-    ▀████▀    `,
+`      ▄▄  ▄▄      
+    ████  ████    
+ ▄▄   ▀▀  ▀▀   ▄▄ 
+████          ████
+ ▀▀   ▄████▄   ▀▀ 
+     ████████     
+      ▀████▀      `,
+`                  
+      ▄▄  ▄▄      
+ ▄▄ ████  ████ ▄▄ 
+████  ▀▀  ▀▀  ████
+ ▀▀   ▄████▄   ▀▀ 
+     ████████     
+      ▀████▀      `,
+`                  
+                  
+ ▄▄   ▄▄  ▄▄   ▄▄ 
+███ ████  ████ ███
+ ▀▀  ▄██████▄  ▀▀ 
+     ████████     
+      ▀████▀      `,
+`                  
+                  
+                  
+ ▄▄▄  ▄▄▄▄▄▄  ▄▄▄ 
+▀▀▀▀▄████████▄▀▀▀▀
+     ████████     
+      ▀████▀      `,
 ];
 const BANNER = `██╗      █████╗ ██████╗ ██╗  ██╗ █████╗ 
 ██║     ██╔══██╗██╔══██╗██║ ██╔╝██╔══██╗
@@ -674,22 +674,22 @@ const BANNER = `██╗      █████╗ ██████╗ ██�
 ██║     ██╔══██║██╔═══╝ ██╔═██╗ ██╔══██║
 ███████╗██║  ██║██║     ██║  ██╗██║  ██║
 ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝`;
-const pawEl = $('#paw'), bannerEl = $('#banner');
+const bannerEl = $('#banner');
 if (bannerEl) bannerEl.textContent = BANNER;
-if (pawEl) {
-  pawEl.textContent = PAW_FRAMES[0];
-  const still = matchMedia('(prefers-reduced-motion: reduce)');
-  /* down through the frames and back up: one press */
-  const press = () => {
-    if (still.matches || emptyEl.classList.contains('hide')) return;
-    const order = [...PAW_FRAMES.keys(), ...[...PAW_FRAMES.keys()].reverse().slice(1)];
-    let i = 0;
-    const tick = () => { pawEl.textContent = PAW_FRAMES[order[i]]; if (++i < order.length) setTimeout(tick, i === PAW_FRAMES.length ? 260 : 90); };
-    tick();
-  };
-  setTimeout(press, 700);
-  setInterval(press, 4200);
+/* every paw on the page (the mark, the queue's about) presses together */
+const paws = () => [...document.querySelectorAll('.paw')].filter(el => el.offsetParent !== null);
+const stillPaw = matchMedia('(prefers-reduced-motion: reduce)');
+function pressPaws() {
+  const els = paws();
+  if (stillPaw.matches || !els.length) return;
+  const order = [...PAW_FRAMES.keys(), ...[...PAW_FRAMES.keys()].reverse().slice(1)];
+  let i = 0;
+  const tick = () => { for (const el of els) el.textContent = PAW_FRAMES[order[i]]; if (++i < order.length) setTimeout(tick, i === PAW_FRAMES.length ? 260 : 90); };
+  tick();
 }
+for (const el of document.querySelectorAll('.paw')) el.textContent = PAW_FRAMES[0];
+setTimeout(pressPaws, 700);
+setInterval(pressPaws, 4200);
 
 /* ═══════════════ opening a link ═══════════════
    One address in. The server reads the page, finds the series and
@@ -2195,7 +2195,8 @@ const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at', 'animeflv.or.at'];
 function aboutBlock() {
   const li = document.createElement('li');
   li.className = 'queue__about';
-  li.innerHTML = '<p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
+  li.innerHTML = '<pre class="paw mono-art queue__paw" aria-hidden="true"></pre><p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
+  li.querySelector('.queue__paw').textContent = PAW_FRAMES[0];
   li.querySelector('.queue__drop').innerHTML = t('queue.empty');
   /* the sites tried so far, in three groups: it works, it works in
      part, the door is shut. Data, not words: the names are the same
