@@ -144,6 +144,7 @@ const btnAudio = $('#btnAudio'), audioLabel = $('#audioLabel'), audioMenu = $('#
 const btnSubs = $('#btnSubs'), subsMenu = $('#subsMenu');
 const btnQuality = $('#btnQuality'), qualityLabel = $('#qualityLabel'), qualityMenu = $('#qualityMenu');
 const btnSaveAll = $('#btnSaveAll'), saveCount = $('#saveCount'), savePop = $('#savePop');
+const tipEl = $('#tip');
 const btnGear = $('#btnGear'), gearMenu = $('#gearMenu');
 const queueList = $('#queueList'), queueFiles = $('#queueFiles'), queueTotal = $('#queueTotal');
 const btnViewRows = $('#btnViewRows'), btnViewGrid = $('#btnViewGrid');
@@ -2069,23 +2070,7 @@ function paintSaved() {
     const it = byId(li.dataset.id);
     const btn = it && li.querySelector('.item__save');
     if (!btn) continue;
-    const saved = isSaved(it);
-    const sv = it.save;
-    const saving = sv && !sv.error;
-    btn.classList.toggle('is-saved', saved && !saving);
-    btn.classList.toggle('is-saving', !!saving);
-    btn.classList.toggle('is-failed', !!(sv && sv.error));
-    if (saving) {
-      const C = 2 * Math.PI * 9;
-      const p = sv.phase === 'assemble' ? 1 : sv.total ? sv.done / sv.total : 0;
-      btn.innerHTML = `<svg class="ring${sv.phase === 'assemble' ? ' is-assembling' : ''}" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${C.toFixed(2)};stroke-dashoffset:${(C * (1 - p)).toFixed(2)}"/></svg>`;
-      btn.title = sv.phase === 'assemble' ? t('queue.assembling') : t('queue.saving', { done: sv.done, total: sv.total, pct: Math.round(p * 100) });
-    } else {
-      btn.innerHTML = phSvg(sv && sv.error ? PH.warn : saved ? PH.check : PH.download);
-      btn.title = sv && sv.error ? t('queue.saveFailed', { why: sv.error })
-        : saved ? t('queue.savedAs', { size: fmtSize(state.saved.get(savedKey(it)).reduce((a, b) => a + (b.size || 0), 0)), dubs: state.saved.get(savedKey(it)).map(x => x.dub).join(', ') })
-        : t('queue.save');
-    }
+    paintSaveButton(btn, it);
   }
   const all = state.list.length, done = state.list.filter(isSaved).length;
   saveCount.textContent = all ? `${done}/${all}` : '';
@@ -2093,6 +2078,67 @@ function paintSaved() {
   btnSaveAll.classList.toggle('is-busy', savingAll);
   btnSaveAll.hidden = !all;
 }
+/* The button of one row. The ring is drawn once and then only moved:
+   rebuilding it on every tick would take the tooltip down with it. A
+   save that failed keeps the ring where it stopped, in warning colour,
+   and says why. The text of the tooltip lives on the button, and the
+   tooltip shown now follows it. */
+const RING = 2 * Math.PI * 9;
+function paintSaveButton(btn, it) {
+  const saved = isSaved(it), sv = it.save;
+  const saving = !!(sv && !sv.error), failed = !!(sv && sv.error);
+  btn.classList.toggle('is-saved', saved && !saving && !failed);
+  btn.classList.toggle('is-saving', saving);
+  btn.classList.toggle('is-failed', failed);
+  let tip, sub = '';
+  if (saving || failed) {
+    const p = sv.phase === 'assemble' ? 1 : sv.total ? sv.done / sv.total : 0;
+    const pct = Math.round(p * 100);
+    let ring = btn.querySelector('.ring');
+    if (!ring) {
+      btn.innerHTML = `<svg class="ring" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(2)}"/></svg>`;
+      ring = btn.querySelector('.ring');
+    }
+    ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
+    ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
+    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct }) : ''; }
+    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct: 100 }) : ''; }
+    else tip = t('queue.saving', { done: sv.done, total: sv.total, pct });
+  } else {
+    const want = saved ? PH.check : PH.download;
+    if (btn.dataset.icon !== (saved ? 'check' : 'download')) { btn.innerHTML = phSvg(want); btn.dataset.icon = saved ? 'check' : 'download'; }
+    tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
+  }
+  if (saving || failed) delete btn.dataset.icon;
+  btn.dataset.tip = tip; btn.dataset.tipSub = sub;
+  if (tipFor === btn) paintTip(btn);
+}
+
+/* ── Lapka's own tooltip ───────────────────────────────────────
+   The system's takes a second and dies whenever its element is
+   redrawn. This one appears at once, sits by the pointer, and is
+   repainted with its element while it is up. */
+let tipFor = null;
+function paintTip(el) {
+  tipEl.textContent = el.dataset.tip || '';
+  if (el.dataset.tipSub) { const s = document.createElement('div'); s.className = 'tip__sub'; s.textContent = el.dataset.tipSub; tipEl.append(s); }
+  const r = el.getBoundingClientRect();
+  tipEl.hidden = false;
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let left = r.left + r.width / 2 - w / 2, top = r.top - h - 8;
+  if (top < 8) top = r.bottom + 8;
+  left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+  tipEl.style.left = left + 'px'; tipEl.style.top = top + 'px';
+}
+document.addEventListener('pointerover', e => {
+  const el = e.target.closest('[data-tip]');
+  if (el === tipFor) return;
+  tipFor = el;
+  if (el) paintTip(el); else tipEl.hidden = true;
+});
+document.addEventListener('pointerdown', () => { tipFor = null; tipEl.hidden = true; });
+queueList.addEventListener('scroll', () => { tipFor = null; tipEl.hidden = true; }, { passive: true });
+
 function paintGroupSave(li) {
   const items = state.list.filter(it => it.group === li.dataset.group);
   const done = items.filter(isSaved).length;
@@ -2209,7 +2255,7 @@ async function saveItem(it) {
     await loadLibrary();
     return true;
   } catch (e) {
-    it.save = { error: e.message }; paintSaved();
+    it.save = { ...(it.save || {}), error: e.message }; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
     return false;
   }

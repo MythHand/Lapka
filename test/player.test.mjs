@@ -213,7 +213,7 @@ describe('saving from the queue', { skip }, () => {
       const spinner = !!$('#queueList .item__save.is-saving .ring');
       await until('saved', () => $('#saveCount').textContent === '3/3', 300);
       const marksAfter = $$('#queueList .item__save').map(b => b.className);
-      const title = $('#queueList .item__save').title;
+      const title = $('#queueList .item__save').dataset.tip;
       $('#btnSaveAll').dispatchEvent(new PointerEvent('pointerenter'));
       await until('pop', () => !$('#savePop').hidden && $$('#savePop .savepop__sec').length > 1, 40);
       const pop = $('#savePop').textContent;

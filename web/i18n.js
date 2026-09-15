@@ -340,7 +340,7 @@ en: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -356,6 +356,7 @@ en: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -667,7 +668,7 @@ ru: {
   'queue.popCache': 'Кэш: {size} из {limit}',
   'queue.popFree': 'Свободно на диске: {size}',
   'toast.savedMany': { one: 'Сохранена {n} серия', few: 'Сохранено {n} серии', many: 'Сохранено {n} серий', other: 'Сохранено {n} серии' },
-  'queue.saveFailed': 'Не сохранилось: {why}. Нажмите, чтобы попробовать снова',
+  'queue.saveFailed': 'Не сохранилось: {why}',
   'pop.queue': 'Очередь',
   'pop.saved': 'Сохранено',
   'pop.rest': 'Осталось',
@@ -683,6 +684,7 @@ ru: {
   'pop.ofLimit': 'из {limit}',
   'pop.free': 'Свободно',
   'pop.ofDisk': 'из {total}',
+  'queue.saveStopped': 'Дошло до {done} из {total} ({pct}%). Нажмите, чтобы продолжить',
 
 },
 
@@ -994,7 +996,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -1010,6 +1012,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -1321,7 +1324,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -1337,6 +1340,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -1648,7 +1652,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -1664,6 +1668,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -1975,7 +1980,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -1991,6 +1996,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -2302,7 +2308,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -2318,6 +2324,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -2629,7 +2636,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -2645,6 +2652,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -2956,7 +2964,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -2972,6 +2980,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
@@ -3283,7 +3292,7 @@ ru: {
   'queue.popCache': 'Cache: {size} of {limit}',
   'queue.popFree': 'Free on disk: {size}',
   'toast.savedMany': { one: '{n} episode saved', other: '{n} episodes saved' },
-  'queue.saveFailed': 'Not saved: {why}. Click to try again',
+  'queue.saveFailed': 'Not saved: {why}',
   'pop.queue': 'Queue',
   'pop.saved': 'Saved',
   'pop.rest': 'Left',
@@ -3299,6 +3308,7 @@ ru: {
   'pop.ofLimit': 'of {limit}',
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
+  'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
 
 },
 
