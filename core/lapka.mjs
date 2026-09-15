@@ -14,7 +14,7 @@ import { playerId } from './discover/players.mjs';
 import { loadExtractors, extractorFor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
-import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS } from './catalog/index.mjs';
+import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS, dubKey } from './catalog/index.mjs';
 
 export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), sites: await loadSites(), profiles: await loadProfiles(), ...opts });
@@ -200,7 +200,10 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     if (!x) { markHealth(source, false, 'no extractor'); return false; }
     try {
       const got = await x.extract(source.embedUrl, { referer: ep.sourceUrl || s.sourceUrl }, session);
-      const streams = got.dubs?.length ? got.dubs.flatMap(d => d.streams) : (got.streams || []);
+      /* a source of one dub takes that dub's streams; a source that is one dub among the embed's takes its own */
+      const mine = ep.dubs.find(x => x.sources.includes(source));
+      const own = got.dubs?.length && mine ? (got.dubs.find(d => dubKey(d.name) === mine.key) || null) : null;
+      const streams = got.dubs?.length ? (own ? own.streams : got.dubs.flatMap(d => d.streams)) : (got.streams || []);
       if (!streams.length) { markHealth(source, false, 'no streams'); return false; }
       source.extractor = source.extractor || x.name;
       source.streams = streams.map(st => ({ ...st, headers: { ...(st.headers || {}) } }));
@@ -242,9 +245,9 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       dubs: ep.dubs.map(d => ({ key: d.key, name: d.name, alive: d.sources.filter(x => x.health.ok !== false).length, sources: d.sources.length })),
       dub: dub ? { key: dub.key, name: dub.name } : null,
       source: source ? { id: source.id, player: source.player, extractor: source.extractor } : null,
-      stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play } : null,
+      stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play, audio: stream.audio || null } : null,
       /* every stream of every live source of the dub: the player offers the qualities across them and may switch the source by picking one */
-      streams: dub ? dub.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play, player: x.player, sourceId: x.id }))) : [],
+      streams: dub ? dub.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play, player: x.player, sourceId: x.id, audio: st.audio || null }))) : [],
       /* the subtitle tracks the dub's live sources offer, one per language and label */
       subs: dub ? [...new Map(dub.sources.filter(x => x.health.ok !== false).flatMap(x => (x.subs || []).filter(sb => sb.id).map(sb => [`${sb.lang || ''}|${sb.label}`, { id: sb.id, lang: sb.lang, label: sb.label, format: sb.format, default: sb.default, play: sb.play, player: x.player }]))).values()] : [],
     };

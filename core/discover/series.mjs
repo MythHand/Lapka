@@ -134,9 +134,11 @@ const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /сезон\
 
 /* "neobjatnyj-okean-sezon-3", "one_piece_season_2", "…/s2/": the season an address names */
 const SEASON_PATH = /(?:^|[-_/])(?:sezon|season|s)[-_]?(\d{1,2})(?=[-_/.]|$)/i;
+const SEASON_PATH_REV = /(?:^|[-_/])(\d{1,2})[-_](?:sezon|season)(?=[-_/.]|$)/i;
 export function seasonFromUrl(url) {
   let u; try { u = new URL(url); } catch { return null; }
-  const m = SEASON_PATH.exec(u.pathname.toLowerCase());
+  const p = u.pathname.toLowerCase();
+  const m = SEASON_PATH.exec(p) || SEASON_PATH_REV.exec(p);
   return m ? Number(m[1]) : null;
 }
 
@@ -144,7 +146,7 @@ export function seasonFromUrl(url) {
    океан, Сезон 3 (2026) все серии онлайн". The name is what is left
    once the year in brackets and the tail of watch-words go; the year
    is kept. */
-const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis)\s*$/i;
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
 export function tidyTitle(text, host = '') {
   let t = String(text || '').replace(SEO_HEAD, '');
   let year = null;
@@ -201,8 +203,9 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
      "neobjatnyj-okean-sezon-3". The slug's stem before the season
      marker names the series. */
   let pageUrl; try { pageUrl = new URL(url); } catch { pageUrl = null; }
-  const slugOf = p => p.toLowerCase().replace(/[-_]+/g, '-');
-  const stemOf = p => { const seg = slugOf(p).split('/').filter(Boolean).find(s => SEASON_PATH.test(s)); if (!seg) return null; const stem = seg.replace(/(?:^|-)(?:sezon|season|s)-?\d{1,2}(?=-|$).*$/, ''); return stem.length >= 5 ? stem : null; };
+  /* a slug without its engine's leading id ("5120-arkejn-1-sezon.html" → "arkejn-1-sezon") */
+  const slugOf = p => p.toLowerCase().replace(/[-_]+/g, '-').replace(/\/\d+-/g, '/').replace(/\.html?$/, '');
+  const stemOf = p => { const seg = slugOf(p).split('/').filter(Boolean).find(s => SEASON_PATH.test(s) || SEASON_PATH_REV.test(s)); if (!seg) return null; const stem = seg.replace(/(?:^|-)(?:sezon|season|s)-?\d{1,2}(?=-|$).*$/, '').replace(/(?:^|-)\d{1,2}-(?:sezon|season)(?=-|$).*$/, ''); return stem.length >= 5 ? stem : null; };
   const stem = pageUrl ? stemOf(pageUrl.pathname) : null;
   if (stem) for (const a of doc.querySelectorAll('a[href]')) {
     let u; try { u = new URL(a.getAttribute('href'), url); } catch { continue; }
@@ -212,7 +215,7 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
     /* the season's own page, not an episode inside it: nothing may
        follow the season's segment but a site engine's id ("10-1-0-834") */
     const segs = slugOf(u.pathname).split('/').filter(Boolean);
-    const at = segs.findIndex(sg => SEASON_PATH.test(sg));
+    const at = segs.findIndex(sg => SEASON_PATH.test(sg) || SEASON_PATH_REV.test(sg));
     if (segs.slice(at + 1).some(sg => !/^\d+(?:-\d+){2,}$/.test(sg))) continue;
     const key = u.toString().replace(/\/+$/, '');
     if (!out.has(key)) out.set(key, { order: n, title: '', url: u.toString(), kind: 'tv', self: key === page });

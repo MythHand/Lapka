@@ -106,9 +106,11 @@ export function createSub({ url, lang = null, label = '', format = null, headers
   return { url, lang, label, format: format || (/\.srt(\?|$)/i.test(url) ? 'srt' : 'vtt'), headers: { ...headers }, default: !!def };
 }
 
-export function createStream({ kind, url, quality = null, headers = {}, expiresAt = null }) {
+/* audio: for an HLS that carries several audio renditions (one per
+   dub), which one this dub is: its index among them and its name */
+export function createStream({ kind, url, quality = null, headers = {}, expiresAt = null, audio = null }) {
   if (!kind || !url) throw new Error('a stream needs a kind and a url');
-  return { kind, url, quality, headers: { ...headers }, expiresAt };
+  return { kind, url, quality, headers: { ...headers }, expiresAt, audio: audio ? { index: Number(audio.index) || 0, name: audio.name || '' } : null };
 }
 
 /* Lookups by identity, the only way anything is found in a catalog. */

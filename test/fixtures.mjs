@@ -79,10 +79,11 @@ export async function build() {
     subsLong: at('lines-long.srt'),
     hls: at('hls'),
     hlsIndex: at(path.join('hls', 'index.m3u8')),
+    hlsAudio: at(path.join('hls-audio', 'master.m3u8')),
   };
 
   /* already built by an earlier run */
-  if ([made.native, made.release, made.legacy, made.long, made.hlsIndex].every(f => fs.existsSync(f)))
+  if ([made.native, made.release, made.legacy, made.long, made.hlsIndex, made.hlsAudio].every(f => fs.existsSync(f)))
     return made;
 
   /* Nothing is written into place directly. The suites that need media
@@ -165,11 +166,26 @@ export async function build() {
       '-hls_segment_filename', w(path.join('hls', 'seg%02d.ts')),
       w(path.join('hls', 'index.m3u8'))]);
 
+    /* The same clip with its sound as renditions of their own: a master
+       with one video variant and an audio group of two languages, the
+       way aggregators serve several dubs in one stream. */
+    await fsp.mkdir(w('hls-audio'));
+    await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
+      ...src(6), ...tone(440, 6), ...tone(660, 6),
+      '-map', '0:v', '-map', '1:a', '-map', '2:a',
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+      '-g', '20', '-keyint_min', '20', '-sc_threshold', '0',
+      '-f', 'hls', '-hls_time', '2', '-hls_list_size', '0',
+      '-var_stream_map', 'a:0,agroup:aud,language:rus,default:yes a:1,agroup:aud,language:eng v:0,agroup:aud',
+      '-master_pl_name', 'master.m3u8',
+      '-hls_segment_filename', w(path.join('hls-audio', 's%v-%02d.ts')),
+      w(path.join('hls-audio', 'v%v.m3u8'))]);
+
     /* On Windows a file another run already has open cannot be replaced;
        that one is whole too, so it stays. The hls folder is moved as one
        piece for the same reason the files are: a half-moved folder is a
        playlist pointing at segments that are not there yet. */
-    for (const n of ['lines.srt', 'lines-long.srt', 'native.mp4', 'release.mkv', 'legacy.avi', 'long.mkv', 'hls'])
+    for (const n of ['lines.srt', 'lines-long.srt', 'native.mp4', 'release.mkv', 'legacy.avi', 'long.mkv', 'hls', 'hls-audio'])
       await fsp.rename(w(n), at(n)).catch(e => { if (!fs.existsSync(at(n))) throw e; });
   } finally {
     await fsp.rm(work, { recursive: true, force: true });

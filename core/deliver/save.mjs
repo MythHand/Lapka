@@ -34,16 +34,33 @@ async function segmentsOf(delivery, entry, url, depth = 0) {
   const lines = text.split(/\r?\n/);
   if (lines.some(l => l.startsWith('#EXT-X-STREAM-INF'))) {
     if (depth > 2) throw new Error('playlist points at playlists all the way down');
-    let best = null, bw = -1;
+    let best = null, bw = -1, group = null;
     for (let i = 0; i < lines.length; i++) {
       if (!lines[i].startsWith('#EXT-X-STREAM-INF')) continue;
       const b = Number(/BANDWIDTH=(\d+)/.exec(lines[i])?.[1] || 0);
       const next = lines.slice(i + 1).find(l => l.trim() && !l.startsWith('#'));
-      if (next && b > bw) { bw = b; best = new URL(next.trim(), base).toString(); }
+      if (next && b > bw) { bw = b; best = new URL(next.trim(), base).toString(); group = /AUDIO="([^"]+)"/.exec(lines[i])?.[1] || null; }
     }
     if (!best) throw new Error('master playlist without variants');
     entry.allowed.add(best);
-    return segmentsOf(delivery, entry, best, depth + 1);
+    const video = await segmentsOf(delivery, entry, best, depth + 1);
+    /* the sound is a rendition of its own: the one this stream names,
+       else the default, else the first of the variant's group */
+    if (group) {
+      const media = lines.filter(l => l.startsWith('#EXT-X-MEDIA') && /TYPE=AUDIO/.test(l) && (new RegExp(`GROUP-ID="${group.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`)).test(l));
+      const want = entry.stream.audio ? entry.stream.audio.index : media.findIndex(l => /DEFAULT=YES/.test(l));
+      const line = media[want >= 0 && want < media.length ? want : 0];
+      const uri = line && /URI="([^"]+)"/.exec(line)?.[1];
+      if (uri) {
+        const abs = new URL(uri, base).toString();
+        entry.allowed.add(abs);
+        video.audio = await segmentsOf(delivery, entry, abs, depth + 1);
+        /* the file will say which sound it holds */
+        video.audio.lang = /LANGUAGE="([^"]+)"/.exec(line)?.[1] || null;
+        video.audio.name = (entry.stream.audio && entry.stream.audio.name) || /NAME="([^"]+)"/.exec(line)?.[1] || null;
+      }
+    }
+    return video;
   }
   const segments = [], keys = [], out = [];
   for (const line of lines) {
@@ -94,19 +111,30 @@ export function createSaver({ delivery, cache, library, state = null }) {
       const counter = new Transform({ transform(chunk, _, cb) { done += chunk.length; onProgress({ phase: 'fetch', done, total }); cb(null, chunk); } });
       await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(part));
     } else {
-      const { segments, keys, localPlaylist } = await segmentsOf(delivery, entry, stream.url);
+      const { segments, keys, localPlaylist, audio } = await segmentsOf(delivery, entry, stream.url);
       let done = 0;
-      const total = keys.length + segments.length;
-      for (const u of [...keys, ...segments]) {
+      const pieces = [...keys, ...segments, ...(audio ? [...audio.keys, ...audio.segments] : [])];
+      const total = pieces.length;
+      for (const u of pieces) {
         await delivery.piece(entry, u);
         onProgress({ phase: 'fetch', done: ++done, total });
       }
       const listFile = cache.fileFor(entry.id, 'local.m3u8');
       await fsp.writeFile(listFile, localPlaylist);
+      const inputs = ['-i', listFile];
+      const maps = audio ? ['-map', '0:v', '-map', '1:a'] : [];
+      if (audio) {
+        /* the sound comes as a playlist of its own: muxed with the picture, not re-encoded, and named in the file */
+        const audioFile = cache.fileFor(entry.id, 'local-audio.m3u8');
+        await fsp.writeFile(audioFile, audio.localPlaylist);
+        inputs.push('-i', audioFile);
+        if (audio.lang) maps.push('-metadata:s:a:0', `language=${audio.lang}`);
+        if (audio.name) maps.push('-metadata:s:a:0', `title=${audio.name}`);
+      }
       onProgress({ phase: 'assemble', done, total });
       await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
         '-allowed_extensions', 'ALL', '-protocol_whitelist', 'file,crypto,data',
-        '-i', listFile, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', part]);
+        ...inputs, ...maps, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', part]);
     }
 
     await fsp.rename(part, place.file);

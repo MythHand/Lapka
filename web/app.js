@@ -1007,6 +1007,19 @@ function loadSource(it, src, token, onMeta, play) {
   if (play) video.play().catch(() => {});
 }
 
+/* The stream carries several audio renditions, one per dub: the one
+   this dub is, by its index among the renditions of the group in
+   play, is switched to inside hls.js; no other stream is loaded. */
+function pickAudioTrack(stream) {
+  if (!hls || !stream || !stream.audio) return;
+  const all = hls.audioTracks || [];
+  if (!all.length) return;
+  const group = all[hls.audioTrack >= 0 ? hls.audioTrack : 0]?.groupId;
+  const mine = all.filter(t => !group || t.groupId === group);
+  const want = mine[stream.audio.index] || all[stream.audio.index];
+  if (want && hls.audioTrack !== want.id) hls.audioTrack = want.id;
+}
+
 /* An HLS stream goes through hls.js, anything else straight into the
    element. A fatal error inside hls.js is reported the way the
    element reports its own, so one handler deals with both. */
@@ -1022,7 +1035,7 @@ function attachSource(stream) {
       const it = cur();
       if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true });
     });
-    hls.on(Hls.Events.MANIFEST_PARSED, syncQualityButton);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => { syncQualityButton(); pickAudioTrack(stream); });
     hls.on(Hls.Events.LEVEL_SWITCHED, syncQualityButton);
     hls.loadSource(stream.play);
     hls.attachMedia(video);
@@ -1039,6 +1052,8 @@ async function switchTrack(it) {
   const token = ++playToken;
   const src = await sourceFor(it);
   if (token !== playToken || it !== cur() || !src) return;
+  /* the same stream, another rendition of its sound: switched inside, without a reload */
+  if (src.audio && it.loadedSrc === src.play && hls) { pickAudioTrack(src); syncAudioButton(); syncSubsButton(); applySubs(it); return; }
   loadSource(it, src, token, () => { video.currentTime = at; }, playing);
   syncAudioButton(); syncSubsButton(); applySubs(it);
   if (audioMenu.classList.contains('open')) buildAudioMenu();   // the mark on the quality follows the stream now playing
@@ -2093,7 +2108,7 @@ btnLocate.onclick = revealCurrent;
    by importance to the goal: first what the whole thing was started
    for, then what it cannot work without, and only at the end the
    trimmings. */
-const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net'];
+const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co'];
 const SITES_PART = [];
 const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at', 'animeflv.or.at'];
 function aboutBlock() {

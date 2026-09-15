@@ -61,15 +61,105 @@ function nameOf(o) {
   return null;
 }
 
+/* A playlist in the player's script: seasons of episodes, each with
+   its HLS, its audio renditions named (one per dub), its subtitles.
+   The shape VenomPlayer and its kin use:
+     seasons: [{ season, episodes: [{ episode, hls, dash, audio: { names, order }, cc: [{ name, url }], title, duration }] }]
+   Read by matching brackets, not by running anything. */
+export function readPlaylist(text) {
+  const t = String(text || '');
+  const at = t.search(/\bseasons\s*:\s*\[/);
+  if (at < 0) return null;
+  const start = t.indexOf('[', at);
+  let depth = 0, inStr = null;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) { if (c === '\\') i++; else if (c === inStr) inStr = null; continue; }
+    if (c === '"' || c === "'") { inStr = c; continue; }
+    if (c === '[' || c === '{') depth++;
+    else if (c === ']' || c === '}') { depth--; if (depth === 0) { try { return normalizePlaylist(JSON.parse(t.slice(start, i + 1)), t); } catch { return null; } } }
+  }
+  return null;
+}
+function normalizePlaylist(seasons, text) {
+  if (!Array.isArray(seasons)) return null;
+  const cur = /current\s*:\s*\{\s*season\s*:\s*"?(\d+)"?\s*,\s*episode\s*:\s*"?([\d.]+)"?/.exec(text);
+  const out = seasons.map(se => ({
+    season: Number(se.season) || 1,
+    episodes: (se.episodes || []).map(e => ({
+      number: Number(e.episode ?? e.number), title: String(e.title || ''), duration: Number(e.duration) || null,
+      hls: e.hls || e.file || e.url || null, dash: e.dash || null,
+      audio: e.audio && Array.isArray(e.audio.names) ? { names: e.audio.names.map(String), order: Array.isArray(e.audio.order) ? e.audio.order.map(Number) : null } : null,
+      subs: (e.cc || e.subtitles || e.tracks || []).map(c => ({ url: c.url || c.file, label: String(c.name || c.label || ''), lang: langOfLabel(c.name || c.label), format: /\.srt(\?|$)/i.test(String(c.url || c.file || '')) ? 'srt' : 'vtt' })).filter(c => c.url),
+    })).filter(e => Number.isFinite(e.number) && e.hls),
+  })).filter(se => se.episodes.length);
+  return out.length ? { seasons: out, current: cur ? { season: Number(cur[1]), episode: Number(cur[2]) } : null } : null;
+}
+/* the stream's expiry, when the address says it (t=<unix seconds>) */
+const expiryOf = url => { const m = /[?&]t=(\d{9,10})(?:&|$)/.exec(url); return m ? Number(m[1]) * 1000 : null; };
+/* the dubs of an episode of the playlist: one per audio rendition, or one unnamed */
+function dubsOfEpisode(e, headers) {
+  const stream = (audio = null) => ({ kind: 'hls', url: e.hls, quality: null, headers, expiresAt: expiryOf(e.hls), audio });
+  const names = e.audio ? e.audio.names : [];
+  if (!names.length) return [{ name: null, streams: [stream()] }];
+  const order = e.audio.order && e.audio.order.length === names.length ? e.audio.order : names.map((_, i) => i);
+  return names.map((name, i) => ({ name, streams: [stream({ index: order.indexOf(i) >= 0 ? order.indexOf(i) : i, name })] }));
+}
+const withParams = (url, season, episode) => { const u = new URL(url); u.searchParams.set('season', String(season)); u.searchParams.set('episode', String(episode)); return u.toString(); };
+
 export default {
   name: 'generic',
   match: () => true,
+
+  /* An embed whose script holds the playlist of the whole series:
+     the season the embed shows (its season parameter, else the
+     current one, else the first), every episode of it with its dubs
+     as audio renditions of one HLS, its subtitles, its expiry. Each
+     source is the same embed opened at that episode. */
+  async unfold(embedUrl, { referer = null } = {}, session) {
+    const res = await session.fetch(embedUrl, { referer });
+    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    const base = res.url || embedUrl;
+    const { document: doc } = parseHTML(res.body);
+    let pl = null;
+    for (const s of doc.querySelectorAll('script:not([src])')) { pl = readPlaylist(s.textContent); if (pl) break; }
+    if (!pl) return null;
+    const want = Number(new URL(base).searchParams.get('season')) || pl.current?.season || pl.seasons[0].season;
+    const season = pl.seasons.find(se => se.season === want) || pl.seasons[0];
+    const headers = { referer: new URL(base).origin + '/' };
+    const episodes = season.episodes.map(e => ({
+      number: e.number, title: e.title || undefined, duration: e.duration || undefined,
+      dubs: dubsOfEpisode(e, headers).map(d => ({ name: d.name || undefined, kind: 'dub', sources: [{ embedUrl: withParams(base, season.season, e.number), streams: d.streams, subs: e.subs }] })),
+    }));
+    if (episodes.length < 2 && !episodes[0]?.dubs.length) return null;
+    return { episodes, season: season.season, seasons: pl.seasons.map(se => se.season) };
+  },
 
   async extract(embedUrl, { referer = null } = {}, session) {
     const res = await session.fetch(embedUrl, { referer });
     if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
     const base = res.url || embedUrl;
     const headers = { referer: base };
+    /* the player's script holds the playlist: the episode this embed
+       is opened at, its dubs as audio renditions, its subtitles */
+    if (/\bseasons\s*:\s*\[/.test(String(res.body || ''))) {
+      const { document: d } = parseHTML(res.body);
+      let pl = null;
+      for (const s of d.querySelectorAll('script:not([src])')) { pl = readPlaylist(s.textContent); if (pl) break; }
+      if (pl) {
+        const u = new URL(base);
+        const wantS = Number(u.searchParams.get('season')) || pl.current?.season || pl.seasons[0].season;
+        const wantE = Number(u.searchParams.get('episode')) || pl.current?.episode || null;
+        const season = pl.seasons.find(se => se.season === wantS) || pl.seasons[0];
+        const e = (wantE !== null && season.episodes.find(x => x.number === wantE)) || season.episodes[0];
+        if (e) {
+          const h = { referer: u.origin + '/' };
+          const dubs = dubsOfEpisode(e, h);
+          if (dubs.length === 1 && !dubs[0].name) return { streams: dubs[0].streams, dubs: [], subs: e.subs.map(sb => ({ ...sb, headers: h })) };
+          return { streams: [], dubs: dubs.map(x => ({ name: x.name, streams: x.streams })), subs: e.subs.map(sb => ({ ...sb, headers: h })) };
+        }
+      }
+    }
     /* the "page" is the playlist itself: the address is the stream */
     if (/^\s*#EXTM3U/.test(String(res.body || '').slice(0, 200))) return { streams: [{ kind: 'hls', url: base, quality: null, headers: { referer: new URL(base).origin + '/' } }], dubs: [] };
     const { document: doc } = parseHTML(res.body);

@@ -78,10 +78,18 @@ export function findEpisodes(doc, url, { profile } = {}) {
     if (!prev || c.title.length > prev.title.length) g.set(c.number, c);
   }
 
+  /* Links numbered by their text alone, leading to pages whose slugs
+     are all different words ("2 серия" → propavshaja, "5 серия" →
+     fonari): a strip of other series' latest episodes, not one
+     series' episodes. One series' episode pages share their slug,
+     or are told apart by a number. */
+  const wordsOf = u => { try { const last = new URL(u).pathname.split('/').filter(Boolean).pop() || ''; const w = last.replace(/\.[a-z0-9]+$/i, '').replace(/\d+/g, '').replace(/[-_]+/g, '-').replace(/^-|-$/g, ''); return /[a-zа-яё]{4,}/i.test(w) && /[g-zа-яё]/i.test(w) ? w : ''; } catch { return ''; } };   // an id of hex has no words: a word has a letter past f
   const scored = [...groups.values()].map(g => {
     const items = [...g.items.values()].sort((a, b) => a.number - b.number);
     const seq = sequence(items.map(i => i.number));
     let confidence = g.by === 'profile' ? 1 : 0;
+    const scattered = g.by !== 'profile' && items.every(i => numberFromUrl(i.url) === null) && new Set(items.map(i => wordsOf(i.url)).filter(Boolean)).size > 1;
+    if (scattered) return { by: g.by, template: template(items[0].url), count: 0, sequence: 0, confidence: 0, items: [] };
     if (!confidence) {
       if (items.length >= 2) confidence = 0.4;
       if (items.length >= 3) confidence = 0.6;
