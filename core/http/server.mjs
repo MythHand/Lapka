@@ -91,6 +91,13 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const s = lapka.series(m[1]);
         return s ? json(res, 200, { series: s }) : json(res, 404, { error: 'unknown series' });
       }
+      if (req.method === 'GET' && p === '/api/dubs') {
+        const q = url.searchParams;
+        try {
+          const ep = q.get('open') === '1' ? await lapka.openAllSources(q.get('series'), Number(q.get('episode'))) : await lapka.openEpisode(q.get('series'), Number(q.get('episode')));
+          return json(res, 200, { episode: ep.number, dubs: lapka.dubsOf(ep) });
+        } catch (e) { return json(res, e.code || 500, { error: e.message }); }
+      }
       if (req.method === 'GET' && p === '/api/resolve') {
         const q = url.searchParams;
         try {
@@ -110,13 +117,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         try {
           const chosen = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
           if (!chosen) return json(res, 200, { cancelled: true });
-          const r = await ctx.switchHome(chosen);
-          return json(res, 200, { ok: true, home: r.path, created: !r.existed });
+          /* not switched yet: the page asks whether to take the files along */
+          const has = (await library.list()).length > 0;
+          return json(res, 200, { ok: true, chosen, hasContent: has, from: store.home });
         } catch (e) { return json(res, e.code || 500, { error: e.message }); }
       }
       if (ctx.switchHome && mutating && p === '/api/home') {
-        try { const r = await ctx.switchHome(url.searchParams.get('path') || ''); return json(res, 200, { ok: true, home: r.path, created: !r.existed }); }
-        catch (e) { return json(res, e.code || 500, { error: e.message }); }
+        try {
+          const move = url.searchParams.get('move') === '1';
+          const r = await ctx.switchHome(url.searchParams.get('path') || '', { move });
+          return json(res, 200, { ok: true, home: r.path, created: !r.existed, moved: r.moved || 0 });
+        } catch (e) { return json(res, e.code || 500, { error: e.message }); }
       }
       if (store && mutating && p === '/api/cache/limit') {
         await store.cache.setLimit(Number(url.searchParams.get('gb')));

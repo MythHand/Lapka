@@ -990,7 +990,8 @@ svg.ph{ fill:currentColor; stroke:none; }
   font-size:calc(12.5px + var(--fs)); color:var(--tx-3); font-variant-numeric:tabular-nums;
   flex-wrap:wrap;
 }
-.queue__sum{ display:flex; flex-direction:column; gap:0; line-height:1.35; }
+.queue__sum{ display:flex; flex-direction:column; justify-content:center; gap:0; line-height:1.35; }
+#queueTotal{ display:none; }
 .queue__add{ display:flex; gap:7px; flex-wrap:wrap; }
 /* When the buttons do not fit on one line they stand two by two (fitFoot
    in the player code). Left to wrap freely, one of them ended up alone on a line:
@@ -1441,7 +1442,7 @@ video::cue{
 }
 .linkform__in::placeholder{ color:var(--tx-3); }
 .linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
-.linkform--foot{ max-width:none; flex:1; }
+.linkform--foot{ max-width:none; flex:1 1 auto; min-width:0; }
 .linkform--foot .linkform__in{ height:32px; padding:0 10px; font-size:calc(13px + var(--fs)); }
 
 /* ── skipping the opening or the ending ─────────────────────── */
@@ -1600,3 +1601,30 @@ video::cue{
 /* ── the small menu by a row's save button ──────────────────── */
 .menu--float{ position:fixed; bottom:auto; right:auto; z-index:60; min-width:200px; display:block; }
 .menu--float[hidden]{ display:none; }
+
+/* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
+.queue__add{ flex:1 1 auto; min-width:0; }
+.linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
+.linkform__wrap .linkform__in{ width:100%; padding-right:34px; }
+.linkform__enter{
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  font:inherit; font-size:calc(11px + var(--fs)); line-height:1; padding:3px 6px; border-radius:6px;
+  color:var(--tx-3); border:1px solid var(--line-2); background:var(--glass-soft); opacity:0; transition:opacity .14s; pointer-events:none;
+}
+.linkform__in:not(:placeholder-shown) + .linkform__enter{ opacity:1; }
+
+/* ── the audio menu: room for the qualities each dub can play in ── */
+#audioMenu{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); }
+.menu__item--dub{ align-items:center; }
+.menu__tags{ flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:210px; margin-left:8px; }
+.tag{
+  font-size:calc(11px + var(--fs)); line-height:1; padding:4px 7px; border-radius:6px; cursor:pointer;
+  color:var(--tx-2); border:1px solid var(--line); background:var(--glass-soft); font-variant-numeric:tabular-nums;
+}
+.tag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
+.tag.sel{ color:var(--s-0); background:var(--tx-1); border-color:var(--tx-1); }
+.tag--wait{ cursor:default; color:var(--tx-3); border-style:dashed; }
+
+/* ── the folder's buttons, each on a full line ── */
+.home__acts{ display:grid; grid-template-columns:1fr; gap:6px; }
+.home__acts .cache__clear{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

@@ -204,13 +204,14 @@ function fitDeck() {
 }
 /* Shortens the studio name to the room its side has. False when even
    the icon alone leaves the side too wide. */
+const LABEL_MAX = 180;
 function fitLabel(room) {
   btnAudio.classList.remove('rb--icon');
-  audioLabel.style.maxWidth = '';
+  audioLabel.style.maxWidth = LABEL_MAX + 'px';   // a steady width: the name does not grow and shrink with every change around it
   const over = deckLeft.scrollWidth - room;
   if (over <= 0) return true;
   if (btnAudio.hidden) return false;
-  const left = audioLabel.getBoundingClientRect().width - over;
+  const left = Math.min(LABEL_MAX, audioLabel.getBoundingClientRect().width) - over;
   if (left >= fourLetters()) { audioLabel.style.maxWidth = Math.floor(left) + 'px'; return true; }
   btnAudio.classList.add('rb--icon');
   return deckLeft.scrollWidth <= room;
@@ -800,10 +801,10 @@ function qualityOptions() {
 
 function syncQualityButton() {
   const opts = qualityOptions();
-  btnQuality.hidden = opts.length < 2;
   const it = cur();
+  btnQuality.hidden = !(it && it.stream) && opts.length < 2;
   const now = it && it.stream && it.stream.quality ? it.stream.quality : (hls && hls.levels && hls.levels[hls.currentLevel] ? hls.levels[hls.currentLevel].height + 'p' : '');
-  qualityLabel.textContent = now || t('quality.short');
+  qualityLabel.textContent = now || (it && it.stream && it.stream.kind === 'hls' ? t('quality.auto') : t('quality.short'));
   btnQuality.title = now ? t('quality.current', { name: now }) : t('quality.title');
   if (opts.length < 2) qualityMenu.classList.remove('open');
   fitDeck();
@@ -905,6 +906,7 @@ async function playItem(it, autoplay = true, glide = true) {
   if (!it) return;
   state.current = it;
   state.seekPreview = null;
+  if (dubsInfo && (dubsInfo.seriesId !== it.seriesId || dubsInfo.episode !== it.number)) dubsInfo = null;
   skipNow = null; skipEl.hidden = true;
   if (!it.switching) hideNotice();   // the notice of a source being switched stays until the picture is back
   endCard.classList.remove('show');
@@ -1227,8 +1229,10 @@ function syncAudioButton() {
   fitDeck();         // the name has changed, and so has the room it takes
 }
 
+let dubsInfo = null;          // what the server said each dub offers, for the episode the menu was built for
 function buildAudioMenu() {
   const opts = audioOptions();
+  const it = cur();
   audioMenu.replaceChildren();
   const head = document.createElement('div');
   head.className = 'menu__title';
@@ -1243,22 +1247,43 @@ function buildAudioMenu() {
     return;
   }
 
+  const known = dubsInfo && it && dubsInfo.seriesId === it.seriesId && dubsInfo.episode === it.number ? dubsInfo.dubs : null;
   for (const o of opts) {
+    const info = known && known.find(d => d.key === o.id);
     const b = document.createElement('button');
-    b.className = 'menu__item' + (o.sel ? ' sel' : '');
+    b.className = 'menu__item menu__item--dub' + (o.sel ? ' sel' : '');
     b.innerHTML = `<span class="menu__tick">${phSvg(PH.check)}</span>
-      <span class="menu__body"><span class="menu__main"></span>${o.sub ? '<span class="menu__sub"></span>' : ''}</span>`;
+      <span class="menu__body"><span class="menu__main"></span>${o.sub ? '<span class="menu__sub"></span>' : ''}</span>
+      <span class="menu__tags"></span>`;
     b.querySelector('.menu__main').textContent = o.main;
     if (o.sub) b.querySelector('.menu__sub').textContent = o.sub;
+    const tags = b.querySelector('.menu__tags');
+    if (info && info.qualities.length) {
+      for (const q of info.qualities) {
+        const tg = document.createElement('span');
+        tg.className = 'tag' + (o.sel && it.stream && it.stream.id === q.id ? ' sel' : '');
+        tg.textContent = q.quality || t('quality.auto');
+        tg.title = q.player + ' · ' + q.kind.toUpperCase();
+        tg.onclick = ev => { ev.stopPropagation(); pickAudio(o, q.quality || 'auto'); markPicked(b); };
+        tags.append(tg);
+      }
+    } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'tag tag--wait'; w.textContent = '…'; tags.append(w); }
     b.onclick = () => { pickAudio(o); markPicked(b); };
     audioMenu.append(b);
   }
+  /* what each dub can play in is asked once per episode; the sources
+     not yet opened are opened for it, and the menu is drawn again */
+  if (it && !known) {
+    api(`/api/dubs?series=${it.seriesId}&episode=${it.number}`).then(d => { dubsInfo = { seriesId: it.seriesId, episode: it.number, dubs: d.dubs }; if (audioMenu.classList.contains('open')) buildAudioMenu(); }).catch(() => {});
+    api(`/api/dubs?series=${it.seriesId}&episode=${it.number}&open=1`).then(d => { dubsInfo = { seriesId: it.seriesId, episode: it.number, dubs: d.dubs }; if (audioMenu.classList.contains('open')) buildAudioMenu(); }).catch(() => {});
+  }
 }
 
-function pickAudio(opt) {
+function pickAudio(opt, quality = null) {
   const it = cur();
   if (!it) return;
-  if (it.dub && it.dub.key === opt.id) return;
+  if (quality) { state.quality = quality; saveStr('lapka.quality', quality); }
+  if (it.dub && it.dub.key === opt.id) { if (quality) switchTrack(it); return; }
   state.dubKey = opt.id;
   post(`/api/state/dub?series=${it.seriesId}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
   hideNotice();
@@ -1695,7 +1720,22 @@ function homeRow(col) {
   q('.home__pick').onclick = async ev => {
     ev.stopPropagation();
     q('.home__pick').disabled = true;
-    try { const r = await post('/api/home/pick'); if (r.cancelled) return; took(r); }
+    try {
+      const r = await post('/api/home/pick');
+      if (r.cancelled) return;
+      /* the old folder holds a library: taken along, or left where it is */
+      if (r.hasContent) {
+        closeMenus();
+        showNotice(t('notice.homeMove', { path: r.chosen }), { action: t('notice.homeMoveGo'), onAction: async () => {
+          try { const m = await post('/api/home?path=' + encodeURIComponent(r.chosen) + '&move=1'); toast(t('toast.homeMoved', { path: m.home })); loadLibrary(); }
+          catch (e) { toast(t('toast.homeFail', { why: e.message })); }
+        }, onClose: async () => {
+          try { took(await post('/api/home?path=' + encodeURIComponent(r.chosen))); } catch (e) { toast(t('toast.homeFail', { why: e.message })); }
+        } });
+        return;
+      }
+      took(await post('/api/home?path=' + encodeURIComponent(r.chosen)));
+    }
     catch (e) { toast(t('toast.homeFail', { why: e.message })); }
     finally { q('.home__pick').disabled = false; }
   };
@@ -1836,17 +1876,17 @@ document.addEventListener('click', e => {
 
 /* ── the notice over the picture ───────────────────────────── */
 /* a line over the picture: what went wrong, and one thing to do about it */
-let noticeDo = null;
-function showNotice(text, { action = null, onAction = null } = {}) {
+let noticeDo = null, noticeUndo = null;
+function showNotice(text, { action = null, onAction = null, onClose = null } = {}) {
   noticeText.textContent = text;
   const btn = $('#noticeAction');
   btn.hidden = !action;
   btn.textContent = action || '';
-  noticeDo = onAction;
+  noticeDo = onAction; noticeUndo = onClose;
   notice.classList.add('show');
 }
-function hideNotice() { notice.classList.remove('show'); noticeDo = null; }
-$('#noticeClose').onclick = hideNotice;
+function hideNotice() { notice.classList.remove('show'); noticeDo = null; noticeUndo = null; }
+$('#noticeClose').onclick = () => { const f = noticeUndo; hideNotice(); if (f) f(); };
 $('#noticeAction').onclick = () => { const f = noticeDo; hideNotice(); if (f) f(); };
 
 /* ═══════════════ queue ═══════════════ */
@@ -1861,7 +1901,6 @@ function render() {
 
   if (!state.list.length) {
     queueList.replaceChildren(aboutBlock());
-    queueTotal.textContent = '0:00:00';
     stage.classList.add('is-empty');
     if (booted) emptyEl.classList.remove('hide');
     syncStatus();
@@ -2065,13 +2104,15 @@ function watchThumbs() {
 }
 function askThumb(li) {
   const it = byId(li.dataset.id);
-  if (!it || it.thumb || !state.series || !state.series.cover) return;
-  it.thumb = state.series.cover;
+  if (!it || it.thumb) return;
+  const season = seasonOf(it);
+  const cover = (season && season.series.cover) || (state.series && state.series.cover);
+  if (!cover) return;
+  it.thumb = cover;
   putThumb(li, it.thumb);
 }
 
 function paintMeta() {
-  queueTotal.textContent = fmtLong(state.list.reduce((a, b) => a + (b.dur || 0), 0));
   for (const li of queueList.children) {
     const it = byId(li.dataset.id);
     if (!it) continue;

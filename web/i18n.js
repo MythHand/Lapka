@@ -285,7 +285,7 @@ en: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -365,6 +365,9 @@ en: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -621,7 +624,7 @@ ru: {
   'empty.link': 'Ссылка на сериал или серию',
   'empty.open': 'Открыть',
   'hint.link': 'Всё читает локальный сервер на этой машине; сайт видит те же запросы, что сделал бы ваш браузер.',
-  'queue.link': 'Ещё ссылка…',
+  'queue.link': 'Другая ссылка',
   'queue.episodeN': '{n} серия',
   'queue.dubs': { one: '{n} озвучка', few: '{n} озвучки', many: '{n} озвучек', other: '{n} озвучки' },
   'prep.page': 'Читаю страницу',
@@ -701,6 +704,9 @@ ru: {
   'notice.switching': 'Источник {from} не ответил. Пробую другой, попытка {n} из {total}…',
   'notice.allFailed': 'Ни один источник не воспроизвёл: {name}',
   'flash.source': 'Источник: {player}',
+  'notice.homeMove': 'Папка выбрана: {path}. Перенести туда файлы из прежней папки? Крестик оставит их на месте.',
+  'notice.homeMoveGo': 'Перенести',
+  'toast.homeMoved': 'Перенесено в {path}',
 
 },
 
@@ -957,7 +963,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -1037,6 +1043,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -1293,7 +1302,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -1373,6 +1382,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -1629,7 +1641,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -1709,6 +1721,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -1965,7 +1980,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -2045,6 +2060,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -2301,7 +2319,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -2381,6 +2399,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -2637,7 +2658,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -2717,6 +2738,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -2973,7 +2997,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -3053,6 +3077,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 
@@ -3309,7 +3336,7 @@ ru: {
   'empty.link': 'Link to the series or an episode',
   'empty.open': 'Open',
   'hint.link': 'Everything is read by the local server on this machine; the site sees the same requests your browser would make.',
-  'queue.link': 'Another link…',
+  'queue.link': 'Another link',
   'queue.episodeN': 'Episode {n}',
   'queue.dubs': { one: '{n} dub', other: '{n} dubs' },
   'prep.page': 'Reading the page',
@@ -3389,6 +3416,9 @@ ru: {
   'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
   'notice.allFailed': 'No source could play: {name}',
   'flash.source': 'Source: {player}',
+  'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
+  'notice.homeMoveGo': 'Move',
+  'toast.homeMoved': 'Moved to {path}',
 
 },
 

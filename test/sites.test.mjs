@@ -144,6 +144,18 @@ describe('look() on aniliberty, page and adapter together', () => {
     assert.ok(r2.stream, 'still something to play');
   });
 
+  test('the dubs of an episode say what they can play in, once their sources are opened', async () => {
+    const delivery = { register: () => 'id' + Math.random().toString(36).slice(2, 8), get: () => null };
+    const lapka = createLapka({ session, sites: await loadSites(), profiles: await loadProfiles(), delivery, extractors: await (await import('../core/extract/index.mjs')).loadExtractors() });
+    const { series } = await lapka.look(`${SITE}/anime/video/episode/${UUID}`);
+    const ep = await lapka.openAllSources(series.id, 8);
+    const dubs = lapka.dubsOf(ep);
+    assert.equal(dubs.length, 1);
+    assert.equal(dubs[0].unopened, 0);
+    assert.deepEqual([...new Set(dubs[0].qualities.map(q => q.quality))], ['1080p', '720p', '480p']);
+    assert.ok(dubs[0].qualities.every(q => q.id && q.play && q.player));
+  });
+
   test('without the adapter and the profile the page still plays, under the unnamed dub', async () => {
     const lapka = createLapka({ session });
     const { series, start } = await lapka.look(`${REL}/torrents`);

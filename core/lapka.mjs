@@ -199,6 +199,30 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     };
   }
 
+  /* Every source of every dub of an episode, opened, a few at a time:
+     the audio menu wants to show what each dub can play in. */
+  async function openAllSources(seriesId, number, { limit = 4 } = {}) {
+    const s = seen.get(seriesId);
+    if (!s) throw Object.assign(new Error('unknown series; look at its page first'), { code: 404 });
+    const ep = await openEpisode(seriesId, number);
+    const todo = ep.dubs.flatMap(d => d.sources).filter(src => !src.streams.length && src.health.ok !== false && !src.opening);
+    let i = 0;
+    const worker = async () => { while (i < todo.length) { const src = todo[i++]; src.opening = true; try { await refreshSource(src, ep, s); } finally { src.opening = false; } } };
+    await Promise.all(Array.from({ length: Math.min(limit, todo.length) }, worker));
+    return ep;
+  }
+
+  /* what each dub of an episode offers: its live sources and their qualities */
+  function dubsOf(ep) {
+    return ep.dubs.map(d => ({
+      key: d.key, name: d.name, kind: d.kind,
+      alive: d.sources.filter(x => x.health.ok !== false).length, sources: d.sources.length,
+      unopened: d.sources.filter(x => !x.streams.length && x.health.ok !== false).length,
+      qualities: [...new Map(d.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => [st.quality || (st.kind === 'hls' ? 'auto' : '?'), { quality: st.quality || null, kind: st.kind, player: x.player, id: st.id, play: st.play }])).sort((a, b) => rankQ(b[1]) - rankQ(a[1]))).values()],
+    }));
+  }
+  const rankQ = st => { const m = /(\d{3,4})/.exec(String(st.quality || '')); return m ? Number(m[1]) : st.kind === 'hls' ? 9999 : 0; };
+
   /* One address in, a catalog and the reports behind it out. */
   async function look(url) {
     const reports = [];
@@ -247,7 +271,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       start: startAt !== null ? { episode: startAt } : null };
   }
 
-  return { look, readPage, context, series, adopt, openEpisode, resolve, session, extractors, sites, profiles };
+  return { look, readPage, context, series, adopt, openEpisode, openAllSources, dubsOf, resolve, session, extractors, sites, profiles };
 }
 
 function plural(n, one, few, many) {

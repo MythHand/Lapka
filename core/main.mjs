@@ -14,6 +14,27 @@ import { readConfig, writeConfig, checkHome } from './store/config.mjs';
 export const PORT = Number(process.env.PORT) || 8800;
 export const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
 
+/* The contents of one Lapka folder carried into another: renamed
+   where the disk allows, copied and removed where it does not; the
+   old folder is removed once it is empty. Nested folders are refused. */
+async function moveHome(from, to) {
+  const a = path.resolve(from), b = path.resolve(to);
+  if (b.startsWith(a + path.sep) || a.startsWith(b + path.sep)) throw Object.assign(new Error('one folder is inside the other'), { code: 400 });
+  const fsp = await import('node:fs/promises');
+  let moved = 0;
+  for (const name of await fsp.readdir(a).catch(() => [])) {
+    const src = path.join(a, name), dst = path.join(b, name);
+    try { await fsp.rename(src, dst); }
+    catch (e) {
+      if (e.code === 'EXDEV' || e.code === 'ENOTEMPTY' || e.code === 'EEXIST') { await fsp.cp(src, dst, { recursive: true, force: false, errorOnExist: false }); await fsp.rm(src, { recursive: true, force: true }); }
+      else throw e;
+    }
+    moved++;
+  }
+  if (!(await fsp.readdir(a).catch(() => ['x'])).length) await fsp.rmdir(a).catch(() => {});
+  return moved;
+}
+
 /* everything that lives in the Lapka folder, opened */
 async function openHome(home, delivery) {
   const store = await openStore({ home });
@@ -36,12 +57,15 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   ctx.delivery = delivery;
   ctx.lapka = await bootLapka({ session, delivery });
   /* the folder can change while running: the user picks another one */
-  ctx.switchHome = async dir => {
+  ctx.switchHome = async (dir, { move = false } = {}) => {
     const check = await checkHome(dir);
     if (!check.ok) throw Object.assign(new Error(check.why), { code: 400 });
     const old = ctx.state;
-    Object.assign(ctx, await openHome(check.path, delivery));
+    const from = ctx.home;
     await old.close().catch(() => {});
+    /* the files go along: every series folder and Lapka's own things, then the emptied old folder goes */
+    if (move && from && path.resolve(from) !== path.resolve(check.path)) check.moved = await moveHome(from, check.path);
+    Object.assign(ctx, await openHome(check.path, delivery));
     if (!explicit && !process.env.LAPKA_HOME) await writeConfig({ home: check.path });
     return check;
   };

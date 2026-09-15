@@ -149,6 +149,26 @@ describe('the state', () => {
   });
 });
 
+/* ── the folder moves with its files ── */
+describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  test('the series folders and Lapka\'s own things go along, the old folder is emptied and removed', async () => {
+    const before = await (await get('/api/library')).json();
+    assert.ok(before.series.length >= 1, 'something to move');
+    const other = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-moved-')), 'Lapka');
+    const r = await (await post(`/api/home?path=${encodeURIComponent(other)}&move=1`)).json();
+    assert.equal(r.home, other);
+    assert.ok(r.moved >= 2, `moved ${r.moved}`);
+    const after = await (await get('/api/library')).json();
+    assert.equal(after.home, other);
+    assert.deepEqual(after.series.map(s => s.title), before.series.map(s => s.title));
+    await assert.rejects(fsp.stat(home), 'the old folder is gone');
+    await fsp.access(path.join(other, '.lapka', 'state.json'));
+    /* one folder inside the other is refused */
+    assert.equal((await post(`/api/home?path=${encodeURIComponent(path.join(other, 'inner'))}&move=1`)).status, 400);
+    home = other;
+  });
+});
+
 /* ── saves that were cut short are taken up again ── */
 describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
   test('a pending record becomes a file, and goes; the routes list and forget', async () => {
