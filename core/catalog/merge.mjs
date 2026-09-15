@@ -22,7 +22,7 @@
    old stream is a dead stream.
    ═══════════════════════════════════════════════════════════ */
 import {
-  createEpisode, createDub, createSource, createStream,
+  createEpisode, createDub, createSource, createStream, createSub,
   findEpisode, findDub, findSource, dubKey, UNNAMED_DUB,
 } from './model.mjs';
 
@@ -75,6 +75,7 @@ export function merge(series, contribution) {
           source.streams = s.streams.map(createStream);
           added.streams += source.streams.length;
         }
+        if (s.subs && s.subs.length) source.subs = s.subs.map(createSub);
       }
     }
   }

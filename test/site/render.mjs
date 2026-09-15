@@ -103,7 +103,7 @@ export function renderEmbedBeta(c, ep) {
   return page({ title: `beta · ${c.id} ${ep}`, body: `<select id="dub">\n${options}\n</select>
 <video id="v" controls></video>
 <script>
-var player = { episode: ${ep}, file: "/media/hls/index.m3u8", dubs: ${JSON.stringify(dubs)} };
+var player = { episode: ${ep}, file: "/media/hls/index.m3u8", dubs: ${JSON.stringify(dubs)}, tracks: [{ file: "/media/lines.srt", label: "Русские", kind: "captions" }, { file: "/media/thumbs.vtt", kind: "thumbnails" }] };
 document.getElementById('dub').addEventListener('change', function () {
   player.file = player.dubs.find(function (d) { return d.id === this.value; }.bind(this)).file;
 });

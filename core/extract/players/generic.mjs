@@ -23,6 +23,10 @@ const abs = (v, base) => { try { return new URL(v, base).toString(); } catch { r
    found by the outer scan as their own flat objects. */
 import { objectsIn, unpacked } from '../../discover/objects.mjs';
 
+/* the language a label names, for the common ones; else nothing */
+const LANGS = [['en', /^(english|eng|англ)/i], ['ru', /^(russian|rus|русск)/i], ['ja', /^(japanese|jpn|япон)/i], ['es', /^(spanish|spa|espa)/i], ['pt', /^(portug)/i], ['fr', /^(french|fra|franç)/i], ['de', /^(german|deu|deutsch)/i], ['it', /^(italian|ita)/i], ['ar', /^(arabic|ara)/i], ['uk', /^(ukrain|укра)/i], ['tr', /^(turkish|tur)/i], ['zh', /^(chinese|zho|中文)/i], ['ko', /^(korean|kor)/i]];
+const langOfLabel = label => (LANGS.find(([, re]) => re.test(String(label || '').trim())) || [null])[0];
+
 /* The kind of a file the object names: by its extension, else by
    what the object says of it ("type": "mp4", "application/x-mpegURL"),
    else by the mime in its query (googlevideo: mime=video%2Fmp4). */
@@ -84,11 +88,25 @@ export default {
       for (const s of v.querySelectorAll('source')) push(s.getAttribute('src'));
     }
 
+    /* subtitle tracks: <track> elements, and the player's own list
+       of tracks (jwplayer: {file, label, kind: "captions"}); a track
+       of thumbnails is not one */
+    const subs = [];
+    const seenSub = new Set();
+    const addSub = (u, label = '', lang = null, def = false) => {
+      u = abs(u, base);
+      if (!u || seenSub.has(u)) return;
+      seenSub.add(u); subs.push({ url: u, label: String(label || '').trim(), lang: lang || langOfLabel(label), format: /\.srt(\?|$)/i.test(u) ? 'srt' : 'vtt', headers, default: !!def });
+    };
+    for (const tr of doc.querySelectorAll('track[src]')) if (!tr.getAttribute('kind') || /subtitles|captions/i.test(tr.getAttribute('kind'))) addSub(tr.getAttribute('src'), tr.getAttribute('label') || '', tr.getAttribute('srclang') || null, tr.hasAttribute('default'));
+
     const dubs = [];
     /* packed scripts are read unpacked: the hosters' players keep their addresses in them */
     const scripts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent).flatMap(t => [t, ...unpacked(t)]);
     for (const text of scripts) {
       for (const o of objectsIn(text)) {
+        const track = typeof o.file === 'string' || typeof o.src === 'string' ? (o.file || o.src) : null;
+        if (track && (/captions|subtitles/i.test(String(o.kind || '')) || /\.(vtt|srt)(\?|$)/i.test(track)) && !/thumbnails|chapters/i.test(String(o.kind || ''))) { addSub(track, o.label || o.name || '', o.srclang || o.lang || o.language || null, o.default); continue; }
         const file = fileOf(o, base), name = nameOf(o);
         if (!file) continue;
         /* a name that is a quality ("360p") names no dub: the object is a source of the one video */
@@ -106,6 +124,6 @@ export default {
       for (const s of d.streams) if (!merged.get(key).streams.some(x => x.url === s.url)) merged.get(key).streams.push(s);
     }
 
-    return { streams, dubs: [...merged.values()] };
+    return { subs, streams, dubs: [...merged.values()] };
   },
 };

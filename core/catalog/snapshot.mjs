@@ -50,7 +50,7 @@ export function fromSnapshot(snap) {
       sources: (d.sources || []).map(s => ({
         id: s.id, player: s.player, embedUrl: s.embedUrl, extractor: s.extractor || null, origin: s.origin || null,
         health: { ok: null, checkedAt: null, error: null, ...(s.health || {}) },
-        streams: [],
+        streams: [], subs: [],
       })),
     })),
   }));

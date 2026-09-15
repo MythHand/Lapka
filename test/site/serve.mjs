@@ -17,7 +17,7 @@ import { CASES, caseById } from './cases.mjs';
 import { renderHome, renderSeries, renderEpisode, renderEmbedAlpha, renderEmbedBeta } from './render.mjs';
 
 const TYPES = {
-  '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t', '.mp4': 'video/mp4',
+  '.m3u8': 'application/vnd.apple.mpegurl', '.ts': 'video/mp2t', '.mp4': 'video/mp4', '.srt': 'text/plain; charset=utf-8', '.vtt': 'text/vtt; charset=utf-8',
   '.jpg': 'image/jpeg', '.mkv': 'video/x-matroska',
 };
 
@@ -60,7 +60,9 @@ export function startSite({ port = 0, media } = {}) {
       res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': COVER.length });
       return res.end(COVER);
     }
-    if ((m = /^\/media\/((?:hls\/)?[a-z0-9]+\.(?:m3u8|ts|mp4|mkv))$/.exec(p)) && media) {
+    /* a track of thumbnails, as players list beside the subtitles: not a subtitle */
+    if (p === '/media/thumbs.vtt') { res.writeHead(200, { 'content-type': 'text/vtt; charset=utf-8' }); return res.end('WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n/media/cover-a.jpg#xywh=0,0,160,90\n'); }
+    if ((m = /^\/media\/((?:hls\/)?[a-z0-9-]+\.(?:m3u8|ts|mp4|mkv|srt|vtt))$/.exec(p)) && media) {
       const file = path.join(media, m[1]);
       let st;
       try { st = await fsp.stat(file); } catch { return notFound(res); }

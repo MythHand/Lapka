@@ -772,6 +772,10 @@ async function resolveItem(it, { avoid = null } = {}) {
     it.stream = pickStream(it.streams, r.stream) || r.stream;
     if (it.stream && it.stream.player) it.source = { ...(it.source || {}), player: it.stream.player };
     it.marks = r.episode.marks || null;
+    /* the subtitle tracks the source offers, in the shape the menu
+       reads; off unless a track like the one chosen before is here */
+    it.subs = (r.subs || []).map((sb, i) => ({ index: 'w' + sb.id, order: i, lang: sb.lang || '', title: sb.label || '', codec: sb.format || 'vtt', forced: false, default: !!sb.default, text: true, url: sb.play }));
+    if (!it.subPicked) it.subIndex = preferredSub(it);
     if (r.episode.duration && !it.dur) it.dur = r.episode.duration;
     if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode, state.seasons.find(s => s.series.id === it.seriesId)?.series); }
     return r;
@@ -972,6 +976,7 @@ async function playItem(it, autoplay = true, glide = true) {
      watching */
   const back = state.positions[posKey(it)];
   loadSource(it, src, token, () => {
+  syncSubsButton(); applySubs(it);   // the tracks of this source, when there are any
     const d = duration();
     if (back == null || back < POS_MIN || (d && back > d - POS_TAIL)) return;
     video.currentTime = back;

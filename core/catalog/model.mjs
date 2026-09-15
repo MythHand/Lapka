@@ -94,7 +94,16 @@ export function createSource({ player, embedUrl, extractor = null, origin = null
     player, embedUrl, extractor, origin,
     health: { ok: null, checkedAt: null, error: null },
     streams: [],
+    subs: [],
   };
+}
+
+/* A subtitle track a source offers beside its streams: a text file
+   (WebVTT or SRT) at an address, named by language and label. Like a
+   stream it may be signed and is never kept in a snapshot. */
+export function createSub({ url, lang = null, label = '', format = null, headers = {}, default: def = false }) {
+  if (!url) throw new Error('a subtitle track needs a url');
+  return { url, lang, label, format: format || (/\.srt(\?|$)/i.test(url) ? 'srt' : 'vtt'), headers: { ...headers }, default: !!def };
 }
 
 export function createStream({ kind, url, quality = null, headers = {}, expiresAt = null }) {

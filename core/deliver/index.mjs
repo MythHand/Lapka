@@ -64,6 +64,18 @@ export function createDelivery({ session, cache }) {
     return res;
   }
 
+  /* A subtitle track: fetched from the origin and given as WebVTT,
+     which is what a browser's <track> reads; SRT is turned into it
+     (the timestamps' commas become dots, the header goes on top). */
+  async function text(entry) {
+    const res = await fetchOrigin(entry, entry.stream.url);
+    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });
+    const raw = (await res.text()).replace(/^\uFEFF/, '');
+    if (/^WEBVTT/.test(raw.trim())) return raw;
+    const cues = raw.replace(/\r\n?/g, '\n').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
+    return 'WEBVTT\n\n' + cues.trim() + '\n';
+  }
+
   /* The playlist: fetched every time (it may be live or signed
      anew), rewritten, and the media playlist kept for saving later. */
   async function playlist(entry, url = entry.stream.url) {
@@ -97,7 +109,7 @@ export function createDelivery({ session, cache }) {
     return res;
   }
 
-  return { register, get, playlist, piece, file, rewrite, streams, fetchOrigin, nameFor };
+  return { register, get, playlist, text, piece, file, rewrite, streams, fetchOrigin, nameFor };
 }
 
 export const contentType = url => /\.m3u8(\?|$)/i.test(url) ? 'application/vnd.apple.mpegurl'

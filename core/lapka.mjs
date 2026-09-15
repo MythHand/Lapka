@@ -91,7 +91,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
          iframe on such a page is left alone. */
       if (number === null) { if (!player.followed) return { player, extractor: x.name, error: 'the page names no episode' }; number = 1; }
       const got = await x.extract(player.url, { referer: pageUrl }, session);
-      const source = streams => ({ player: player.id, embedUrl: player.url, extractor: x.name, streams });
+      const source = streams => ({ player: player.id, embedUrl: player.url, extractor: x.name, streams, subs: got.subs || [] });
       let dubs;
       if (got.dubs?.length) dubs = got.dubs.map(d => ({ name: d.name, sources: [source(d.streams)] }));
       else if (got.streams?.length) dubs = [{ name: player.dubLabel || UNNAMED_DUB, sources: [source(got.streams)] }];
@@ -105,10 +105,18 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   /* Streams get an address the player can ask for. */
   function registerStreams(series) {
     if (!delivery) return;
-    for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) for (const st of s.streams) {
-      if (st.id) continue;
-      st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
-      st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
+    for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) {
+      for (const st of s.streams) {
+        if (st.id) continue;
+        st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+        st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
+      }
+      /* a subtitle track gets an address of ours the same way: the browser takes a text track from its own origin only */
+      for (const sb of s.subs || []) {
+        if (sb.id) continue;
+        sb.id = delivery.register({ kind: 'sub', url: sb.url, headers: sb.headers, format: sb.format }, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+        sb.play = `/api/stream/${sb.id}.vtt`;
+      }
     }
   }
 
@@ -196,6 +204,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       if (!streams.length) { markHealth(source, false, 'no streams'); return false; }
       source.extractor = source.extractor || x.name;
       source.streams = streams.map(st => ({ ...st, headers: { ...(st.headers || {}) } }));
+      source.subs = (got.subs || []).map(sb => ({ ...sb, headers: { ...(sb.headers || {}) } }));
       markHealth(source, true);
       registerStreams(s);
       return true;
@@ -236,6 +245,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play } : null,
       /* every stream of every live source of the dub: the player offers the qualities across them and may switch the source by picking one */
       streams: dub ? dub.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play, player: x.player, sourceId: x.id }))) : [],
+      /* the subtitle tracks the dub's live sources offer, one per language and label */
+      subs: dub ? [...new Map(dub.sources.filter(x => x.health.ok !== false).flatMap(x => (x.subs || []).filter(sb => sb.id).map(sb => [`${sb.lang || ''}|${sb.label}`, { id: sb.id, lang: sb.lang, label: sb.label, format: sb.format, default: sb.default, play: sb.play, player: x.player }]))).values()] : [],
     };
   }
 
