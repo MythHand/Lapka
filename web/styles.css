@@ -1309,8 +1309,8 @@ video::cue{
   top:calc(100% - var(--gear-pad-y) + 12px);
   right:calc(var(--gear-pad-x) - 10px);
   /* the keys as they were, the other two columns a quarter wider than the keys */
-  min-width:min(990px, calc(100vw - 60px));
-  max-width:min(990px, calc(100vw - 60px));
+  min-width:min(1058px, calc(100vw - 60px));
+  max-width:min(1058px, calc(100vw - 60px));
   /* the menu starts 72px from the top, so the window leaves it all but
      72px and a 16px margin at the bottom; the old 120px reserve cut the
      settings short in a window of ordinary height */
@@ -1344,7 +1344,9 @@ video::cue{
   .menu--gear.open{ opacity:0; transform:translateX(60px); }
 }
 .menu--gear .menu__col--keys{ flex:0 0 270px; }
+/* the middle column a fifth wider again than the third */
 .menu--gear .menu__col:not(.menu__col--keys){ flex:0 0 338px; }
+.menu--gear .menu__col:nth-child(2){ flex:0 0 406px; }
 
 /* the list of keyboard shortcuts */
 .keys__row{
@@ -1578,3 +1580,19 @@ video::cue{
   font-size:calc(12px + var(--fs)); line-height:1.5; color:var(--tx-1); pointer-events:none; white-space:nowrap;
 }
 .tip__sub{ color:var(--tx-3); white-space:normal; }
+
+/* ── a switch for a setting that is on or off ───────────────── */
+.menu__row--switch{ display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; }
+.menu__row--switch .menu__rowlabel{ margin:0; }
+.switch{
+  flex:none; position:relative; width:40px; height:24px; border-radius:999px; padding:0;
+  background:var(--glass-hi); border:1px solid var(--line-2); cursor:pointer;
+  transition:background .18s, border-color .18s;
+}
+.switch i{
+  position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+  background:var(--tx-2); transition:transform .18s cubic-bezier(.2,.8,.3,1), background .18s;
+}
+.switch.on{ background:var(--tx-1); border-color:var(--tx-1); }
+.switch.on i{ transform:translateX(16px); background:var(--s-0); }
+.switch:hover i{ background:var(--tx-1); } .switch.on:hover i{ background:var(--s-0); }

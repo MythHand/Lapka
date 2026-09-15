@@ -1442,7 +1442,27 @@ function setCue(key, val) {
 
 /* Label on top, options below it across the full width: on one line
    they did not fit and overlapped each other. */
+/* A setting that is only on or off is a switch, not two buttons. */
+function switchRow(menu, label, on, pick) {
+  const line = document.createElement('label');
+  line.className = 'menu__row menu__row--switch';
+  const lab = document.createElement('span');
+  lab.className = 'menu__rowlabel';
+  lab.textContent = label;
+  const sw = document.createElement('button');
+  sw.type = 'button';
+  sw.className = 'switch' + (on ? ' on' : '');
+  sw.setAttribute('role', 'switch');
+  sw.setAttribute('aria-checked', String(!!on));
+  sw.innerHTML = '<i></i>';
+  sw.onclick = ev => { ev.stopPropagation(); pick(!on); };
+  line.append(lab, sw);
+  menu.append(line);
+}
+
 function segRow(menu, label, current, opts, pick) {
+  /* exactly on and off: a switch */
+  if (opts.length === 2 && opts[0][0] === 'on' && opts[1][0] === 'off') return switchRow(menu, label, current === 'on', v => pick(v ? 'on' : 'off'));
   const line = document.createElement('div');
   line.className = 'menu__row';
   const lab = document.createElement('span');
@@ -2398,10 +2418,16 @@ const byOrder = (a, b) => seasonRank(a) - seasonRank(b) || a.number - b.number;
 $('#btnSort').onclick = () => { state.list.sort(byOrder); render(); toast(t('queue.sorted')); };
 $('#btnReverse').onclick = () => { state.list.sort((a, b) => byOrder(b, a)); render(); toast(t('queue.reversed')); };
 $('#btnClear').onclick = () => {
+  playToken++;
+  stopPlayback();                    // the picture and the sound, hls.js included
   state.list = []; state.current = null;
-  video.pause(); video.removeAttribute('src'); video.load();
+  state.series = null; state.seasons = []; state.dubKey = null; state.saved = new Map();
+  try { localStorage.removeItem('lapka.session'); } catch (_) {}
   endCard.classList.remove('show'); hideNotice(); hideProgress();
   stage.classList.remove('fading');
+  skipNow = null; skipEl.hidden = true;
+  emptyEl.classList.remove('hide');
+  paintTitle(); syncStatus(); syncAudioButton(); syncQualityButton(); syncSubsButton();
   render();
 };
 

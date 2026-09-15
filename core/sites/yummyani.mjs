@@ -50,6 +50,7 @@ export function playerOf(iframeUrl) {
   const host = new URL(u).hostname;
   if (/kodik/i.test(host)) return 'kodik';
   if (/alloha/i.test(host)) return 'alloha';
+  if (/sibnet/i.test(host)) return 'sibnet';
   if (/iframeCVH/i.test(u)) return 'cvh';
   return host.replace(/^www\./, '');
 }
