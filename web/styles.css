@@ -1679,10 +1679,29 @@ video::cue{
 /* nothing open: the panel is the about page, without a header and without a count */
 .queue--empty .queue__tools{ display:none; }
 .queue--empty .queue__sum{ display:none; }   /* only the count; the mini brand stays */
-/* the footer's field and its button: one height, one shape */
-.linkform--foot .linkform__in{ height:34px; border-radius:999px; padding:0 14px; }
-.linkform__wrap .linkform__in{ padding-right:36px; }
-.queue__add .tag{ height:34px; padding:0 16px; display:inline-flex; align-items:center; }
+/* the footer's field and its button: the prompt of the panel. Both in
+   the monospace, one height, one corner, one line around them; the
+   field opens with the same › the state line opens with, the Enter
+   sign at its end is set in the same face */
+.linkform--foot .linkform__in{
+  height:34px; border-radius:8px; padding:0 36px 0 28px;
+  font-family:var(--mono); font-size:calc(13px + var(--fs)); letter-spacing:0;
+  background:var(--glass-soft); border:1px solid var(--line-2); color:var(--tx-1);
+}
+.linkform--foot .linkform__in::placeholder{ color:var(--tx-3); }
+.linkform--foot .linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
+.linkform__wrap::before{
+  content:'›'; position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  font-family:var(--mono); font-size:calc(13px + var(--fs)); color:var(--tx-3); pointer-events:none;
+}
+.linkform__wrap .linkform__in:focus ~ .linkform__enter{ color:var(--tx-2); }
+.linkform__enter{ font-family:var(--mono); border-radius:5px; }
+.queue__add .tag{
+  height:34px; padding:0 14px; display:inline-flex; align-items:center; border-radius:8px;
+  font-family:var(--mono); font-size:calc(13px + var(--fs)); letter-spacing:0;
+  background:var(--glass-soft); border:1px solid var(--line-2); color:var(--tx-2);
+}
+.queue__add .tag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
 .about__rule{ margin:1em 0; color:var(--line-3); overflow:hidden; white-space:nowrap; user-select:none; }
 /* the description: the text face, set as text is set — a lead, headings,
    numbered steps, rows of a bold label and a line */
