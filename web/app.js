@@ -286,7 +286,9 @@ for (const m of MENUS) menuWatch.observe(m, { attributes: true, attributeFilter:
 function fitFoot() {
   queueAdd.classList.remove('queue__add--grid');
   const tags = [...queueAdd.children].filter(b => !b.hidden);
-  if (tags.length > 1 && tags[tags.length - 1].offsetTop > tags[0].offsetTop)
+  /* on a second line, not merely a few pixels lower: the field and the
+     button differ in height, and a strict comparison folded the row */
+  if (tags.length > 1 && tags[tags.length - 1].offsetTop > tags[0].offsetTop + tags[0].offsetHeight / 2)
     queueAdd.classList.add('queue__add--grid');
 }
 new ResizeObserver(fitFoot).observe($('#queue'));
@@ -1012,6 +1014,7 @@ async function switchTrack(it) {
   if (token !== playToken || it !== cur() || !src) return;
   loadSource(it, src, token, () => { video.currentTime = at; }, playing);
   syncAudioButton(); syncSubsButton(); applySubs(it);
+  if (audioMenu.classList.contains('open')) buildAudioMenu();   // the mark on the quality follows the stream now playing
   prefetchNext();          // the next episode is opened with the new choice
 }
 
@@ -1275,7 +1278,12 @@ function buildAudioMenu() {
         tg.className = 'qtag' + (o.sel && it.stream && it.stream.id === q.id ? ' sel' : '');
         tg.textContent = q.quality || (q.kind === 'hls' ? t('quality.auto') : q.kind.toUpperCase());   // a file of unknown size is named by what it is, not called adaptive
         tg.title = q.player + ' · ' + q.kind.toUpperCase();
-        tg.onclick = ev => { ev.stopPropagation(); pickAudio(o, q.quality || 'auto'); markPicked(b); };
+        tg.onclick = ev => {
+          ev.stopPropagation();
+          for (const x of audioMenu.querySelectorAll('.qtag.sel')) x.classList.remove('sel');   // the mark moves at once, the stream follows
+          tg.classList.add('sel');
+          pickAudio(o, q.quality || 'auto'); markPicked(b);
+        };
         tags.append(tg);
       }
     } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'qtag qtag--wait'; w.textContent = '…'; tags.append(w); }
