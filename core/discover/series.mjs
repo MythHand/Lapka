@@ -90,8 +90,10 @@ export function findCurrentEpisode(doc, url) {
   })).sort((a, b) => b.confidence - a.confidence);
 }
 
-/* "2 сезон", "Season 2", "2nd season", "S2" in a title */
-const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/];
+/* "2 сезон", "Season 2", "2nd season", "S2", or a bare number at the
+   end of a title ("Богиня благословляет этот прекрасный мир 2",
+   "Этот Замечательный Мир! 3 (OVA)"): the season a title names */
+const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/, /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i];
 export function seasonFromText(text) {
   for (const re of SEASON) { const m = re.exec(String(text || '')); if (m) return Number(m[1]); }
   return null;

@@ -99,7 +99,7 @@ describe('the synthetic site', () => {
 describe('seasons', () => {
   test('the season in a title', async () => {
     const { seasonFromText } = await import('../core/discover/series.mjs');
-    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2]])
+    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2], ['Богиня благословляет этот прекрасный мир 2', 2], ['Этот Замечательный Мир! 3 (OVA)', 3], ['Стальной алхимик 2003', null], ['Ван-Пис 1080p', null]])
       assert.equal(seasonFromText(t), n, t);
   });
   test('a series in two seasons: each page names the other, and knows which one it is', () => {

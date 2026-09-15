@@ -10,6 +10,8 @@
    business: each embed is a source of its dub.
    ═══════════════════════════════════════════════════════════ */
 
+import { seasonFromText } from '../discover/series.mjs';
+
 const HOSTS = /(^|\.)(yummyani\.me|yummy-anime\.ru|yani\.tv)$/i;
 const ITEM = /\/catalog\/item\/([^/?#]+)/;
 
@@ -84,19 +86,24 @@ export default {
 
     const seriesUrl = `${site}/catalog/item/${anime.anime_url || slug}`;
     /* the viewing order: seasons, films, OVAs and spin-offs, this one among them */
+    const spin = text => /spin|ответвлен/i.test(String(text || ''));
     const franchise = (anime.viewing_order || []).map((v, i) => ({
       order: (v.data?.index ?? i) + 1,
       title: v.title || '', url: `${site}/catalog/item/${v.anime_url}`,
-      kind: kindOf(v.type), year: v.year || null, relation: v.data?.text || null,
+      kind: spin(v.data?.text) ? 'spinoff' : kindOf(v.type), year: v.year || null, relation: v.data?.text || null,
       self: v.anime_id === anime.anime_id,
     }));
+    /* the site's "season" is the season of the year it aired; the number of the season is in the title */
+    const own = franchise.find(f => f.self);
+    const kind = own?.kind || kindOf(anime.type);
+    const season = kind === 'tv' ? (seasonFromText(anime.title) ?? 1) : undefined;
     return {
       origin: 'site:yummyani',
       seriesUrl, start: null,
       series: {
         title: anime.title || undefined,
-        season: anime.season || undefined,
-        kind: kindOf(anime.type),
+        season,
+        kind,
         franchise: franchise.length > 1 ? franchise : undefined,
         altTitles: (anime.other_titles || []).map(t => (typeof t === 'string' ? t : t?.title)).filter(Boolean),
         cover: abs(anime.poster?.fullsize || anime.poster?.big, site) || undefined,

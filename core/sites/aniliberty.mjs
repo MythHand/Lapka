@@ -11,18 +11,14 @@
    /franchises, /members, /torrents, /comments. They are one page.
    ═══════════════════════════════════════════════════════════ */
 
+import { seasonFromText as seasonOf } from '../discover/series.mjs';
+
 const HOSTS = /(^|\.)(aniliberty\.top|anilibria\.top|anilibria\.tv)$/i;
 const RELEASE = /\/anime\/releases\/release\/([^/?#]+)/;
 const EPISODE = /\/anime\/video\/episode\/([0-9a-f-]{36})/i;
 const QUALITIES = [480, 720, 1080];
 const STUDIO = 'AniLibria';
 
-/* "Этот Замечательный Мир! 3", "Re:Zero 2 сезон", "Season 2": the season a release is */
-export function seasonOf(name) {
-  const t = String(name || '');
-  const m = /(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i.exec(t) || /season\s*(\d{1,2})/i.exec(t) || /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV)\))?\s*$/i.exec(t);
-  return m ? Number(m[1]) : null;
-}
 const kindOf = type => { const v = String(type?.value || '').toLowerCase(); return /ova|ona/.test(v) ? 'ova' : /movie|film/.test(v) ? 'movie' : /special/.test(v) ? 'special' : v === 'tv' ? 'tv' : v || null; };
 
 const originOf = url => new URL(url).origin;

@@ -187,6 +187,7 @@ describe('the yummyani adapter', () => {
     assert.deepEqual(c.series.franchise.slice(0, 5).map(f => [f.order, f.kind, f.self]), [[1, 'tv', true], [2, 'ova', false], [3, 'tv', false], [4, 'ova', false], [5, 'movie', false]]);
     assert.match(c.series.franchise[2].url, /\/catalog\/item\/boginya-blagoslovlyaet-etot-prekrasnyj-mir-2$/);
     assert.equal(c.series.franchise[5].relation, 'spinoff (ответвление сюжета)');
+    assert.equal(c.series.franchise[5].kind, 'spinoff');
     /* a source has no stream yet: the extractors bring those */
     assert.ok(anilibria.sources.every(s => !s.streams));
   });
