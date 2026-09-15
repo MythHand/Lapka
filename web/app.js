@@ -685,20 +685,29 @@ function orderSeasons(list) {
 const seasonOf = it => state.seasons.find(s => s.series.id === it.seriesId) || null;
 
 /* The other seasons of the franchise, each a series of its own,
-   opened at once. One that fails is left out and said so. */
+   opened at once. A site may name only the neighbours of a part on
+   its page, so what each opened part names is gathered too, round
+   after round, until nothing new comes. One that fails is left out
+   and said so. */
 async function openSeasons(main) {
-  const entries = main.franchise || [];
-  if (entries.length < 2) return [{ series: main, entry: entries.find(e => e.self) || null }];
-  toast(t('toast.seasons', { n: entries.length }));
-  const got = await Promise.allSettled(entries.map(e => e.self || !e.url ? Promise.resolve(null) : api('/api/look?url=' + encodeURIComponent(e.url))));
-  const out = [];
-  entries.forEach((e, i) => {
-    if (e.self) { out.push({ series: main, entry: e }); return; }
-    const r = got[i];
-    if (r.status === 'fulfilled' && r.value && r.value.series.episodes.length) out.push({ series: r.value.series, entry: e });
-    else toast(t('toast.seasonFail', { title: e.title || e.url }));
-  });
-  return orderSeasons(out);
+  const norm = u => String(u || '').replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const me = norm(main.sourceUrl);
+  const known = new Map();   // url → { entry, series }
+  const add = e => { const k = norm(e.url); if (!k || known.has(k)) return; known.set(k, { entry: { ...e, self: k === me }, series: k === me ? main : null }); };
+  for (const e of main.franchise || []) add(e);
+  if (known.size < 2) return [{ series: main, entry: (main.franchise || []).find(e => e.self) || null }];
+  toast(t('toast.seasons', { n: known.size }));
+  for (let round = 0; round < 6; round++) {
+    const todo = [...known.values()].filter(x => !x.series && !x.failed);
+    if (!todo.length) break;
+    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url))));
+    todo.forEach((x, i) => {
+      const r = got[i];
+      if (r.status === 'fulfilled' && r.value && r.value.series.episodes.length) { x.series = r.value.series; for (const e of r.value.series.franchise || []) add(e); }
+      else { x.failed = true; toast(t('toast.seasonFail', { title: x.entry.title || x.entry.url })); }
+    });
+  }
+  return orderSeasons([...known.values()].filter(x => x.series).map(x => ({ series: x.series, entry: x.entry })));
 }
 
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {

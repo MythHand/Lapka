@@ -55,11 +55,22 @@ function fakeSession() {
 }
 
 describe('reading animego', () => {
-  test('the page: the name whole, the cover, no player mistaken for the poster', () => {
+  test('the page: the name whole, the cover, no player mistaken for the poster; the year and the kind from its schema.org data', () => {
     const r = discover({ html: snap('animego', 'page.html'), url: PAGE });
     assert.equal(r.title.value, 'Блич: Тысячелетняя кровавая война — Бедствие');
     assert.deepEqual(r.players, []);
     assert.match(r.cover.value, /^https:\/\/img\.cdngos\.com\//);
+    assert.equal(r.year, 2026);
+    assert.equal(r.kind_, 'tv');
+  });
+  test('"Связанное" names the neighbour only: the franchise is that part and this page, by year', () => {
+    const r = discover({ html: snap('animego', 'page.html'), url: PAGE });
+    assert.deepEqual(r.franchise.map(f => [f.order, f.year, f.kind, f.self, f.title]), [
+      [1, 2024, 'tv', false, 'Блич: Тысячелетняя кровавая война — Конфликт'],
+      [2, 2026, 'tv', true, 'Блич: Тысячелетняя кровавая война — Бедствие'],
+    ]);
+    assert.equal(r.franchise[0].url, `${SITE}/anime/blich-tysyacheletnyaya-krovavaya-voyna-konflikt-2689`);
+    assert.equal(r.franchise[1].url, PAGE);
   });
   test('the fragments: the JSON unwrapped, the episodes with their ids', () => {
     const html = unwrap(snap('animego', 'player-3590.json'));
@@ -96,6 +107,9 @@ describe('through look() and resolve()', () => {
     const r = await lapka.look(PAGE);
     assert.equal(r.series.title, 'Блич: Тысячелетняя кровавая война — Бедствие');
     assert.equal(r.series.sourceUrl, PAGE);
+    assert.equal(r.series.year, 2026);
+    assert.equal(r.series.kind, 'tv');
+    assert.equal(r.series.franchise.length, 2);
     assert.equal(r.series.episodes.length, 9);
     assert.ok(r.steps.some(s => s.includes('Сайт знаком: animego')), r.steps.join(' | '));
     assert.equal(r.series.episodes[1].dubs.length, 0, 'nothing is opened until it is played');

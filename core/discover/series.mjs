@@ -158,9 +158,10 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
    knows it, films and spin-offs included, ordered by year and then as
    the site lists them. Looked at only when no season links say
    otherwise. */
-const FRANCHISE_HEAD = /^(франшиза|все части|порядок просмотра|хронология|связанные|franchise|watch order|related)/i;
+const FRANCHISE_HEAD = /^(франшиза|все части|порядок просмотра|хронология|связанн|franchise|watch order|related)/i;
 const YEAR = /^\s*((?:19|20)\d{2})\s*$/;
-export function franchiseFromBlock(doc, url, title = '') {
+const kindOfName = name => /фильм|movie|film/i.test(name) ? 'movie' : /\b(ova|ona)\b/i.test(name) ? 'ova' : /спешл|special/i.test(name) ? 'special' : 'tv';
+export function franchiseFromBlock(doc, url, title = '', own = {}) {
   const page = (() => { try { const u = new URL(url); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return url; } })();
   const same = href => { try { const u = new URL(href, url); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return null; } };
   const heads = [...doc.querySelectorAll('h1, h2, h3, h4, div, span, p')].filter(el => el.children.length <= 1 && FRANCHISE_HEAD.test(textOf(el)) && textOf(el).length < 40);
@@ -168,33 +169,70 @@ export function franchiseFromBlock(doc, url, title = '') {
     let up = head;
     for (let depth = 0; depth < 4 && up.parentElement; depth++) {
       up = up.parentElement;
-      /* the items: a year each, a link for every part but this page */
+      /* the items: a year each, a link for every part but this page.
+         The year may sit a few levels below the item ("Сериал / 2024"
+         under the name): the item is the nearest ancestor of the year
+         that holds one link, or none. */
       const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && YEAR.test(el.textContent || ''));
-      if (years.length < 2) continue;
+      if (!years.length) continue;
       const items = [];
+      const yearsIn = el => years.filter(y => el.contains(y)).length;
       for (const y of years) {
-        const item = y.parentElement; if (!item) continue;
-        const a = item.querySelector('a[href]');
-        const name = clean(a ? textOf(a) : (item.textContent || '').replace(y.textContent, ''));
+        /* up from the year while the element is still about one part
+           (holds this year alone), until a link is met; an item without
+           a link is the widest such element */
+        let item = y.parentElement, prev = null;
+        for (let k = 0; k < 5 && item && item !== up && yearsIn(item) === 1; k++) {
+          if (item.querySelector('a[href]')) break;
+          prev = item; item = item.parentElement;
+        }
+        if (!item || item === up || yearsIn(item) !== 1) item = prev;
+        if (!item) continue;
+        const links = [...item.querySelectorAll('a[href]')];
+        const hrefs = new Set(links.map(a => same(a.getAttribute('href'))).filter(Boolean));
+        if (hrefs.size > 1) continue;   // several parts inside: not one item
+        const a = links[0] || null;
+        const name = clean(a ? links.map(l => textOf(l) || l.getAttribute('title') || l.querySelector('img')?.getAttribute('alt')).find(Boolean) : (item.textContent || '').replace(y.textContent, ''));
         if (!name) continue;
-        const href = a ? same(a.getAttribute('href')) : null;
+        const href = a ? [...hrefs][0] : null;
         if (a && !href) continue;
-        items.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : null, href, year: Number(YEAR.exec(y.textContent)[1]),
-          kind: /фильм|movie|film/i.test(name) ? 'movie' : /\b(ova|ona)\b/i.test(name) ? 'ova' : /спешл|special/i.test(name) ? 'special' : 'tv' });
+        items.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : null, href, year: Number(YEAR.exec(y.textContent)[1]), kind: kindOfName(name) });
       }
+      if (!items.length) continue;
       /* this page: the item linking to it; else the one item without a
          link (a site leaves the current page unlinked, or the head of
-         the franchise); else the one named as the page is */
-      const self = items.find(it => it.href === page) || items.find(it => !it.href) || items.find(it => title && it.title.toLowerCase() === String(title).toLowerCase());
-      if (!self) continue;
+         the franchise); else the one named as the page is; else the
+         block names the others only, and the page joins them with
+         what it knows of itself */
+      let self = items.find(it => it.href === page) || items.find(it => !it.href) || items.find(it => title && it.title.toLowerCase() === String(title).toLowerCase());
+      if (!self) { self = { title: String(title || ''), url: null, href: page, year: own.year || null, kind: own.kind || kindOfName(String(title || '')) }; items.push(self); }
       /* a part without a link cannot be looked at, and is left out unless it is this page */
       const parts = items.filter(it => it === self || it.url).map(it => ({ title: it.title, url: it === self ? String(url).replace(/#.*$/, '') : it.url, year: it.year, kind: it.kind, self: it === self }));
       if (parts.length < 2) continue;
-      parts.sort((a, b) => a.year - b.year);   // stable: the site's order within a year stays
+      parts.sort((a, b) => (a.year || 9999) - (b.year || 9999));   // stable: the site's order within a year stays; a year unknown goes last
       return parts.map((p, i) => ({ order: i + 1, ...p }));
     }
   }
   return [];
+}
+
+/* What the page says of itself in schema.org data (JSON-LD): the year
+   it came out and what it is, a series or a film. */
+export function findSelf(doc) {
+  const out = { year: null, kind: null };
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    let d; try { d = JSON.parse(s.textContent); } catch { continue; }
+    for (const node of (Array.isArray(d) ? d : [d]).flatMap(x => x && x['@graph'] ? x['@graph'] : [x])) {
+      if (!node || typeof node !== 'object') continue;
+      const type = String(Array.isArray(node['@type']) ? node['@type'][0] : node['@type'] || '');
+      if (!/^(TVSeries|TVSeason|Movie|VideoObject|CreativeWorkSeries|Series)$/i.test(type)) continue;
+      const date = node.datePublished || node.startDate || node.dateCreated || '';
+      const y = /^(19|20)\d{2}/.exec(String(date));
+      if (y && !out.year) out.year = Number(y[0]);
+      if (!out.kind) out.kind = /Movie/i.test(type) ? 'movie' : /TV|Series/i.test(type) ? 'tv' : null;
+    }
+  }
+  return out;
 }
 
 export { titleFromText };
