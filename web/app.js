@@ -2208,7 +2208,7 @@ function aboutBlock() {
   state.append(el('p', 'about__line about__line--now', '› ' + t('about.state')), el('p', 'about__line about__line--hint', '  ' + t('about.hint')));
 
   const desc = el('div', 'about__desc');
-  desc.append(el('p', null, t('about.desc1')), el('p', null, t('about.desc2')));
+  for (const k of ['about.desc1', 'about.desc2', 'about.desc3', 'about.desc4', 'about.desc5']) desc.append(el('p', null, t(k)));
 
   const doors = el('div', 'about__doors about__mono');
   doors.append(el('p', 'about__head', t('about.doors')));
