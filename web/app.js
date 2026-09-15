@@ -635,7 +635,7 @@ function itemFor(ep) {
 function takeEpisode(it, ep) {
   if (!ep || !ep.dubs || !ep.dubs.length) return;
   it.dubs = ep.dubs.map(d => ({ key: d.key, name: d.name, sources: d.sources.length,
-    alive: d.sources.filter(x => x.health.ok !== false && x.streams.length).length }));
+    alive: d.sources.filter(x => x.health.ok !== false).length }));
 }
 
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {

@@ -170,7 +170,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     return {
       series: { id: s.id, title: s.title },
       episode: { number: ep.number, title: ep.title, sourceUrl: ep.sourceUrl, duration: ep.duration, marks: ep.marks },
-      dubs: ep.dubs.map(d => ({ key: d.key, name: d.name, alive: d.sources.filter(x => x.health.ok !== false && x.streams.length).length, sources: d.sources.length })),
+      /* alive: not known to be dead; a source not yet asked counts, one that refused does not */
+      dubs: ep.dubs.map(d => ({ key: d.key, name: d.name, alive: d.sources.filter(x => x.health.ok !== false).length, sources: d.sources.length })),
       dub: dub ? { key: dub.key, name: dub.name } : null,
       source: source ? { id: source.id, player: source.player, extractor: source.extractor } : null,
       stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play } : null,
