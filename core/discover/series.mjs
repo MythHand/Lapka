@@ -5,9 +5,10 @@
    and the number of the episode the page shows. All candidates, each
    with a confidence and the place it was found.
    ═══════════════════════════════════════════════════════════ */
-import { numberFromText, numberFromUrl, titleFromText } from './numbers.mjs';
+import { numberFromText, numberFromUrl, tailNumberOfUrl, titleFromText } from './numbers.mjs';
 import { textOf } from './text.mjs';
 
+const SEO_HEAD = /^\s*(?:watch|ver|смотреть)\s+(?:anime\s+|аниме\s+)?(?=\S)/i;
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 
 /* "Название — Сайт", "Название | Сайт", "Название - смотреть онлайн" */
@@ -24,8 +25,18 @@ export function findTitle(doc, { profile } = {}) {
   /* "Клинок, рассекающий демонов смотреть на джутсу" in og:title and
      "Клинок, рассекающий демонов" in the heading: the heading is the
      name, the rest is a tail for search engines */
-  const og = out.find(c => c.by === 'og:title'), head = out.find(c => c.by === 'h1');
-  if (og && head && og.value.length > head.value.length && head.value.length >= 4 && og.value.toLowerCase().includes(head.value.toLowerCase())) head.confidence = 0.95;
+  /* "Watch Dr. Stone: Science Future Part 3 Anime Free on Gogoanime" in
+     og:title and "Dr. Stone: Science Future Part 3" in the heading or
+     the title tag: the shorter one the longer one opens with, past a
+     "Watch", is the name and the rest a tail for search engines. Not
+     when the shorter one is the episode's own line ("Эпизод 8"). */
+  const og = out.find(c => c.by === 'og:title');
+  const core = og ? og.value.replace(SEO_HEAD, '').toLowerCase() : '';
+  for (const other of out) {
+    if (!og || other === og || other.by === 'profile') continue;
+    const v = other.value.toLowerCase();
+    if (og.value.length > other.value.length && v.length >= 4 && core.startsWith(v) && numberFromText(other.value) === null) other.confidence = Math.max(other.confidence, 0.95);
+  }
   out.sort((a, b) => b.confidence - a.confidence);
   return out;
 }
@@ -52,7 +63,9 @@ export function findSeriesUrl(doc, url, seriesTitle = '') {
   const pagePath = page.pathname.replace(/\/+$/, '');
   const seen = new Set();
   const add = (value, by, confidence, where) => {
-    if (!value || seen.has(value)) return;
+    if (!value) return;
+    value = value.replace(/\/{2,}$/, '/');   // "…/season-3//" is "…/season-3/"
+    if (seen.has(value)) return;
     seen.add(value); out.push({ value, by, confidence, where });
   };
   /* a link on this site named exactly as the series is: the way
@@ -96,6 +109,16 @@ export function findCurrentEpisode(doc, url) {
   if (fromH1 !== null) out.push({ value: fromH1, by: 'h1', confidence: 0.6, where: 'h1' });
   const fromTitle = numberFromText(doc.querySelector('meta[property="og:title"]')?.getAttribute('content') || doc.querySelector('title')?.textContent);
   if (fromTitle !== null) out.push({ value: fromTitle, by: 'title', confidence: 0.4, where: 'title' });
+  /* the page's own element that names the episode's number in an
+     attribute, when there is one such element and not a list of them */
+  for (const attr of ['data-numero', 'data-episode-num', 'data-ep-num', 'data-current-episode', 'data-num', 'data-episode-number']) {
+    const els = doc.querySelectorAll(`[${attr}]`);
+    if (els.length !== 1) continue;
+    const n = Number(els[0].getAttribute(attr));
+    if (Number.isFinite(n) && n > 0 && n < 10000) { out.push({ value: n, by: 'attr', confidence: 0.6, where: `[${attr}]` }); break; }
+  }
+  const tail = tailNumberOfUrl(url);
+  if (tail !== null) out.push({ value: tail, by: 'url-tail', confidence: 0.35, where: url });
   /* two independent sources agreeing beat either alone */
   const votes = new Map();
   for (const c of out) votes.set(c.value, (votes.get(c.value) || 0) + c.confidence);
@@ -121,11 +144,14 @@ export function seasonFromUrl(url) {
    океан, Сезон 3 (2026) все серии онлайн". The name is what is left
    once the year in brackets and the tail of watch-words go; the year
    is kept. */
-const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+)\s*$/i;
-const SEO_HEAD = /^\s*(?:watch|смотреть)\s+(?:anime\s+|аниме\s+)?(?=\S)/i;
-export function tidyTitle(text) {
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis)\s*$/i;
+export function tidyTitle(text, host = '') {
   let t = String(text || '').replace(SEO_HEAD, '');
   let year = null;
+  /* "… — JkAnime", "… - Gogoanime": the site's own name at the end, when it is the site's */
+  const site = String(host || '').replace(/^www\./, '').split('.')[0].toLowerCase();
+  const tail = /\s*[—–|-]\s*([\p{L}\d.]+)\s*$/u.exec(t);
+  if (site.length >= 3 && tail) { const w = tail[1].toLowerCase().replace(/\./g, ''); if (w.includes(site) || site.includes(w)) t = t.slice(0, tail.index); }
   t = t.replace(/\s*\(((?:19|20)\d{2})\)\s*/g, (_, y) => { year = year || Number(y); return ' '; });
   for (let i = 0; i < 6; i++) { const was = t; t = t.replace(SEO_TAIL, ''); if (t === was) break; }
   t = t.replace(/\s+/g, ' ').replace(/[\s,:·|—–-]+$/g, '').trim();

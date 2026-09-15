@@ -15,9 +15,14 @@
    ═══════════════════════════════════════════════════════════ */
 import { studioFor } from '../catalog/studios.mjs';
 import { textOf } from './text.mjs';
+import { objectsIn, urlFromBase64 } from './objects.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
-const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-player', 'data-player-url', 'data-link', 'data-file', 'data-video'];
+const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-player', 'data-player-url', 'data-link', 'data-file', 'data-video', 'data-hash', 'data-remote', 'data-code'];
+/* keys a script's list of servers uses: the address, then the name of the server */
+const SCRIPT_URL_KEYS = ['remote', 'url', 'src', 'embed', 'link', 'file', 'iframe', 'code'];
+const SCRIPT_NAME_KEYS = ['server', 'name', 'title', 'player', 'host', 'provider'];
+const SCRIPT_DUB_KEYS = ['dub', 'dubbing', 'translation', 'voice', 'audio', 'language'];
 /* data-src is how images load lazily too: on a picture element, or
    one that calls itself a picture, or with a picture's address, it is
    an image; on a frame, a video or a switch item it is a player */
@@ -33,7 +38,7 @@ const firstAttr = (el, names) => { for (const n of names) { const v = clean(el.g
 const STREAM_RE = /https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?|(?<![\w/])\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?/g;
 /* words a switch of players uses: the word itself, a quality ("SD",
    "HD", "720p"), a mirror, or a hoster's name */
-const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server|mirror|option|sd|hd|fhd|uhd|4k|\d{3,4}p|blogger|mega\w*|vidstream|streamtape|dood\w*|mp4upload|filemoon|streamwish|sibnet|kodik|aniboom|alloha|cvh|vk|ok\.ru|youtube|rumble)\b/i;
+const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server|mirror|option|opci[óo]n|opt|sd|hd|fhd|uhd|4k|\d{3,4}p|blogger|mega\w*|vidstream|streamtape|dood\w*|mp4upload|filemoon|streamwish|sibnet|kodik|aniboom|alloha|cvh|vk|ok\.ru|youtube|rumble)\b/i;
 
 /* A player the page fetches after it loads: the element carries the
    parameters of a request instead of an address, and the site's
@@ -78,6 +83,9 @@ function embedOf(el, url) {
   for (const a of EMBED_ATTRS) {
     const v = el.getAttribute(a);
     if (a === 'data-src' && !LAZY_MEDIA.test(el.tagName) && isPicture(el, String(v || ''))) continue;
+    /* an address hidden in base64 is an address all the same */
+    const hidden = urlFromBase64(v);
+    if (hidden) return hidden;
     if (v && /[/.]/.test(v) && !/^#/.test(v)) { try { return new URL(v, url).toString(); } catch { /* not an address */ } }
   }
   return null;
@@ -116,6 +124,26 @@ export function findPlayers(doc, url, { profile } = {}) {
   }
   for (const s of doc.querySelectorAll('script:not([src])')) {
     for (const m of s.textContent.matchAll(STREAM_RE)) add(abs(m[0]), 'script', 'script');
+  }
+  /* a list of servers in a script: objects with an address (plain or
+     in base64) and the server's name, sometimes the dub's; one switch */
+  const fromScripts = [];
+  for (const s of doc.querySelectorAll('script:not([src])')) {
+    if (!/\{[^{}]*"?(?:remote|url|src|embed|link|file|iframe|code)"?\s*:/.test(s.textContent)) continue;
+    for (const o of objectsIn(s.textContent)) {
+      let embed = null;
+      for (const k of SCRIPT_URL_KEYS) { const v = o[k]; if (typeof v !== 'string') continue; embed = urlFromBase64(v) || (/^(https?:)?\/\/\S+$/i.test(v) ? abs(v) : null); if (embed) break; }
+      if (!embed) continue;
+      const name = SCRIPT_NAME_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v.trim());
+      const dub = SCRIPT_DUB_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v.trim());
+      if (!name && !dub) continue;
+      fromScripts.push({ embed, name: name ? clean(name) : null, dub: dub ? clean(dub) : null });
+    }
+  }
+  if (fromScripts.length) {
+    const kind = fromScripts.some(i => i.dub) ? 'dubs' : 'players';
+    switches.push({ kind, scope: null, where: 'script', items: fromScripts.map(i => ({ label: i.dub || i.name || '', url: i.embed })) });
+    for (const i of fromScripts) add(i.embed, 'switch', 'script', kind === 'dubs' ? { dubLabel: i.dub, playerLabel: i.name } : { playerLabel: i.name });
   }
 
   /* the switches: siblings that carry an address each */

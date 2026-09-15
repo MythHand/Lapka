@@ -11,7 +11,7 @@
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
 import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, seasonFromUrl, tidyTitle, findFranchise, franchiseFromBlock, findSelf } from './series.mjs';
-import { numberFromText } from './numbers.mjs';
+import { numberFromText, numberFromUrl, tailNumberOfUrl, stemOfUrl } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
 import { template } from './numbers.mjs';
@@ -25,10 +25,11 @@ export function discover({ html, url, profile = null }) {
 
   const title = findTitle(doc, { profile });
   const cover = findCover(doc, url);
-  const episodes = findEpisodes(doc, url, { profile });
+  let episodes = findEpisodes(doc, url, { profile });
   const { players, switches } = findPlayers(doc, url, { profile });
+  const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
   /* the series' own name, for a link that carries it: the heading without the episode and the tail */
-  const probableSeries = tidyTitle(titleFromText(title[0]?.value || '') || title[0]?.value || '').title;
+  const probableSeries = tidyTitle(titleFromText(title[0]?.value || '') || title[0]?.value || '', host).title;
   const seriesUrl = findSeriesUrl(doc, url, probableSeries);
   const current = findCurrentEpisode(doc, url);
   const ownSeason = seasonFromText(title[0]?.value || '') ?? seasonFromUrl(url);
@@ -36,6 +37,35 @@ export function discover({ html, url, profile = null }) {
   const bySeasons = findFranchise(doc, url, ownSeason, title[0]?.value || '');
   const self = findSelf(doc);
   const franchise = bySeasons.length ? bySeasons : franchiseFromBlock(doc, url, title[0]?.value || '', self);
+
+  /* No list of episodes, but the page says how many there are: the
+     others are the same address with the other numbers. On an episode
+     page its own address is the template, and a planned total would
+     name episodes not yet out, so only the last one out counts; on a
+     series page the link to the last episode out is the template. */
+  const sure = current.find(c => c.confidence >= 0.4) || null;
+  if (!episodes.items.length) {
+    const ownNumber = sure && (numberFromUrl(url) === sure.value || tailNumberOfUrl(url) === sure.value) ? sure.value : null;
+    const count = findEpisodeCount(doc, { strict: ownNumber !== null });
+    let stem = null;
+    if (count && ownNumber !== null && count >= ownNumber) stem = stemOfUrl(url);
+    else if (count && ownNumber === null) {
+      const origin = (() => { try { return new URL(url).origin; } catch { return null; } })();
+      for (const a of doc.querySelectorAll('a[href]')) {
+        let u; try { u = new URL(a.getAttribute('href'), url); } catch { continue; }
+        if (u.origin !== origin) continue;
+        if ((numberFromUrl(u.toString()) ?? tailNumberOfUrl(u.toString())) === count) { stem = stemOfUrl(u.toString()); if (stem) break; }
+      }
+    }
+    const dated = stem && /\/\d{4}\/\d{2}\/\d{2}\//.test(stem);   // an address with a date in it names one day's page, not a template
+    if (count && count <= 2000 && stem && !dated) {
+      const origin = new URL(url).origin;
+      const items = [];
+      for (let n = 1; n <= count; n++) items.push({ number: n, title: '', url: origin + stem.replace('N', String(n)) });
+      episodes = { ...episodes, items, by: 'template', confidence: 0.5 };
+      steps.push(`Серии по шаблону адреса: ${count}`);
+    }
+  }
 
   /* A player element on the page makes it an episode page. Streams
      found only in scripts do not: a series page may carry the
@@ -62,8 +92,10 @@ export function discover({ html, url, profile = null }) {
   }
 
   /* the tail a site writes for search engines goes; a year in brackets is the year */
-  const tidy = tidyTitle(seriesTitle);
+  const tidy = tidyTitle(seriesTitle, host);
   seriesTitle = tidy.title;
+  /* "Grand Blue Season 3 11" on the page of episode 11: the bare number at the end is the episode */
+  if (kind === 'episode' && sure && new RegExp(`\\s${sure.value}$`).test(seriesTitle)) seriesTitle = seriesTitle.replace(/\s\d+$/, '').trim();
   if (seriesTitle) steps.push(`Сериал: ${seriesTitle}`);
   if (episodes.items.length) steps.push(`Нашла ${episodes.items.length} ${plural(episodes.items.length, 'серию', 'серии', 'серий')}`);
   const dubLabels = [...new Set(players.filter(p => p.dubLabel).map(p => p.dubLabel))];
@@ -79,7 +111,7 @@ export function discover({ html, url, profile = null }) {
     title: { value: seriesTitle, candidates: title },
     cover: { value: cover[0]?.value || null, candidates: cover },
     seriesUrl: { value: kind === 'episode' ? seriesUrl[0]?.value || null : null, candidates: seriesUrl },
-    episode: { value: kind === 'episode' ? current[0]?.value ?? null : null, candidates: current },
+    episode: { value: kind === 'episode' ? sure?.value ?? null : null, candidates: current },
     season: ownSeason ?? (franchise.find(f => f.self)?.order ?? null),
     year: self.year ?? tidy.year, kind_: self.kind,
     franchise,
@@ -87,6 +119,35 @@ export function discover({ html, url, profile = null }) {
     players, switches,
     steps,
   };
+}
+
+/* How many episodes the page says there are: an attribute of the
+   list, or words ("Último episodio: … 11", "26 серий", "Episodes: 12"). */
+const COUNT_ATTRS = ['data-max-episode', 'data-episodes', 'data-total-episodes', 'data-episode-count', 'data-total'];
+function findEpisodeCount(doc, { strict = false } = {}) {
+  for (const attr of COUNT_ATTRS) for (const el of doc.querySelectorAll(`[${attr}]`)) { const n = Number(el.getAttribute(attr)); if (Number.isFinite(n) && n > 0) return n; }
+  let text = '';
+  try { text = (doc.body?.textContent || '').replace(/\s+/g, ' '); } catch { /* an empty document has no body */ }
+  /* "Último episodio: Grand Blue Season 3 - 11": the element that says
+     so, and the link in it; failing the link, the number that follows */
+  const LAST = /^\s*(?:último|ultimo|last)\s+(?:episodio|episode|capítulo|серия)/i;
+  for (const el of doc.querySelectorAll('p, div, li, span, dd, td')) {
+    if (!LAST.test(el.textContent || '')) continue;
+    const a = el.querySelector('a[href]');
+    if (a) {
+      let u; try { u = new URL(a.getAttribute('href'), doc.URL || 'https://x/'); } catch { u = null; }
+      const n = u ? (numberFromUrl(u.toString()) ?? tailNumberOfUrl(u.toString())) : null;
+      if (n !== null) return n;
+      const m = /(\d{1,4})\s*$/.exec((a.textContent || '').trim()); if (m) return Number(m[1]);
+    }
+    const m = /(\d{1,4})\b/.exec((el.textContent || '').replace(LAST, '')); if (m) return Number(m[1]);
+    break;
+  }
+  if (strict) return null;
+  for (const re of [/\b(\d{1,4})\s*(?:серий|серии|episodes?|episodios?|capítulos?|capitulos?)\b/i, /(?:серий|episodes?|episodios?|capítulos?)\s*[:：]\s*(\d{1,4})\b/i]) {
+    const m = re.exec(text); if (m) return Number(m[1]);
+  }
+  return null;
 }
 
 function plural(n, one, few, many) {

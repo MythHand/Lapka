@@ -21,17 +21,7 @@ const abs = (v, base) => { try { return new URL(v, base).toString(); } catch { r
    without quotes, single quotes, trailing commas are all made into
    JSON before parsing. One flat object at a time; nested ones are
    found by the outer scan as their own flat objects. */
-function objectsIn(text) {
-  const out = [];
-  for (const m of text.matchAll(/\{[^{}]*\}/g)) {
-    const raw = m[0]
-      .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
-      .replace(/'((?:[^'\\]|\\.)*)'/g, (_, s) => JSON.stringify(s))
-      .replace(/,\s*}/g, '}');
-    try { const o = JSON.parse(raw); if (o && typeof o === 'object') out.push(o); } catch { /* not an object we can read */ }
-  }
-  return out;
-}
+import { objectsIn, unpacked } from '../../discover/objects.mjs';
 
 /* The kind of a file the object names: by its extension, else by
    what the object says of it ("type": "mp4", "application/x-mpegURL"),
@@ -75,8 +65,10 @@ export default {
     const res = await session.fetch(embedUrl, { referer });
     if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
     const base = res.url || embedUrl;
-    const { document: doc } = parseHTML(res.body);
     const headers = { referer: base };
+    /* the "page" is the playlist itself: the address is the stream */
+    if (/^\s*#EXTM3U/.test(String(res.body || '').slice(0, 200))) return { streams: [{ kind: 'hls', url: base, quality: null, headers: { referer: new URL(base).origin + '/' } }], dubs: [] };
+    const { document: doc } = parseHTML(res.body);
     const seen = new Set();
     const streams = [];
     const push = (u, kind = null, q = null) => {
@@ -93,7 +85,8 @@ export default {
     }
 
     const dubs = [];
-    const scripts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent);
+    /* packed scripts are read unpacked: the hosters' players keep their addresses in them */
+    const scripts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent).flatMap(t => [t, ...unpacked(t)]);
     for (const text of scripts) {
       for (const o of objectsIn(text)) {
         const file = fileOf(o, base), name = nameOf(o);
