@@ -2124,6 +2124,8 @@ function paintTip(el) {
   if (el.dataset.tipSub) { const s = document.createElement('div'); s.className = 'tip__sub'; s.textContent = el.dataset.tipSub; tipEl.append(s); }
   const r = el.getBoundingClientRect();
   tipEl.hidden = false;
+  /* measured from the left edge: a fixed box shrinks to what is left of the window past its old position */
+  tipEl.style.left = '0px'; tipEl.style.top = '0px';
   const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
   let left = r.left + r.width / 2 - w / 2, top = r.top - h - 8;
   if (top < 8) top = r.bottom + 8;
