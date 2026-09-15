@@ -210,12 +210,12 @@ describe('saving from the queue', { skip }, () => {
       const marksBefore = $$('#queueList .item__save').map(b => b.className);
       $('#btnSaveAll').click();
       await until('saving', () => $$('#queueList .item__save.is-saving').length > 0, 40);
-      const spinner = !!$('#queueList .item__save.is-saving .spin');
+      const spinner = !!$('#queueList .item__save.is-saving .ring');
       await until('saved', () => $('#saveCount').textContent === '3/3', 300);
       const marksAfter = $$('#queueList .item__save').map(b => b.className);
       const title = $('#queueList .item__save').title;
       $('#btnSaveAll').dispatchEvent(new PointerEvent('pointerenter'));
-      await until('pop', () => !$('#savePop').hidden && $('#savePop').children.length > 1, 40);
+      await until('pop', () => !$('#savePop').hidden && $$('#savePop .savepop__sec').length > 1, 40);
       const pop = $('#savePop').textContent;
       const lib = await (await fetch('/api/library')).json();
       __report({ errors: window.__errors, marksBefore, spinner, marksAfter, title, pop, files: lib.series.flatMap(x => x.episodes.map(e => e.file)), qualityHidden: $('#btnQuality').hidden, done: $('#btnSaveAll').classList.contains('is-done') });
@@ -228,8 +228,9 @@ describe('saving from the queue', { skip }, () => {
     assert.equal(r.spinner, true);
     assert.ok(r.marksAfter.every(c => c.includes('is-saved')), r.marksAfter.join(','));
     assert.match(r.title, /In the library/);
-    assert.match(r.pop, /Saved 3 of 3 episodes/);
-    assert.match(r.pop, /Free on disk/);
+    assert.match(r.pop, /Saved3 \/ 3/);
+    assert.match(r.pop, /Free/);
+    assert.match(r.pop, /Library/);
     assert.equal(r.files.length, 3);
     assert.equal(r.done, true);
     /* one stream of one quality: nothing to choose from */
