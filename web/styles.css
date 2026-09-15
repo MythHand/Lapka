@@ -1663,7 +1663,7 @@ video::cue{
   margin:0; display:inline-block; text-align:left;
 }
 /* the paw to the left of the name, both on one grid size, one line of a seal */
-.mark{ display:flex; flex-direction:row; align-items:center; justify-content:center; gap:18px; margin:6px 0 22px; }
+.mark{ display:flex; flex-direction:row; align-items:center; justify-content:center; gap:2.4em; margin:6px 0 22px; font-size:calc(9.5px + var(--fs)); }   /* the gap is cells of the same grid: a few spaces between the paw and the name */
 .paw{ font-size:calc(9.5px + var(--fs)); color:var(--tx-2); }
 .banner{ font-size:calc(9.5px + var(--fs)); color:var(--tx-1); }
 .mark--left{ justify-content:flex-start; margin:0 0 18px; }
