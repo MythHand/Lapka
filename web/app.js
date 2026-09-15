@@ -2207,8 +2207,23 @@ function aboutBlock() {
   const state = el('div', 'about__state about__mono');
   state.append(el('p', 'about__line about__line--now', '› ' + t('about.state')), el('p', 'about__line about__line--hint', '  ' + t('about.hint')));
 
+  /* what Lapka is: a lead line, then how it works in three steps,
+     what it does and what it stands for as label + line, all in the
+     monospace, the doors last */
   const desc = el('div', 'about__desc');
-  for (const k of ['about.desc1', 'about.desc2', 'about.desc3', 'about.desc4', 'about.desc5']) desc.append(el('p', null, t(k)));
+  desc.append(el('p', 'about__lead', t('about.lead')), el('p', 'about__tagline', t('about.tagline')));
+
+  const section = (headKey, rows, numbered = false) => {
+    const box = el('div', 'about__section about__mono');
+    box.append(el('p', 'about__head', t(headKey)));
+    const dl = el('dl', 'about__list');
+    rows.forEach(([k, v], i) => { dl.append(el('dt', null, numbered ? String(i + 1) : t(k)), el('dd', null, t(v))); });
+    box.append(dl);
+    return box;
+  };
+  const how = section('about.how', [['', 'about.step1'], ['', 'about.step2'], ['', 'about.step3']], true);
+  const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'save', 'finish', 'sources'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
+  const rules = section('about.rules', ['local', 'fair', 'general', 'doors', 'open'].map(k => [`about.p.${k}.k`, `about.p.${k}`]));
 
   const doors = el('div', 'about__doors about__mono');
   doors.append(el('p', 'about__head', t('about.doors')));
@@ -2233,7 +2248,7 @@ function aboutBlock() {
   doors.append(dl);
 
   const rule = () => { const r = el('p', 'about__rule about__mono', '─'.repeat(80)); r.setAttribute('aria-hidden', 'true'); return r; };
-  li.append(mark, state, rule(), desc, rule(), doors);
+  li.append(mark, state, rule(), desc, how, can, rules, rule(), doors);
   return li;
 }
 
