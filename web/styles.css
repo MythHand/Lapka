@@ -1666,4 +1666,4 @@ video::cue{
 .mark{ display:flex; flex-direction:row; align-items:center; justify-content:center; gap:18px; margin:6px 0 22px; }
 .paw{ font-size:calc(9.5px + var(--fs)); color:var(--tx-2); }
 .banner{ font-size:calc(9.5px + var(--fs)); color:var(--tx-1); }
-.queue__paw{ display:block; margin:0 0 14px; }
+.mark--left{ justify-content:flex-start; margin:0 0 18px; }

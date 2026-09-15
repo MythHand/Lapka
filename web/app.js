@@ -2195,8 +2195,10 @@ const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at', 'animeflv.or.at'];
 function aboutBlock() {
   const li = document.createElement('li');
   li.className = 'queue__about';
-  li.innerHTML = '<pre class="paw mono-art queue__paw" aria-hidden="true"></pre><p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
-  li.querySelector('.queue__paw').textContent = PAW_FRAMES[0];
+  /* the same mark as on the stage: the paw and the name, one seal */
+  li.innerHTML = '<div class="mark mark--left" aria-hidden="true"><pre class="paw mono-art"></pre><pre class="banner mono-art"></pre></div><p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
+  li.querySelector('.paw').textContent = PAW_FRAMES[0];
+  li.querySelector('.banner').textContent = BANNER;
   li.querySelector('.queue__drop').innerHTML = t('queue.empty');
   /* the sites tried so far, in three groups: it works, it works in
      part, the door is shut. Data, not words: the names are the same
