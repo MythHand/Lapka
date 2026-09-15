@@ -2089,8 +2089,8 @@ btnLocate.onclick = revealCurrent;
    for, then what it cannot work without, and only at the end the
    trimmings. */
 const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net'];
-const SITES_PART = ['animeflv.or.at — только открытая серия'];
-const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at'];
+const SITES_PART = [];
+const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at', 'animeflv.or.at'];
 function aboutBlock() {
   const li = document.createElement('li');
   li.className = 'queue__about';
@@ -2102,6 +2102,7 @@ function aboutBlock() {
   const lede = li.querySelector('.queue__lede');
   lede.replaceChildren();
   for (const [key, sites] of [['about.sitesOk', SITES_OK], ['about.sitesPart', SITES_PART], ['about.sitesShut', SITES_SHUT]]) {
+    if (!sites.length) continue;   // an empty group is not shown
     const h = document.createElement('p'); h.className = 'queue__sites-head'; h.textContent = t(key);
     const ul = document.createElement('ul'); ul.className = 'queue__sites';
     for (const s of sites) { const item = document.createElement('li'); item.textContent = s; ul.append(item); }
