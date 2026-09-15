@@ -906,7 +906,7 @@ async function playItem(it, autoplay = true, glide = true) {
   state.current = it;
   state.seekPreview = null;
   skipNow = null; skipEl.hidden = true;
-  hideNotice();
+  if (!it.switching) hideNotice();   // the notice of a source being switched stays until the picture is back
   endCard.classList.remove('show');
   emptyEl.classList.add('hide');
   stage.classList.remove('is-empty');
@@ -933,7 +933,7 @@ async function playItem(it, autoplay = true, glide = true) {
     showNotice(t('notice.noOpen', { name: it.name, why: it.why || '' }), { action: t('notice.retry'), onAction: () => { it.err = false; it.retries = 0; playItem(it); } });
     return;
   }
-  hideNotice();
+  if (!it.switching) hideNotice();
 
   await faded;                       // let the fade finish
   if (token !== playToken || it !== cur()) return;
