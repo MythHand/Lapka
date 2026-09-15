@@ -197,6 +197,9 @@ describe('picking', () => {
       createStream({ kind: 'hls', url: 'u2', quality: '720p' }),
       createStream({ kind: 'mp4', url: 'u3', quality: '1080' }),
     ];
+    /* an HLS stream with no number is adaptive: every quality at once, the best there is */
+    assert.equal(bestStream(src).url, 'u1');
+    src.streams = src.streams.slice(1);
     assert.equal(bestStream(src).url, 'u3');
     assert.equal(bestStream(createSource({ player: 'p', embedUrl: 'https://p.test/2' })), null);
   });

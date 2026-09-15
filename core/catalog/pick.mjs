@@ -24,7 +24,9 @@ function healthRank(source, now) {
    Only the number is trusted; anything else sorts last. */
 export function qualityRank(stream) {
   const m = /(\d{3,4})/.exec(String(stream?.quality || ''));
-  return m ? Number(m[1]) : 0;
+  if (m) return Number(m[1]);
+  /* an HLS stream with no quality named is a master playlist: every quality at once */
+  return stream?.kind === 'hls' ? 9999 : 0;
 }
 
 export function bestStream(source) {

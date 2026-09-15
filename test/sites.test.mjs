@@ -117,8 +117,10 @@ describe('look() on aniliberty, page and adapter together', () => {
     assert.deepEqual(dubs, ['AniLibria']);
     const r = await lapka.resolve({ seriesId: series.id, number: 8 });
     assert.deepEqual(r.episode.marks, { opening: { start: 42, stop: 132 }, ending: { start: 1330, stop: 1421 } });
-    assert.deepEqual(r.streams.map(st => st.quality), ['480p', '720p', '1080p']);
-    assert.ok(r.streams.every(st => st.id && st.play));
+    /* the streams of every live source of the dub, each saying its player */
+    assert.deepEqual([...new Set(r.streams.map(st => st.quality))].sort(), ['1080p', '480p', '720p']);
+    assert.deepEqual([...new Set(r.streams.map(st => st.player))].sort(), ['aniliberty', 'page']);
+    assert.ok(r.streams.every(st => st.id && st.play && st.sourceId));
     assert.ok(r.episode.duration > 1000);
     const ep = series.episodes.find(e => e.number === 8);
     assert.equal(ep.dubs.length, 1);

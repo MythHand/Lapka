@@ -744,7 +744,8 @@ async function resolveItem(it, { avoid = null } = {}) {
     const r = await api('/api/resolve?' + q);
     it.dubs = r.dubs; it.dub = r.dub; it.source = r.source;
     it.streams = r.streams || [];
-    it.stream = pickStream(it.streams) || r.stream;
+    it.stream = pickStream(it.streams, r.stream) || r.stream;
+    if (it.stream && it.stream.player) it.source = { ...(it.source || {}), player: it.stream.player };
     it.marks = r.episode.marks || null;
     if (r.episode.duration && !it.dur) it.dur = r.episode.duration;
     if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode, state.seasons.find(s => s.series.id === it.seriesId)?.series); }
@@ -756,14 +757,21 @@ async function resolveItem(it, { avoid = null } = {}) {
 /* ── which quality plays ─────────────────────────────────────
    The wanted quality when the source has it, else the best it has.
    Qualities are read as numbers: "1080p" beats "720p". */
-const qualityNum = q => Number((/(\d{3,4})/.exec(String(q || '')) || [])[1]) || 0;
-function pickStream(streams) {
-  if (!streams || !streams.length) return null;
-  const sorted = [...streams].sort((a, b) => qualityNum(b.quality) - qualityNum(a.quality));
+/* an HLS stream with no quality named is adaptive: it counts as the best */
+const qualityNum = (q, kind) => Number((/(\d{3,4})/.exec(String(q || '')) || [])[1]) || (kind === 'hls' && !q ? 9999 : 0);
+const streamRank = s => qualityNum(s.quality, s.kind);
+/* The stream to play, out of every live source of the dub. The wanted
+   quality when any source has it, the current source first among
+   equals; else what the server picked, else the best there is. */
+function pickStream(streams, chosen = null) {
+  if (!streams || !streams.length) return chosen;
+  const current = chosen ? chosen.player : null;
+  const sorted = [...streams].sort((a, b) => streamRank(b) - streamRank(a) || (b.player === current) - (a.player === current));
   if (state.quality !== 'auto') {
-    const want = sorted.find(s => s.quality === state.quality);
-    if (want) return want;
+    const same = sorted.filter(s => s.quality === state.quality);
+    if (same.length) return same.find(s => s.player === current) || same[0];
   }
+  if (chosen && streams.some(s => s.id === chosen.id)) return streams.find(s => s.id === chosen.id);
   return sorted[0];
 }
 
@@ -774,10 +782,12 @@ function qualityOptions() {
   if (!it) return [];
   const out = [];
   const seen = new Set();
-  for (const s of [...(it.streams || [])].sort((a, b) => qualityNum(b.quality) - qualityNum(a.quality))) {
+  /* every quality any live source offers; the players that offer it, as a note */
+  for (const s of [...(it.streams || [])].sort((a, b) => streamRank(b) - streamRank(a))) {
     if (!s.quality || seen.has(s.quality)) continue;
     seen.add(s.quality);
-    out.push({ id: s.quality, main: s.quality, sel: state.quality === s.quality, stream: s });
+    const players = [...new Set((it.streams || []).filter(x => x.quality === s.quality).map(x => x.player).filter(Boolean))];
+    out.push({ id: s.quality, main: s.quality, sub: players.length > 1 || (players[0] && players[0] !== (it.source && it.source.player)) ? players.join(' · ') : '', sel: state.quality === s.quality, stream: s });
   }
   if (out.length < 2 && hls && hls.levels && hls.levels.length > 1) {
     return [{ id: 'auto', main: t('quality.auto'), sel: hls.autoLevelEnabled, level: -1 },
@@ -806,8 +816,9 @@ function buildQualityMenu() {
   for (const o of opts) {
     const b = document.createElement('button');
     b.className = 'menu__item' + (o.sel ? ' sel' : '');
-    b.innerHTML = `<span class="menu__tick">${phSvg(PH.check)}</span><span class="menu__body"><span class="menu__main"></span></span>`;
+    b.innerHTML = `<span class="menu__tick">${phSvg(PH.check)}</span><span class="menu__body"><span class="menu__main"></span>${o.sub ? '<span class="menu__sub"></span>' : ''}</span>`;
     b.querySelector('.menu__main').textContent = o.main;
+    if (o.sub) b.querySelector('.menu__sub').textContent = o.sub;
     b.onclick = () => { pickQuality(o); markPicked(b); };
     qualityMenu.append(b);
   }
@@ -824,9 +835,9 @@ function pickQuality(opt) {
   }
   state.quality = opt.id;
   saveStr('lapka.quality', opt.id);
-  const next = pickStream(it.streams);
+  const next = pickStream(it.streams, it.stream);
   if (!next || (it.stream && next.id === it.stream.id)) { syncQualityButton(); return; }
-  toast(t('quality.current', { name: opt.main }));
+  toast(t('quality.current', { name: opt.main + (next.player && next.player !== (it.source && it.source.player) ? ' · ' + next.player : '') }));
   switchTrack(it);
 }
 btnQuality.onclick = e => {

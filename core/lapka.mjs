@@ -13,7 +13,7 @@ import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
 import { loadExtractors, extractorFor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
-import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream } from './catalog/index.mjs';
+import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS } from './catalog/index.mjs';
 
 export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), sites: await loadSites(), profiles: await loadProfiles(), ...opts });
@@ -170,8 +170,11 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const ep = await openEpisode(seriesId, number);
     /* a stream that failed: its source gets one more try with fresh links, then counts as dead */
     if (avoid) for (const d of ep.dubs) for (const src of d.sources) if (src.streams.some(st => st.id === avoid)) {
-      if (!(await refreshSource(src, ep, s))) markHealth(src, false, 'playback failed');
+      /* one fresh try after a failure; a second failure soon after means the source, not the links */
+      const again = src.health.retriedAt && Date.now() - src.health.retriedAt < RETRY_MS;
+      if (again || !(await refreshSource(src, ep, s))) markHealth(src, false, 'playback failed');
       else if (src.streams.some(st => st.id === avoid)) markHealth(src, false, 'playback failed');
+      else src.health.retriedAt = Date.now();
     }
     const dub = pickDub(ep, dubKey ? { name: dubKey } : null);
     let source = dub ? pickSource(dub) : null;
@@ -191,8 +194,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       dub: dub ? { key: dub.key, name: dub.name } : null,
       source: source ? { id: source.id, player: source.player, extractor: source.extractor } : null,
       stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play } : null,
-      /* every stream of the source, so the player can offer the qualities */
-      streams: source ? source.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play })) : [],
+      /* every stream of every live source of the dub: the player offers the qualities across them and may switch the source by picking one */
+      streams: dub ? dub.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play, player: x.player, sourceId: x.id }))) : [],
     };
   }
 
