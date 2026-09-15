@@ -637,45 +637,37 @@ function hideProgress() {
    lets go, the way a cat's does, every few seconds. Frame by frame,
    textContent only: nothing moves by pixels. Under
    prefers-reduced-motion it stands still on the first frame. The
-   name is drawn with the same blocks, seven rows tall like the paw:
-   one seal, one language. */
+   name is set the way software greets in a terminal, blocks with a
+   shadow of frame lines, and the paw is drawn in that same hand. */
 const PAW_FRAMES = [
-`      ▄▄  ▄▄      
-    ████  ████    
- ▄▄   ▀▀  ▀▀   ▄▄ 
-████          ████
- ▀▀   ▄████▄   ▀▀ 
-     ████████     
-      ▀████▀      `,
-`                  
-      ▄▄  ▄▄      
- ▄▄ ████  ████ ▄▄ 
-████  ▀▀  ▀▀  ████
- ▀▀   ▄████▄   ▀▀ 
-     ████████     
-      ▀████▀      `,
-`                  
-                  
- ▄▄   ▄▄  ▄▄   ▄▄ 
-███ ████  ████ ███
- ▀▀  ▄██████▄  ▀▀ 
-     ████████     
-      ▀████▀      `,
-`                  
-                  
-                  
- ▄▄▄  ▄▄▄▄▄▄  ▄▄▄ 
-▀▀▀▀▄████████▄▀▀▀▀
-     ████████     
-      ▀████▀      `,
+`      ███╗  ███╗      
+      ███║  ███║      
+ ███╗ ╚══╝  ╚══╝ ███╗ 
+ ███║  ██████╗   ███║ 
+ ╚══╝ ███████║   ╚══╝ 
+      ███████║        
+      ╚══════╝        `,
+`                      
+      ███╗  ███╗      
+ ███╗ ███║  ███║ ███╗ 
+ ███║ ╚═██████╗═╝███║ 
+ ╚══╝ ███████║   ╚══╝ 
+      ███████║        
+      ╚══════╝        `,
+`                      
+                      
+ ███╗ ███╗  ███╗ ███╗ 
+ ███║ ╚═██████╗═╝███║ 
+ ╚══╝ ███████║   ╚══╝ 
+      ███████║        
+      ╚══════╝        `,
 ];
-const BANNER = `██        ▄████▄  ██████▄  ██   ▄█▀  ▄████▄ 
-██       ██    ██ ██    ██ ██  ▄█▀  ██    ██
-██       ██    ██ ██    ██ ██ ▄█▀   ██    ██
-██       ████████ ██████▀  ████     ████████
-██       ██    ██ ██       ██ ▀█▄   ██    ██
-██       ██    ██ ██       ██  ▀█▄  ██    ██
-██████   ██    ██ ██       ██   ▀█▄ ██    ██`;
+const BANNER = `██╗      █████╗ ██████╗ ██╗  ██╗ █████╗ 
+██║     ██╔══██╗██╔══██╗██║ ██╔╝██╔══██╗
+██║     ███████║██████╔╝█████╔╝ ███████║
+██║     ██╔══██║██╔═══╝ ██╔═██╗ ██╔══██║
+███████╗██║  ██║██║     ██║  ██╗██║  ██║
+╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝`;
 const bannerEl = $('#banner');
 if (bannerEl) bannerEl.textContent = BANNER;
 /* every paw on the page (the mark, the queue's about) presses together */
