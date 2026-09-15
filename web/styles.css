@@ -1308,8 +1308,9 @@ video::cue{
 .menu--gear{
   top:calc(100% - var(--gear-pad-y) + 12px);
   right:calc(var(--gear-pad-x) - 10px);
-  min-width:min(892px, calc(100vw - 60px));
-  max-width:min(892px, calc(100vw - 60px));
+  /* the keys as they were, the other two columns a quarter wider than the keys */
+  min-width:min(990px, calc(100vw - 60px));
+  max-width:min(990px, calc(100vw - 60px));
   /* the menu starts 72px from the top, so the window leaves it all but
      72px and a 16px margin at the bottom; the old 120px reserve cut the
      settings short in a window of ordinary height */
@@ -1343,7 +1344,7 @@ video::cue{
   .menu--gear.open{ opacity:0; transform:translateX(60px); }
 }
 .menu--gear .menu__col--keys{ flex:0 0 270px; }
-.menu--gear .menu__col--side{ flex:0 0 178px; }
+.menu--gear .menu__col:not(.menu__col--keys){ flex:0 0 338px; }
 
 /* the list of keyboard shortcuts */
 .keys__row{

@@ -1624,7 +1624,7 @@ function homeRow(col) {
   const line = document.createElement('div');
   line.className = 'menu__row';
   line.innerHTML =
-    '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__count"></span></div>' +
+    '<div class="cache__head"><span class="menu__rowlabel"></span></div>' +
     '<div class="home__path"></div>' +
     '<div class="home__acts"><button class="cache__clear home__open"></button><button class="cache__clear home__pick"></button><button class="home__manual"></button></div>' +
     '<form class="home__form" hidden><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
@@ -1639,7 +1639,6 @@ function homeRow(col) {
   q('.home__in').placeholder = t('set.homePlaceholder');
   const paint = d => {
     q('.home__path').textContent = d.home;
-    q('.home__count').textContent = t('set.homeSeries', { n: d.series });
     q('.home__pick').hidden = !d.canPick;
     q('.home__open').hidden = !d.canOpen;
     q('.home__note').textContent = d.canPick ? '' : t('set.homeHint');
