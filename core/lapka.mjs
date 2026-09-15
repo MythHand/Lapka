@@ -293,6 +293,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     /* the adapter names things best, then the series page, then the episode page */
     if (extra) merge(series, extra);
     for (const r of [...reports].reverse()) merge(series, toContribution(r));
+    /* the part that is this series is at the series' address, whatever page named it */
+    for (const f of series.franchise) if (f.self) f.url = series.sourceUrl;
 
     const steps = [...new Set(reports.flatMap(r => r.steps))];
     let opened = [];

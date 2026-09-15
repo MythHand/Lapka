@@ -707,7 +707,9 @@ async function openSeasons(main) {
       else { x.failed = true; toast(t('toast.seasonFail', { title: x.entry.title || x.entry.url })); }
     });
   }
-  return orderSeasons([...known.values()].filter(x => x.series).map(x => ({ series: x.series, entry: x.entry })));
+  /* one part per series: an episode's address and its series' address name the same series */
+  const seen = new Set();
+  return orderSeasons([...known.values()].filter(x => x.series && !seen.has(x.series.id) && seen.add(x.series.id)).map(x => ({ series: x.series, entry: x.entry })));
 }
 
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
