@@ -64,7 +64,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
 
   async function openPlayer(player, number, pageUrl) {
     if (player.kind === 'deferred') {
-      try { const url = await followDeferred(player.url, pageUrl); player = { ...player, url, id: playerId(url, pageUrl), kind: 'iframe' }; }
+      try { const url = await followDeferred(player.url, pageUrl); player = { ...player, url, id: playerId(url, pageUrl), kind: 'iframe', followed: true }; }
       catch (e) { return { player, error: e.message }; }
     }
     const x = extractorFor(extractors, player.url);
@@ -81,7 +81,10 @@ export function createLapka({ session = createSession(), profiles = [], extracto
           return { player, extractor: x.name, unfolded: { episodes: episodes.length, dubs: dubs.size }, contribution: { origin: `extract:${x.name}`, episodes } };
         }
       }
-      if (number === null) return { player, extractor: x.name, error: 'the page names no episode' };
+      /* the site's own player on a page that names no episode and lists
+         none holds the whole thing: a film, its one episode. A decorative
+         iframe on such a page is left alone. */
+      if (number === null) { if (!player.followed) return { player, extractor: x.name, error: 'the page names no episode' }; number = 1; }
       const got = await x.extract(player.url, { referer: pageUrl }, session);
       const source = streams => ({ player: player.id, embedUrl: player.url, extractor: x.name, streams });
       let dubs;

@@ -98,7 +98,11 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
   if (report.title.value) c.series.title = report.title.value;
   if (report.cover.value) c.series.cover = report.cover.value;
   if (report.season !== null && report.season !== undefined) c.series.season = report.season;
-  if (report.franchise && report.franchise.length) c.series.franchise = report.franchise;
+  if (report.franchise && report.franchise.length) {
+    c.series.franchise = report.franchise;
+    const self = report.franchise.find(f => f.self);
+    if (self && self.kind) c.series.kind = self.kind;   // a film among the parts is a film
+  }
 
   for (const e of report.episodes.items) c.episodes.push({ number: e.number, title: e.title || undefined, sourceUrl: e.url });
 

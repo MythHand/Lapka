@@ -25,6 +25,8 @@ const snap = (...p) => fs.readFileSync(path.join(SNAPS, ...p), 'utf8');
 const PAGE = 'https://jut-su.net/31-klinok-rassekajuschij-demonov-o2.html';
 const SERIAL = 'https://kodikplayer.com/serial/16224/dac5236f74af6509ca0d0f39d27db2d1/720p';
 const ANIDUB_EP3 = 'https://kodikplayer.com/serial/19241/1488b084080e38e69aa3e5c1fd6cc8e1/720p?episode=3';
+const FILM = 'https://jut-su.net/16-klinok-rassekajuschij-demonov-beskonechnyj-poezd-p1.html';
+const FILM_EMBED = 'https://kodikplayer.com/video/109611/d41372e3683900687a68073a26e671f0/720p';
 
 /* the site, the ajax controller and Kodik, played back from the snapshots */
 function fakeSession() {
@@ -36,9 +38,11 @@ function fakeSession() {
       asked.push({ url, ...opts });
       const u = new URL(url);
       if (url === PAGE) return ok(url, snap('jutsu', 'page.html'));
+      if (url === FILM) return ok(url, snap('jutsu', 'film.html'));
+      if (url === FILM_EMBED) return ok(url, snap('kodik', 'embed.html'));
       if (u.pathname === '/engine/ajax/controller.php') {
         assert.equal(opts.headers?.['x-requested-with'], 'XMLHttpRequest', 'asked the way the page does');
-        if (u.searchParams.get('mod') === 'kodik-player') return ok(url, snap('jutsu', 'ajax-kodik.json'));
+        if (u.searchParams.get('mod') === 'kodik-player') return ok(url, u.searchParams.get('id') === '16' ? JSON.stringify({ success: true, data: FILM_EMBED }) : snap('jutsu', 'ajax-kodik.json'));
         return ok(url, JSON.stringify({ success: true, data: 'https://absciss.example/?token_movie=x' }));
       }
       if (url === SERIAL) return ok(url, snap('kodik', 'serial.html'));
@@ -46,7 +50,7 @@ function fakeSession() {
       if (u.pathname.startsWith('/assets/js/app.player_single.')) return ok(url, snap('kodik', 'app.player_single.js'));
       if (u.pathname === '/ftor' && opts.method === 'POST') {
         const form = new URLSearchParams(opts.body);
-        assert.equal(form.get('id'), '500193', 'the id of the third AniDUB episode');
+        assert.ok(['500193', '42969'].includes(form.get('id')), 'the id of the third AniDUB episode, or the film');
         return ok(url, JSON.stringify({ links: { 720: [{ src: '//cloud.example/ep3/720.mp4:hls:manifest.m3u8', type: 'application/x-mpegURL' }] } }));
       }
       return { status: 404, url, body: '', headers: {}, cookies: [] };
@@ -136,5 +140,19 @@ describe('through look() and resolve()', () => {
     assert.ok(session.asked.some(a => a.url === ANIDUB_EP3));
     /* a series the same as the page's own: nothing to re-read for an episode */
     assert.equal(session.asked.filter(a => a.url === PAGE).length, 1);
+  });
+  test('a film: the site\'s player on a page that names no episode is its one episode; the film is a part of the franchise', async () => {
+    const session = fakeSession();
+    const delivery = { register: () => 'id' + Math.random().toString(36).slice(2, 8), get: () => null };
+    const lapka = createLapka({ session, extractors: await loadExtractors(), delivery });
+    const r = await lapka.look(FILM);
+    assert.equal(r.series.kind, 'movie');
+    assert.deepEqual(r.series.episodes.map(e => e.number), [1]);
+    assert.ok(r.series.episodes[0].dubs[0].sources[0].streams.length >= 1, 'the film has its streams');
+    /* the part that links to this page is this page; the head of the franchise, left without a link here, cannot be followed and is left out */
+    const self = r.series.franchise.find(f => f.self);
+    assert.deepEqual([self.year, self.kind, self.url], [2020, 'movie', FILM]);
+    assert.equal(r.series.franchise.length, 8);
+    assert.ok(!r.series.franchise.some(f => f.year === 2019));
   });
 });

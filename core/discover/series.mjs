@@ -171,7 +171,7 @@ export function franchiseFromBlock(doc, url, title = '') {
       /* the items: a year each, a link for every part but this page */
       const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && YEAR.test(el.textContent || ''));
       if (years.length < 2) continue;
-      const parts = [];
+      const items = [];
       for (const y of years) {
         const item = y.parentElement; if (!item) continue;
         const a = item.querySelector('a[href]');
@@ -179,10 +179,17 @@ export function franchiseFromBlock(doc, url, title = '') {
         if (!name) continue;
         const href = a ? same(a.getAttribute('href')) : null;
         if (a && !href) continue;
-        parts.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : String(url).replace(/#.*$/, ''), year: Number(YEAR.exec(y.textContent)[1]), self: !a || href === page,
+        items.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : null, href, year: Number(YEAR.exec(y.textContent)[1]),
           kind: /фильм|movie|film/i.test(name) ? 'movie' : /\b(ova|ona)\b/i.test(name) ? 'ova' : /спешл|special/i.test(name) ? 'special' : 'tv' });
       }
-      if (parts.length < 2 || !parts.some(p => p.self) || !parts.some(p => !p.self)) continue;
+      /* this page: the item linking to it; else the one item without a
+         link (a site leaves the current page unlinked, or the head of
+         the franchise); else the one named as the page is */
+      const self = items.find(it => it.href === page) || items.find(it => !it.href) || items.find(it => title && it.title.toLowerCase() === String(title).toLowerCase());
+      if (!self) continue;
+      /* a part without a link cannot be looked at, and is left out unless it is this page */
+      const parts = items.filter(it => it === self || it.url).map(it => ({ title: it.title, url: it === self ? String(url).replace(/#.*$/, '') : it.url, year: it.year, kind: it.kind, self: it === self }));
+      if (parts.length < 2) continue;
       parts.sort((a, b) => a.year - b.year);   // stable: the site's order within a year stays
       return parts.map((p, i) => ({ order: i + 1, ...p }));
     }
