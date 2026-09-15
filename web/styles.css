@@ -1664,6 +1664,8 @@ video::cue{
 }
 /* the paw to the left of the name, both on one grid size, one line of a seal */
 .mark{ display:flex; flex-direction:row; align-items:center; justify-content:center; gap:26px; margin:6px 0 22px; }
-.paw{ font-size:calc(15px + var(--fs)); color:var(--tx-2); }
+/* the cells show: a hair of air between characters and between rows,
+   so the paw reads as characters on a grid, not as a filled shape */
+.paw{ font-size:calc(15px + var(--fs)); color:var(--tx-2); letter-spacing:0.14em; line-height:1.22; }
 .banner{ font-size:calc(9.5px + var(--fs)); color:var(--tx-1); }
 .mark--left{ justify-content:flex-start; margin:0 0 18px; }
