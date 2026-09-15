@@ -637,7 +637,8 @@ function hideProgress() {
    lets go, the way a cat's does, every few seconds. Frame by frame,
    textContent only: nothing moves by pixels. Under
    prefers-reduced-motion it stands still on the first frame. The
-   name is set the way software greets in a terminal. */
+   name is drawn with the same blocks, seven rows tall like the paw:
+   one seal, one language. */
 const PAW_FRAMES = [
 `      ▄▄  ▄▄      
     ████  ████    
@@ -668,12 +669,13 @@ const PAW_FRAMES = [
      ████████     
       ▀████▀      `,
 ];
-const BANNER = `██╗      █████╗ ██████╗ ██╗  ██╗ █████╗ 
-██║     ██╔══██╗██╔══██╗██║ ██╔╝██╔══██╗
-██║     ███████║██████╔╝█████╔╝ ███████║
-██║     ██╔══██║██╔═══╝ ██╔═██╗ ██╔══██║
-███████╗██║  ██║██║     ██║  ██╗██║  ██║
-╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝`;
+const BANNER = `██        ▄████▄  ██████▄  ██   ▄█▀  ▄████▄ 
+██       ██    ██ ██    ██ ██  ▄█▀  ██    ██
+██       ██    ██ ██    ██ ██ ▄█▀   ██    ██
+██       ████████ ██████▀  ████     ████████
+██       ██    ██ ██       ██ ▀█▄   ██    ██
+██       ██    ██ ██       ██  ▀█▄  ██    ██
+██████   ██    ██ ██       ██   ▀█▄ ██    ██`;
 const bannerEl = $('#banner');
 if (bannerEl) bannerEl.textContent = BANNER;
 /* every paw on the page (the mark, the queue's about) presses together */

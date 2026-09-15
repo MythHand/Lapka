@@ -1672,6 +1672,5 @@ video::cue{
   gap:3ch;                                  /* three cells between the paw and the name */
   margin:0 0 2em;                           /* two rows before what follows */
 }
-.mark .paw{ color:var(--tx-2); }
-.mark .banner{ color:var(--tx-1); }
+.mark .paw, .mark .banner{ color:var(--tx-1); }   /* one seal, one colour */
 .mark--left{ justify-content:flex-start; margin:0 0 1.5em; }
