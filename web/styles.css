@@ -1636,3 +1636,9 @@ video::cue{
 .notice.notice--busy.show{ transform:translateX(-50%) translateY(-50%); }
 .notice.notice--busy .notice__ico{ animation:notice-spin 1s linear infinite; }
 @keyframes notice-spin{ to{ transform:rotate(360deg); } }
+
+/* ── the sites tried, three lists on the empty queue ── */
+.queue__sites-head{ margin:14px 0 4px; color:var(--tx-2); font-weight:500; }
+.queue__sites-head:first-child{ margin-top:0; }
+.queue__sites{ margin:0 0 6px; padding-left:18px; color:var(--tx-3); line-height:1.6; }
+.queue__sites li{ margin:0; }

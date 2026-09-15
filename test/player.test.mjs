@@ -234,7 +234,7 @@ describe('saving from the queue', { skip }, () => {
     assert.equal(r.files.length, 3);
     assert.equal(r.done, true);
     /* one stream: the quality button still stands, so the deck never shifts */
-    assert.equal(r.qualityHidden, false);
+    assert.equal(r.qualityHidden, true);   // one quality: nothing to choose, no button
   });
 });
 

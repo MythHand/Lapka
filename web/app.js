@@ -826,7 +826,7 @@ function qualityOptions() {
 function syncQualityButton() {
   const opts = qualityOptions();
   const it = cur();
-  btnQuality.hidden = !(it && it.stream) && opts.length < 2;
+  btnQuality.hidden = opts.length < 2;   // nothing to choose from: no button; the dub's name keeps its width on its own
   const now = it && it.stream && it.stream.quality ? it.stream.quality : (hls && hls.levels && hls.levels[hls.currentLevel] ? hls.levels[hls.currentLevel].height + 'p' : '');
   qualityLabel.textContent = now || (it && it.stream && it.stream.kind === 'hls' ? t('quality.auto') : t('quality.short'));
   btnQuality.title = now ? t('quality.current', { name: now }) : t('quality.title');
@@ -948,6 +948,7 @@ async function playItem(it, autoplay = true, glide = true) {
 
   const token = ++playToken;
   const faded = fadeOut();
+  video.pause();                      // the episode before stops at once: a new one was asked for
   const src = await sourceFor(it);
   const reveal = fadeIn();
   if (token !== playToken || it !== cur()) { autoSwitch = false; reveal(); return; }
@@ -2087,12 +2088,25 @@ btnLocate.onclick = revealCurrent;
    by importance to the goal: first what the whole thing was started
    for, then what it cannot work without, and only at the end the
    trimmings. */
+const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net'];
+const SITES_PART = ['animeflv.or.at — только открытая серия'];
+const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at'];
 function aboutBlock() {
   const li = document.createElement('li');
   li.className = 'queue__about';
   li.innerHTML = '<p class="queue__drop"></p><hr class="queue__rule"><p class="queue__lede"></p>';
   li.querySelector('.queue__drop').innerHTML = t('queue.empty');
-  li.querySelector('.queue__lede').textContent = t('about.placeholder');
+  /* the sites tried so far, in three groups: it works, it works in
+     part, the door is shut. Data, not words: the names are the same
+     in every language */
+  const lede = li.querySelector('.queue__lede');
+  lede.replaceChildren();
+  for (const [key, sites] of [['about.sitesOk', SITES_OK], ['about.sitesPart', SITES_PART], ['about.sitesShut', SITES_SHUT]]) {
+    const h = document.createElement('p'); h.className = 'queue__sites-head'; h.textContent = t(key);
+    const ul = document.createElement('ul'); ul.className = 'queue__sites';
+    for (const s of sites) { const item = document.createElement('li'); item.textContent = s; ul.append(item); }
+    lede.append(h, ul);
+  }
   return li;
 }
 

@@ -248,7 +248,7 @@ en: {
   'browse.empty': 'No folders and no media files here.',
   'browse.fail': 'Could not read the directory',
 
-  'prep.head': 'Preparing the file for the browser',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Audio track: {name}',
   'prep.note': 'The audio is re-encoded once. After that the file plays and seeks like any other, and the next episode is prepared in the background.',
   'prep.probe': 'ffprobe: reading tracks and codecs',
@@ -300,7 +300,6 @@ en: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -371,6 +370,9 @@ en: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -590,7 +592,7 @@ ru: {
   'browse.empty': 'Здесь нет ни папок, ни медиафайлов.',
   'browse.fail': 'Не удалось прочитать каталог',
 
-  'prep.head': 'Подготовка файла для браузера',
+  'prep.head': 'Открываю серию',
   'prep.track': 'Звуковая дорожка: {name}',
   'prep.note': 'Звук перекодируется один раз. Дальше файл играется и перематывается как обычный, а следующая серия готовится фоном.',
   'prep.probe': 'ffprobe: читаются дорожки и кодеки',
@@ -642,7 +644,6 @@ ru: {
   'toast.openFail': 'Не открылась: {name} ({why})',
   'toast.noStream': 'Нет потока: {name}',
   'toast.otherSource': 'Источник не пошёл, пробую другой…',
-  'about.placeholder': 'Сайты, на которых тестировали и работало: aniliberty.top · old.yummyani.me · jut-su.net · animego.me · anidubonline.ru · gogoanime.by · jkanime.net · animeflv.or.at\nПробовали, дверь закрыта: aniwaves.ru · aniwatch.co.at',
   'skip.opening': 'Пропустить заставку',
   'skip.ending': 'Пропустить титры',
   'skip.hide': 'Скрыть кнопку',
@@ -713,6 +714,9 @@ ru: {
   'notice.loading': 'Открываю {name}: источник {player}…',
   'notice.slow': 'Источник {player} не отвечает, жду ответа…',
   'notice.switchingTo': 'Источник {from} не ответил. Пробую {to}, попытка {n} из {total}…',
+  'about.sitesOk': 'Дверь открыта, работает:',
+  'about.sitesPart': 'Дверь открыта частично:',
+  'about.sitesShut': 'Дверь закрыта, пробовали:',
 
 },
 
@@ -932,7 +936,7 @@ ru: {
   'browse.empty': 'Hier gibt es weder Ordner noch Mediendateien.',
   'browse.fail': 'Das Verzeichnis konnte nicht gelesen werden',
 
-  'prep.head': 'Datei wird für den Browser vorbereitet',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Tonspur: {name}',
   'prep.note': 'Der Ton wird einmal umkodiert. Danach läuft und springt die Datei wie jede andere, und die nächste Folge wird im Hintergrund vorbereitet.',
   'prep.probe': 'ffprobe: Spuren und Codecs werden gelesen',
@@ -984,7 +988,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -1055,6 +1058,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -1274,7 +1280,7 @@ ru: {
   'browse.empty': 'Ni dossier ni fichier multimédia ici.',
   'browse.fail': 'Impossible de lire le répertoire',
 
-  'prep.head': 'Préparation du fichier pour le navigateur',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Piste audio : {name}',
   'prep.note': 'Le son n’est réencodé qu’une fois. Ensuite le fichier se lit et se parcourt comme n’importe quel autre, et l’épisode suivant se prépare en arrière-plan.',
   'prep.probe': 'ffprobe : lecture des pistes et des codecs',
@@ -1326,7 +1332,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -1397,6 +1402,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -1616,7 +1624,7 @@ ru: {
   'browse.empty': 'Aquí no hay ni carpetas ni archivos multimedia.',
   'browse.fail': 'No se pudo leer el directorio',
 
-  'prep.head': 'Preparando el archivo para el navegador',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Pista de audio: {name}',
   'prep.note': 'El sonido se recodifica una sola vez. Después el archivo se reproduce y se navega como cualquier otro, y el siguiente episodio se prepara en segundo plano.',
   'prep.probe': 'ffprobe: leyendo pistas y códecs',
@@ -1668,7 +1676,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -1739,6 +1746,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -1958,7 +1968,7 @@ ru: {
   'browse.empty': 'Qui non ci sono né cartelle né file multimediali.',
   'browse.fail': 'Impossibile leggere la directory',
 
-  'prep.head': 'Preparazione del file per il browser',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Traccia audio: {name}',
   'prep.note': 'L’audio viene ricodificato una volta sola. Dopodiché il file si riproduce e si scorre come qualsiasi altro, e l’episodio successivo si prepara in background.',
   'prep.probe': 'ffprobe: lettura di tracce e codec',
@@ -2010,7 +2020,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -2081,6 +2090,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -2300,7 +2312,7 @@ ru: {
   'browse.empty': 'Aqui não há pastas nem arquivos de mídia.',
   'browse.fail': 'Não foi possível ler o diretório',
 
-  'prep.head': 'Preparando o arquivo para o navegador',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Faixa de áudio: {name}',
   'prep.note': 'O som é recodificado uma única vez. Depois o arquivo toca e navega como qualquer outro, e o próximo episódio é preparado em segundo plano.',
   'prep.probe': 'ffprobe: lendo faixas e codecs',
@@ -2352,7 +2364,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -2423,6 +2434,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -2642,7 +2656,7 @@ ru: {
   'browse.empty': 'Nie ma tu ani folderów, ani plików multimedialnych.',
   'browse.fail': 'Nie udało się odczytać katalogu',
 
-  'prep.head': 'Przygotowanie pliku dla przeglądarki',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Ścieżka dźwiękowa: {name}',
   'prep.note': 'Dźwięk jest przekodowywany raz. Potem plik odtwarza się i przewija jak każdy inny, a następny odcinek przygotowuje się w tle.',
   'prep.probe': 'ffprobe: odczyt ścieżek i kodeków',
@@ -2694,7 +2708,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -2765,6 +2778,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -2984,7 +3000,7 @@ ru: {
   'browse.empty': 'Burada ne klasör ne de ortam dosyası var.',
   'browse.fail': 'Dizin okunamadı',
 
-  'prep.head': 'Dosya tarayıcı için hazırlanıyor',
+  'prep.head': 'Opening the episode',
   'prep.track': 'Ses parçası: {name}',
   'prep.note': 'Ses bir kez yeniden kodlanır. Sonrasında dosya her dosya gibi oynar ve sarılır, sonraki bölüm de arka planda hazırlanır.',
   'prep.probe': 'ffprobe: parçalar ve kodekler okunuyor',
@@ -3036,7 +3052,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -3107,6 +3122,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
@@ -3326,7 +3344,7 @@ ru: {
   'browse.empty': '这里既没有文件夹也没有媒体文件。',
   'browse.fail': '无法读取该目录',
 
-  'prep.head': '正在为浏览器准备文件',
+  'prep.head': 'Opening the episode',
   'prep.track': '音轨：{name}',
   'prep.note': '声音只转码一次。之后这个文件就像普通文件一样播放和拖动，下一集会在后台准备好。',
   'prep.probe': 'ffprobe：读取音轨与编码格式',
@@ -3378,7 +3396,6 @@ ru: {
   'toast.openFail': 'Could not open: {name} ({why})',
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
-  'about.placeholder': 'description to come',
   'skip.opening': 'Skip the opening',
   'skip.ending': 'Skip the ending',
   'skip.hide': 'Hide the button',
@@ -3449,6 +3466,9 @@ ru: {
   'notice.loading': 'Opening {name}: source {player}…',
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
+  'about.sitesOk': 'Door open, works:',
+  'about.sitesPart': 'Door open in part:',
+  'about.sitesShut': 'Door shut, tried:',
 
 },
 
