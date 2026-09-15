@@ -370,7 +370,7 @@ const POS_TAIL = 60;       // and not to the very end either: the episode is fin
    in state.positions is what the rows are painted from. */
 const posKey = it => {
   const dub = it.dub ? it.dub.key : state.dubKey;
-  return state.series && dub ? `${state.series.id}/${it.number}/${dub}` : null;
+  return it && it.seriesId && dub ? `${it.seriesId}/${it.number}/${dub}` : null;
 };
 const posTimers = {};
 function markPos(it, sec) {
@@ -414,7 +414,7 @@ function saveSession() {
   clearTimeout(saveT);
   saveT = setTimeout(() => {
     if (!state.series) { try { localStorage.removeItem('lapka.session'); } catch (_) {} return; }
-    writeStore('lapka.session', { v: SESSION_V, url: state.series.sourceUrl, current: cur() ? cur().number : null, loop: state.loop });
+    writeStore('lapka.session', { v: SESSION_V, url: state.series.sourceUrl, current: cur() ? { seriesId: cur().seriesId, number: cur().number } : null, loop: state.loop });
   }, 500);
 }
 
@@ -430,8 +430,9 @@ async function restoreSession() {
 /* ── state ─────────────────────────────────────────────────── */
 const state = {
   list: [], current: null,
-  series: null,      // the catalog of the series open now
-  dubKey: null,      // the dub chosen for it, carried to every episode
+  series: null,      // the series the link named
+  seasons: [],       // every series of its franchise that was opened, in viewing order: [{ series, entry }]
+  dubKey: null,      // the dub chosen, carried to every episode and every season
   positions: {},     // series/episode/dub → seconds, mirrored from the server
   remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,
@@ -541,6 +542,7 @@ const PH = {
   arrowUp: { vb: '6.9 6.9 242.2 242.2', d: '<path d="M208.49,120.49a12,12,0,0,1-17,0L140,69V216a12,12,0,0,1-24,0V69L64.49,120.49a12,12,0,0,1-17-17l72-72a12,12,0,0,1,17,0l72,72A12,12,0,0,1,208.49,120.49Z"/>' },   // one level up in the browser
   filePlus: { vb: '1.7 1.7 252.6 252.6', d: '<path d="M216.49,79.51l-56-56A12,12,0,0,0,152,20H56A20,20,0,0,0,36,40V216a20,20,0,0,0,20,20H200a20,20,0,0,0,20-20V88A12,12,0,0,0,216.49,79.51ZM160,57l23,23H160ZM60,212V44h76V92a12,12,0,0,0,12,12h48V212Zm104-60a12,12,0,0,1-12,12H140v12a12,12,0,0,1-24,0V164H104a12,12,0,0,1,0-24h12V128a12,12,0,0,1,24,0v12h12A12,12,0,0,1,164,152Z"/>' },   // add files
   folderPlus: { vb: '1.0 1.0 253.9 253.9', d: '<path d="M216,68H133.39l-26-29.29a20,20,0,0,0-15-6.71H40A20,20,0,0,0,20,52V200.62A19.41,19.41,0,0,0,39.38,220H216.89A19.13,19.13,0,0,0,236,200.89V88A20,20,0,0,0,216,68ZM90.61,56l10.67,12H44V56ZM212,196H44V92H212Zm-72-76v12h12a12,12,0,0,1,0,24H140v12a12,12,0,0,1-24,0V156H104a12,12,0,0,1,0-24h12V120a12,12,0,0,1,24,0Z"/>' },   // add a folder
+  download: { vb: '4.1 4.1 247.8 247.8', d: '<path d="M224,152v56a20,20,0,0,1-20,20H52a20,20,0,0,1-20-20V152a12,12,0,0,1,24,0v52H200V152a12,12,0,0,1,24,0Zm-104.49,8.49a12,12,0,0,0,17,0l40-40a12,12,0,0,0-17-17L140,123V40a12,12,0,0,0-24,0v83L96.49,103.51a12,12,0,0,0-17,17Z"/>' },   // save an episode
   disks: { vb: '4.1 4.1 247.8 247.8', d: '<path d="M208,36H48A20,20,0,0,0,28,56V200a20,20,0,0,0,20,20H208a20,20,0,0,0,20-20V56A20,20,0,0,0,208,36Zm-4,24v56H52V60ZM52,196V140H204v56ZM160,88a16,16,0,1,1,16,16A16,16,0,0,1,160,88Zm32,80a16,16,0,1,1-16-16A16,16,0,0,1,192,168Z"/>' },   // browse the disk
 };
 
@@ -617,9 +619,11 @@ function hideProgress() {
    opened on the server only when it is about to play. */
 const nameFor = ep => ep.title ? `${ep.number} · ${ep.title}` : t('queue.episodeN', { n: ep.number });
 
-function itemFor(ep) {
+function itemFor(ep, series) {
   return {
     id: ++state.seq, number: ep.number, title: ep.title || '', name: nameFor(ep),
+    seriesId: series.id, seriesTitle: series.title, season: series.season, kind: series.kind,
+    group: series.id,
     dur: null, err: false, aspect: null,
     dubs: null,       // what the episode offers, once its page was opened
     dub: null,        // the dub playing
@@ -638,6 +642,33 @@ function takeEpisode(it, ep) {
     alive: d.sources.filter(x => x.health.ok !== false).length }));
 }
 
+/* "2 сезон", "Фильм", "OVA": what a series of a franchise is called in the queue */
+function groupLabel(series) {
+  if (series.kind === 'movie') return t('queue.movie');
+  if (series.kind === 'ova') return t('queue.ova');
+  if (series.kind === 'special') return t('queue.special');
+  if (series.kind === 'spinoff') return t('queue.spinoff');
+  if (series.season) return t('queue.season', { n: series.season });
+  return series.title;
+}
+
+/* The other seasons of the franchise, each a series of its own,
+   opened at once. One that fails is left out and said so. */
+async function openSeasons(main) {
+  const entries = main.franchise || [];
+  if (entries.length < 2) return [{ series: main, entry: entries.find(e => e.self) || null }];
+  toast(t('toast.seasons', { n: entries.length }));
+  const got = await Promise.allSettled(entries.map(e => e.self || !e.url ? Promise.resolve(null) : api('/api/look?url=' + encodeURIComponent(e.url))));
+  const out = [];
+  entries.forEach((e, i) => {
+    if (e.self) { out.push({ series: main, entry: e }); return; }
+    const r = got[i];
+    if (r.status === 'fulfilled' && r.value && r.value.series.episodes.length) out.push({ series: r.value.series, entry: e });
+    else toast(t('toast.seasonFail', { title: e.title || e.url }));
+  });
+  return out;
+}
+
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
   url = String(url || '').trim();
   if (!/^https?:\/\//i.test(url)) { toast(t('toast.badLink')); return false; }
@@ -651,15 +682,25 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   stopPlayback(); playToken++;
   state.series = got.series;
   state.current = null;
-  state.list = got.series.episodes.map(itemFor);
-  for (const it of state.list) takeEpisode(it, got.series.episodes.find(e => e.number === it.number));
+  state.seasons = await openSeasons(got.series);
+  state.list = [];
+  for (const { series } of state.seasons) {
+    for (const ep of series.episodes) {
+      const it = itemFor(ep, series);
+      takeEpisode(it, ep);
+      state.list.push(it);
+    }
+  }
   state.dubKey = (state.remote.dubs || {})[got.series.id] || null;
   linkInput.value = '';
   render(); paintTitle();
   if (!quiet) toast(t('toast.opened', { n: state.list.length }));
 
-  const wanted = at != null ? at : got.start ? got.start.episode : null;
-  const first = state.list.find(i => i.number === wanted) || state.list[0];
+  /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
+  const wantedNumber = at && at.number != null ? at.number : at != null && typeof at !== 'object' ? at : got.start ? got.start.episode : null;
+  const wantedSeries = at && at.seriesId ? at.seriesId : got.series.id;
+  const first = state.list.find(i => i.seriesId === wantedSeries && i.number === wantedNumber)
+    || state.list.find(i => i.seriesId === got.series.id) || state.list[0];
   if (autoplay) playItem(first);
   else { state.current = first; paintTitle(); paintActive(); }
   return true;
@@ -673,7 +714,7 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
 async function resolveItem(it, { avoid = null } = {}) {
   if (it.opening) return it.opening;
   it.opening = (async () => {
-    const q = new URLSearchParams({ series: state.series.id, episode: String(it.number) });
+    const q = new URLSearchParams({ series: it.seriesId, episode: String(it.number) });
     if (state.dubKey) q.set('dub', state.dubKey);
     if (avoid) q.set('avoid', avoid);
     const r = await api('/api/resolve?' + q);
@@ -1086,7 +1127,7 @@ function pickAudio(opt) {
   if (!it) return;
   if (it.dub && it.dub.key === opt.id) return;
   state.dubKey = opt.id;
-  if (state.series) post(`/api/state/dub?series=${state.series.id}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
+  post(`/api/state/dub?series=${it.seriesId}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
   hideNotice();
   toast(t('audio.current', { name: opt.main }));
   switchTrack(it);
@@ -1465,6 +1506,44 @@ function cacheRow(col) {
   };
 }
 
+/* ── the Lapka folder ───────────────────────────────────────────
+   Where everything is kept. Shown as it is; a new path typed here is
+   created if it does not exist and taken into use at once. */
+function homeRow(col) {
+  const line = document.createElement('div');
+  line.className = 'menu__row';
+  line.innerHTML =
+    '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__count"></span></div>' +
+    '<div class="home__path"></div>' +
+    '<form class="home__form"><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
+    '<div class="cache__note home__note"></div>';
+  col.append(line);
+  const q = s => line.querySelector(s);
+  q('.menu__rowlabel').textContent = t('set.home');
+  q('.home__go').textContent = t('set.homeChange');
+  q('.home__note').textContent = t('set.homeHint');
+  q('.home__in').placeholder = t('set.homePlaceholder');
+  const paint = d => {
+    q('.home__path').textContent = d.home;
+    q('.home__count').textContent = t('set.homeSeries', { n: d.series });
+  };
+  fetch('/api/home').then(r => r.json()).then(paint).catch(() => { q('.home__path').textContent = '—'; });
+  q('.home__form').addEventListener('submit', async ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const path = q('.home__in').value.trim();
+    if (!path) return;
+    try {
+      const r = await post('/api/home?path=' + encodeURIComponent(path));
+      toast(t(r.created ? 'toast.homeCreated' : 'toast.homeSet', { path: r.home }));
+      q('.home__in').value = '';
+      buildGearMenu(); gearMenu.classList.add('open');
+    } catch (e) { toast(t('toast.homeFail', { why: e.message })); }
+  });
+  /* typing in the field must not seek the video */
+  q('.home__in').addEventListener('keydown', ev => ev.stopPropagation());
+  line.addEventListener('click', ev => ev.stopPropagation());
+}
+
 /* Three columns: keys, settings, languages. Languages need only a
    narrow strip, one word per row; keys need one of their own, because a
    caption next to a key reads only when both are on the same line. The
@@ -1523,6 +1602,7 @@ function buildGearMenu() {
       buildGearMenu();
     });
   }
+  homeRow(opts);
   cacheRow(opts);
 
   gearMenu.append(keys, opts, langs);
@@ -1593,7 +1673,17 @@ function render() {
   stage.classList.remove('is-empty');
 
   const frag = document.createDocumentFragment();
-  for (const it of state.list) frag.append(grid ? tileFor(it) : rowFor(it));
+  const grouped = state.seasons.length > 1;
+  queueEl.classList.toggle('queue--grouped', grouped);
+  let group = null;
+  for (const it of state.list) {
+    if (grouped && it.group !== group) {
+      group = it.group;
+      const s = state.seasons.find(x => x.series.id === it.group);
+      if (s) frag.append(groupRow(s.series));
+    }
+    frag.append(grid ? tileFor(it) : rowFor(it));
+  }
   queueList.replaceChildren(frag);
   paintMeta();
   const active = queueList.querySelector('.item.active, .tile.active');
@@ -1607,8 +1697,20 @@ function render() {
    cards stay and only their classes change, which the transitions in
    styles.css play out. A list that no longer matches the queue is built
    anew as before. */
+/* the line that opens a season in the list */
+function groupRow(series) {
+  const li = document.createElement('li');
+  li.className = 'queue__group';
+  li.innerHTML = '<span class="queue__group-label"></span><span class="queue__group-title"></span>';
+  li.querySelector('.queue__group-label').textContent = groupLabel(series);
+  const label = groupLabel(series);
+  li.querySelector('.queue__group-title').textContent = series.title !== label ? series.title : '';
+  li.title = series.title;
+  return li;
+}
+
 function paintActive() {
-  const kids = [...queueList.children];
+  const kids = [...queueList.children].filter(li => !li.classList.contains('queue__group'));
   if (kids.length !== state.list.length || kids.some((li, i) => li.dataset.id !== String(state.list[i].id))) return render();
   saveSession();
   btnLocate.hidden = !cur();
@@ -1709,9 +1811,12 @@ function rowFor(it) {
   li.innerHTML =
     `<span class="item__grip">${phSvg(PH.grip)}</span>` +
     `<span class="item__thumb"><span class="item__eq"><i></i><i></i><i></i></span><span class="pos"><i></i></span></span>` +
-    `<span class="item__body"><span class="item__name"></span><span class="item__meta"></span></span>` +
+    `<span class="item__body"><span class="item__head"><span class="item__num"></span><span class="item__name"></span></span><span class="item__meta"></span></span>` +
+    `<span class="item__save">${phSvg(PH.download)}</span>` +
     `<span class="item__x" title="${t('queue.remove')}">${phSvg(PH.x)}</span>`;
-  li.querySelector('.item__name').textContent = it.name;
+  li.querySelector('.item__num').textContent = it.number;
+  li.querySelector('.item__name').textContent = it.title || t('queue.episodeN', { n: it.number });
+  li.querySelector('.item__save').title = t('queue.save');
   if (it.thumb) putThumb(li, it.thumb);
   paintPos(li, it);
   paintShape(li, it);
@@ -1774,7 +1879,10 @@ function paintMeta() {
     const fixed = `<span class="item__m item__m--dur">${it.dur ? fmt(it.dur) : '—'}</span>`;
     const rest = [];
     if (it.err) rest.push(`<b>${t('queue.bad')}</b>`);
-    if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
+    /* one dub is named; several are counted */
+    if (it.dubs && it.dubs.length === 1) rest.push(escapeHtml(it.dubs[0].name));
+    else if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
+    if (it.saving) rest.push(`<span class="route">${it.saving}</span>`);
     if (it.stream) rest.push(`<span class="route">${it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
     if (it.source) rest.push(`<span class="route route--off">${it.source.player}</span>`);
     box.innerHTML = fixed + rest.map(b => `<span>${b}</span>`).join('');
@@ -1787,8 +1895,36 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
+  if (e.target.closest('.item__save')) return saveItem(it);
   playItem(it, true, false);
 });
+
+const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ── saving an episode into the library ────────────────────────
+   The episode is opened if it was not, then its stream is handed to
+   the server, which assembles the file; the row shows how far it is. */
+async function saveItem(it) {
+  if (it.saving) return;
+  try {
+    if (!it.stream) await resolveItem(it);
+    if (!it.stream) { toast(t('toast.noStream', { name: it.name })); return; }
+    it.saving = t('queue.saving', { done: 0, total: 0 }); paintMeta();
+    let job = await post('/api/save?stream=' + it.stream.id);
+    while (job.state === 'working') {
+      it.saving = job.phase === 'assemble' ? t('queue.assembling') : t('queue.saving', { done: job.done, total: job.total });
+      paintMeta();
+      await sleep(600);
+      job = await api('/api/save/' + job.id);
+    }
+    it.saving = job.state === 'done' ? t('queue.saved') : null;
+    paintMeta();
+    toast(job.state === 'done' ? t('toast.saved', { name: it.name }) : t('toast.saveFail', { why: job.error || '' }));
+  } catch (e) {
+    it.saving = null; paintMeta();
+    toast(t('toast.saveFail', { why: e.message }));
+  }
+}
 
 function removeItem(it) {
   const i = idxOf(it), wasCurrent = it === cur();
@@ -2233,7 +2369,7 @@ function mediaMeta(it) {
   if (!('mediaSession' in navigator)) return;
   try {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: it.name, artist: state.series ? state.series.title : 'Lapka',
+      title: it.name, artist: it.seriesTitle || 'Lapka',
       album: `${idxOf(it) + 1} / ${state.list.length}`,
     });
   } catch (_) {}
@@ -2397,7 +2533,8 @@ video.addEventListener('error', () => {
 function paintTitle() {
   const it = cur();
   titleName.textContent = it ? it.name : '—';
-  titlePath.textContent = state.series ? state.series.title : '';
+  const series = it ? state.seasons.find(s => s.series.id === it.seriesId)?.series : state.series;
+  titlePath.textContent = series ? series.title + (series.season && state.seasons.length > 1 ? ' · ' + t('queue.season', { n: series.season }) : '') : '';
 }
 /* A line cut short shows itself whole in the ordinary tooltip. Only a
    cut one: over a line that fits, the tooltip would repeat it. */

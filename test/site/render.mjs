@@ -36,16 +36,26 @@ export function renderHome() {
 
 const episodes = c => Array.from({ length: c.episodes }, (_, i) => i + 1);
 
-export function renderSeries(c) {
+/* a season of a series: its own page, its own episodes, links to the other seasons */
+const seasonsNav = (c, season) => c.layout.seasons
+  ? `<div class="seasons">${Array.from({ length: c.layout.seasons }, (_, i) => i + 1).map(n =>
+      n === season ? `<b>${n} сезон</b>` : `<a href="/s/${c.id}/${n === 1 ? '' : 'season-' + n + '/'}">${n} сезон</a>`).join(' ')}</div>`
+  : '';
+const seasonTitle = (c, season) => c.layout.seasons && season > 1 ? `${c.title} ${season} сезон` : c.title;
+
+export function renderSeries(c, season = 1) {
   const head = `<meta property="og:image" content="/media/cover-${c.id}.jpg">`;
+  const prefix = season > 1 ? `/s/${c.id}/season-${season}` : `/s/${c.id}`;
+  const title = seasonTitle(c, season);
   const list = c.layout.episodes === 'select'
-    ? `<select id="episodes" onchange="location.href=this.value">\n${episodes(c).map(n => `<option value="/s/${c.id}/ep-${n}">${n} серия</option>`).join('\n')}\n</select>`
-    : `<ul class="episodes">\n${episodes(c).map(n => `<li><a href="/s/${c.id}/ep-${n}">${n} серия</a></li>`).join('\n')}\n</ul>`;
-  return page({ title: c.title, head, body: `<h1>${esc(c.title)}</h1>\n<p class="meta">Год: 2024 · Серий: ${c.episodes}</p>\n<h2>Серии</h2>\n${list}` });
+    ? `<select id="episodes" onchange="location.href=this.value">\n${episodes(c).map(n => `<option value="${prefix}/ep-${n}">${n} серия</option>`).join('\n')}\n</select>`
+    : `<ul class="episodes">\n${episodes(c).map(n => `<li><a href="${prefix}/ep-${n}">${n} серия</a></li>`).join('\n')}\n</ul>`;
+  return page({ title, head, body: `<h1>${esc(title)}</h1>\n<p class="meta">Год: 2024 · Серий: ${c.episodes}</p>\n${seasonsNav(c, season)}\n<h2>Серии</h2>\n${list}` });
 }
 
-export function renderEpisode(c, ep) {
-  const title = `${c.title} — ${ep} серия`;
+export function renderEpisode(c, ep, season = 1) {
+  const title = `${seasonTitle(c, season)} — ${ep} серия`;
+  const prefix = season > 1 ? `/s/${c.id}/season-${season}` : `/s/${c.id}`;
   let player = '';
 
   if (c.layout.player === 'video') {
@@ -67,8 +77,8 @@ export function renderEpisode(c, ep) {
     player = `<div class="players" id="players">\n${switcher}\n</div>\n${dubTabs}\n<iframe id="player" src="${embedUrl(c.players[0], c, ep, first(c.players[0]))}" allowfullscreen></iframe>`;
   }
 
-  const nav = episodes(c).map(n => n === ep ? `<b>${n}</b>` : `<a href="/s/${c.id}/ep-${n}">${n}</a>`).join(' ');
-  const body = `<p><a href="/s/${c.id}/">← ${esc(c.title)}</a></p>\n<h1>${esc(title)}</h1>\n${player}\n<p class="nav">Серии: ${nav}</p>
+  const nav = episodes(c).map(n => n === ep ? `<b>${n}</b>` : `<a href="${prefix}/ep-${n}">${n}</a>`).join(' ');
+  const body = `<p><a href="${prefix}/">← ${esc(seasonTitle(c, season))}</a></p>\n<h1>${esc(title)}</h1>\n${player}\n<p class="nav">Серии: ${nav}</p>
 <script>
 document.querySelectorAll('[data-embed]').forEach(b => b.addEventListener('click', () => {
   document.getElementById('player').src = b.dataset.embed;

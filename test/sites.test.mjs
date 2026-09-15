@@ -30,6 +30,8 @@ const session = {
     const p = u.pathname;
     let body = null;
     if (p === '/api/v1/anime/releases/re-creators') body = snap('api-release.json');
+    else if (p === '/api/v1/anime/releases/kono-subarashii-sekai-ni-shukufuku-wo-3-ova') body = JSON.stringify({ ...JSON.parse(snap('api-release.json')), id: 10024, alias: 'kono-subarashii-sekai-ni-shukufuku-wo-3-ova', name: { main: 'Этот Замечательный Мир! 3 (OVA)' }, type: { value: 'OVA' } });
+    else if (p === '/api/v1/anime/franchises/release/10024') body = snap('api-franchise-10024.json');
     else if (p === `/api/v1/anime/releases/episodes/${UUID}`) body = snap('api-episode.json');
     else if (/^\/anime\/releases\/release\/re-creators(\/[a-z]+)?\/?$/.test(p)) body = snap('release.html');
     else if (p === `/anime/video/episode/${UUID}`) body = snap('episode.html');
@@ -86,6 +88,17 @@ describe('the aniliberty adapter', () => {
     assert.deepEqual(c.episodes.find(e => e.number === 1).marks, { opening: null, ending: { start: 1170, stop: 1290 } });
     assert.ok(c.series.altTitles.includes('Re:Creators'));
     assert.match(c.series.cover, /^https:\/\/aniliberty\.top\/storage\//);
+  });
+  test('a release in a franchise: the viewing order, this release marked, the season from the name', async () => {
+    const c = await aniliberty.look(`${REL.replace('re-creators', 'kono-subarashii-sekai-ni-shukufuku-wo-3-ova')}/episodes`, session);
+    assert.equal(c.series.kind, 'ova');
+    assert.deepEqual(c.series.franchise.map(f => [f.order, f.kind, f.self]), [[6, 'tv', false], [7, 'tv', false], [8, 'ova', true]]);
+    assert.match(c.series.franchise[1].url, /\/anime\/releases\/release\/kono-subarashii-sekai-ni-shukufuku-wo-3\/episodes$/);
+    assert.equal(c.series.season, 3);
+    /* a release outside any franchise has none, and is season one of itself */
+    const r = await aniliberty.look(`${REL}/episodes`, session);
+    assert.equal(r.series.franchise, undefined);
+    assert.equal(r.series.season, 1);
   });
   test('a link with no release and no episode is nothing to it', async () => {
     assert.equal(await aniliberty.look(`${SITE}/anime/catalog`, session), null);
@@ -167,6 +180,13 @@ describe('the yummyani adapter', () => {
     assert.match(anilibria.sources.find(s => s.player === 'kodik').embedUrl, /^https:\/\/kodikplayer\.com\/season\//);
     assert.deepEqual(ep1.marks, { opening: { start: 107, stop: 196 }, ending: { start: 1405, stop: 1504 } });
     assert.equal(ep1.duration, 1513);
+    /* the viewing order: this season first, then OVAs, the sequel, a film, a spin-off */
+    assert.equal(c.series.season, 1);
+    assert.equal(c.series.kind, 'tv');
+    assert.equal(c.series.franchise.length, 9);
+    assert.deepEqual(c.series.franchise.slice(0, 5).map(f => [f.order, f.kind, f.self]), [[1, 'tv', true], [2, 'ova', false], [3, 'tv', false], [4, 'ova', false], [5, 'movie', false]]);
+    assert.match(c.series.franchise[2].url, /\/catalog\/item\/boginya-blagoslovlyaet-etot-prekrasnyj-mir-2$/);
+    assert.equal(c.series.franchise[5].relation, 'spinoff (ответвление сюжета)');
     /* a source has no stream yet: the extractors bring those */
     assert.ok(anilibria.sources.every(s => !s.streams));
   });

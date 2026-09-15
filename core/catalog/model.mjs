@@ -50,7 +50,7 @@ export const UNNAMED_DUB = 'Основной';
 
 const now = () => Date.now();
 
-export function createSeries({ sourceUrl, title = '', altTitles = [], cover = null, year = null } = {}) {
+export function createSeries({ sourceUrl, title = '', altTitles = [], cover = null, year = null, season = null, kind = null } = {}) {
   if (!sourceUrl) throw new Error('a series needs a sourceUrl');
   /* the id is the canonical address; the address kept is the one that
      actually answered, because a site may want its trailing slash */
@@ -58,6 +58,11 @@ export function createSeries({ sourceUrl, title = '', altTitles = [], cover = nu
     id: seriesId(sourceUrl),
     sourceUrl: String(sourceUrl).replace(/#.*$/, ''),
     title, altTitles: [...altTitles], cover, year,
+    season,            // which season this series is, when it is one of several
+    kind,              // tv | movie | ova | special | spinoff, when known
+    /* the whole franchise in viewing order, this series included:
+       [{ order, title, url, kind, year, relation, self }] */
+    franchise: [],
     episodes: [],
     provenance: [],
     updatedAt: now(),

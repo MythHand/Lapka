@@ -21,6 +21,8 @@ const ATTR_URI = /URI="([^"]+)"/g;
 
 export function createDelivery({ session, cache }) {
   const streams = new Map();          // id → { id, stream, allowed:Set, meta }
+  /* the cache is asked for each time: the Lapka folder can change while running */
+  const cacheOf = () => (typeof cache === 'function' ? cache() : cache);
 
   function register(stream, meta = {}) {
     const id = hash(`${meta.sourceId || ''}|${stream.url}`);
@@ -70,7 +72,7 @@ export function createDelivery({ session, cache }) {
     if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });
     const text = await res.text();
     const body = rewrite(entry, text, res.url || url);
-    cache.write(entry.id, nameFor(url), text).catch(() => {});
+    cacheOf().write(entry.id, nameFor(url), text).catch(() => {});
     return body;
   }
 
@@ -79,6 +81,7 @@ export function createDelivery({ session, cache }) {
   async function piece(entry, url) {
     if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403 });
     const name = nameFor(url);
+    const cache = cacheOf();
     if (await cache.has(entry.id, name)) { cache.touch(entry.id); return { bytes: await cache.read(entry.id, name), hit: true }; }
     const res = await fetchOrigin(entry, url);
     if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });

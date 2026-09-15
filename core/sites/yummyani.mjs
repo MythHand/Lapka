@@ -31,6 +31,16 @@ export function dubOf(label) {
   return { name: kind === 'sub' && !/субтитры|sub/i.test(m[2]) ? `${m[2]} (субтитры)` : m[2], kind };
 }
 
+/* ТВ, OVA, п/ф (a film), spin-off: what the site calls a kind */
+export function kindOf(type) {
+  const a = String(type?.alias || type?.shortname || type?.name || '').toLowerCase();
+  if (/ova|ona/.test(a)) return 'ova';
+  if (/movie|фильм|п\/ф/.test(a)) return 'movie';
+  if (/special|спешл/.test(a)) return 'special';
+  if (/tv|тв|сериал/.test(a)) return 'tv';
+  return a || null;
+}
+
 /* the player behind an embed, by its host */
 export function playerOf(iframeUrl) {
   const u = abs(iframeUrl, 'https://old.yummyani.me/');
@@ -73,11 +83,21 @@ export default {
     }
 
     const seriesUrl = `${site}/catalog/item/${anime.anime_url || slug}`;
+    /* the viewing order: seasons, films, OVAs and spin-offs, this one among them */
+    const franchise = (anime.viewing_order || []).map((v, i) => ({
+      order: (v.data?.index ?? i) + 1,
+      title: v.title || '', url: `${site}/catalog/item/${v.anime_url}`,
+      kind: kindOf(v.type), year: v.year || null, relation: v.data?.text || null,
+      self: v.anime_id === anime.anime_id,
+    }));
     return {
       origin: 'site:yummyani',
       seriesUrl, start: null,
       series: {
         title: anime.title || undefined,
+        season: anime.season || undefined,
+        kind: kindOf(anime.type),
+        franchise: franchise.length > 1 ? franchise : undefined,
         altTitles: (anime.other_titles || []).map(t => (typeof t === 'string' ? t : t?.title)).filter(Boolean),
         cover: abs(anime.poster?.fullsize || anime.poster?.big, site) || undefined,
         year: anime.year || undefined,

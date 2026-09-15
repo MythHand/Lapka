@@ -10,7 +10,7 @@
    right.
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
-import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText } from './series.mjs';
+import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, findFranchise } from './series.mjs';
 import { numberFromText } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
@@ -29,6 +29,8 @@ export function discover({ html, url, profile = null }) {
   const { players, switches } = findPlayers(doc, url, { profile });
   const seriesUrl = findSeriesUrl(doc, url);
   const current = findCurrentEpisode(doc, url);
+  const ownSeason = seasonFromText(title[0]?.value || '');
+  const franchise = findFranchise(doc, url, ownSeason);
 
   /* A player element on the page makes it an episode page. Streams
      found only in scripts do not: a series page may carry the
@@ -70,6 +72,8 @@ export function discover({ html, url, profile = null }) {
     cover: { value: cover[0]?.value || null, candidates: cover },
     seriesUrl: { value: kind === 'episode' ? seriesUrl[0]?.value || null : null, candidates: seriesUrl },
     episode: { value: kind === 'episode' ? current[0]?.value ?? null : null, candidates: current },
+    season: ownSeason ?? (franchise.find(f => f.self)?.order ?? null),
+    franchise,
     episodes,
     players, switches,
     steps,
@@ -91,6 +95,8 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
   const c = { origin, series: {}, episodes: [] };
   if (report.title.value) c.series.title = report.title.value;
   if (report.cover.value) c.series.cover = report.cover.value;
+  if (report.season !== null && report.season !== undefined) c.series.season = report.season;
+  if (report.franchise && report.franchise.length) c.series.franchise = report.franchise;
 
   for (const e of report.episodes.items) c.episodes.push({ number: e.number, title: e.title || undefined, sourceUrl: e.url });
 

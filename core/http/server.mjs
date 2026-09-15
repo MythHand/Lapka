@@ -45,7 +45,7 @@ function serveRange(req, res, file, size, type) {
   return fs.createReadStream(file).pipe(res);
 }
 
-export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery = null, store = null, state = null, library = null, saver = null }) {
+export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
   const hosts = new Set();
   const fromLoopback = (req, { navigation = false } = {}) => {
     if (!hosts.has(String(req.headers.host || '').toLowerCase())) return false;
@@ -69,6 +69,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
   };
 
   const server = http.createServer(async (req, res) => {
+    /* taken per request: the folder, and everything in it, can be switched while running */
+    const { lapka, delivery = null, store = null, state = null, library = null, saver = null } = ctx;
     const url = new URL(req.url, `http://${host}`);
     const p = url.pathname;
     let m;
@@ -77,6 +79,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
       if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', home: store?.home || null });
+      if (req.method === 'GET' && p === '/api/home' && library) return json(res, 200, { home: store.home, series: (await library.list()).length, cache: await store.cache.stat() });
       if (req.method === 'GET' && VENDOR[p.slice('/vendor/'.length)] && p.startsWith('/vendor/')) {
         const file = VENDOR[p.slice('/vendor/'.length)];
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'max-age=86400' });
@@ -98,6 +101,10 @@ export function startServer({ port, host = '127.0.0.1', webDir, lapka, delivery 
       const mutating = req.method === 'POST';
       if (mutating && req.headers['x-lapka'] !== '1') return json(res, 403, { error: 'x-lapka header required' });
 
+      if (ctx.switchHome && mutating && p === '/api/home') {
+        try { const r = await ctx.switchHome(url.searchParams.get('path') || ''); return json(res, 200, { ok: true, home: r.path, created: !r.existed }); }
+        catch (e) { return json(res, e.code || 500, { error: e.message }); }
+      }
       if (store && mutating && p === '/api/cache/limit') {
         await store.cache.setLimit(Number(url.searchParams.get('gb')));
         return json(res, 200, await store.cache.stat());

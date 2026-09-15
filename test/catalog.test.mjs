@@ -113,6 +113,25 @@ describe('merging layers', () => {
     assert.equal(s.episodes[0].sourceUrl, 'https://example.test/1');
   });
 
+  test('season, kind and the franchise fill in once and travel through a snapshot', () => {
+    const s = createSeries({ sourceUrl: URL_A });
+    merge(s, { origin: 'page', series: { season: 2 } });
+    merge(s, { origin: 'site', series: { season: 3, kind: 'tv', franchise: [
+      { order: 1, title: 'One', url: 'https://example.test/one', kind: 'tv', year: 2016 },
+      { order: 2, title: 'Two', url: URL_A, kind: 'tv', year: 2017, self: true },
+      { order: 3, title: 'Film', url: 'https://example.test/film', kind: 'movie' },
+    ] } });
+    merge(s, { origin: 'late', series: { franchise: [{ order: 1, title: 'Other', url: 'https://example.test/x' }, { order: 2, title: 'Y', url: 'https://example.test/y' }] } });
+    assert.equal(s.season, 2, 'the first to say wins');
+    assert.equal(s.kind, 'tv');
+    assert.deepEqual(s.franchise.map(f => [f.order, f.title, f.self]), [[1, 'One', false], [2, 'Two', true], [3, 'Film', false]]);
+    const back = fromSnapshot(JSON.parse(JSON.stringify(toSnapshot(s))));
+    assert.equal(back.season, 2);
+    assert.equal(back.kind, 'tv');
+    assert.equal(back.franchise.length, 3);
+    assert.equal(back.franchise[2].kind, 'movie');
+  });
+
   test('length and marks fill in and travel through a snapshot', () => {
     const s = createSeries({ sourceUrl: URL_A });
     merge(s, { origin: 'x', episodes: [{ number: 1, duration: 1422, marks: { opening: { start: 60, stop: 150 }, ending: null } }] });

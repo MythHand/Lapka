@@ -39,6 +39,15 @@ export const CASES = [
     layout: { episodes: 'select', dubs: 'per-player', player: 'iframe-switch' },
   },
   {
+    id: 'seasons',
+    title: 'Сериал Сезоны',
+    device: 'a series in two seasons: the page of each season links to the other by name ("1 сезон", "2 сезон"); episodes as links; one player with dub tabs',
+    episodes: 2,
+    players: ['alpha'],
+    dubs: { alpha: ['AniLibria'] },
+    layout: { episodes: 'links', dubs: 'page-tabs', player: 'iframe', seasons: 2 },
+  },
+  {
     id: 'video',
     title: 'Сериал Видео',
     device: 'episodes as links; no dubs; a <video> tag with an HLS source on the episode page',

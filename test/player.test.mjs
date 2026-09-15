@@ -129,7 +129,61 @@ describe('a link to an episode', { skip }, () => {
   test('the series is written down for next time', () => {
     const ses = JSON.parse(r.session);
     assert.equal(ses.url, site.base + '/s/select/');
-    assert.equal(ses.current, 2);
+    assert.equal(ses.current.number, 2);
+  });
+});
+
+describe('a series in seasons', { skip }, () => {
+  let r;
+  before(async () => {
+    r = await openLapka('seasons', WAIT + `
+      await until('boot', () => !$('#empty').classList.contains('hide'));
+      $('#linkInput').value = site + '/s/seasons/season-2/ep-2';
+      $('#linkForm').requestSubmit();
+      await until('queue', () => $$('#queueList .item').length === 4);
+      await until('source', () => $('#video').getAttribute('src'));
+      const rows = $$('#queueList > li').map(li => li.classList.contains('queue__group')
+        ? 'group: ' + li.querySelector('.queue__group-label').textContent
+        : li.querySelector('.item__num').textContent + ' · ' + li.querySelector('.item__name').textContent + (li.classList.contains('active') ? ' *' : ''));
+      __report({ errors: window.__errors, rows, titlePath: $('#titlePath').textContent, grouped: $('#queue').classList.contains('queue--grouped'), sortHidden: getComputedStyle($('#btnSort')).display === 'none' });
+    `, { site: site.base, budget: 20000 });
+  });
+  test('both seasons are in the queue, each under its own line, the linked one current', () => {
+    ok(r, 'seasons'); assert.deepEqual(r.errors, []);
+    assert.deepEqual(r.rows, ['group: Season 1', '1 · Episode 1', '2 · Episode 2', 'group: Season 2', '1 · Episode 1', '2 · Episode 2 *']);
+    assert.equal(r.grouped, true);
+    assert.equal(r.sortHidden, true);
+    assert.match(r.titlePath, /Season 2$/);
+  });
+});
+
+describe('the Lapka folder', { skip }, () => {
+  let r, home, other;
+  before(async () => {
+    home = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-home-'));
+    other = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-other-')), 'Lapka');
+    r = await openLapka('home', WAIT + `
+      await until('boot', () => !$('#empty').classList.contains('hide'));
+      $('#btnGear').click(); await __settled();
+      await until('home', () => $('.home__path') && $('.home__path').textContent.length > 1);
+      const before = $('.home__path').textContent;
+      $('.home__in').value = ${JSON.stringify(other)};
+      $('.home__form').requestSubmit();
+      await until('switched', () => $('.home__path') && $('.home__path').textContent === ${JSON.stringify(other)});
+      const ping = await (await fetch('/api/ping')).json();
+      __report({ errors: window.__errors, before, after: $('.home__path').textContent, ping: ping.home });
+    `, { budget: 10000, home });
+  });
+  after(async () => {
+    if (home) await fsp.rm(home, { recursive: true, force: true });
+    if (other) await fsp.rm(path.dirname(other), { recursive: true, force: true });
+  });
+  test('is shown, and a new path is created and taken into use', async () => {
+    ok(r, 'home'); assert.deepEqual(r.errors, []);
+    assert.equal(r.before, home);
+    assert.equal(r.after, other);
+    assert.equal(r.ping, other);
+    await fsp.access(path.join(other, '.lapka', 'cache'));
   });
 });
 

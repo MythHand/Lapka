@@ -96,6 +96,29 @@ describe('the synthetic site', () => {
   });
 });
 
+describe('seasons', () => {
+  test('the season in a title', async () => {
+    const { seasonFromText } = await import('../core/discover/series.mjs');
+    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2]])
+      assert.equal(seasonFromText(t), n, t);
+  });
+  test('a series in two seasons: each page names the other, and knows which one it is', () => {
+    const c = caseById('seasons');
+    const one = discover({ html: renderSeries(c, 1), url: `${BASE}/s/seasons/` });
+    const two = discover({ html: renderSeries(c, 2), url: `${BASE}/s/seasons/season-2/` });
+    assert.equal(one.kind, 'series');
+    assert.deepEqual(one.franchise.map(f => [f.order, f.url, f.self]), [[1, `${BASE}/s/seasons/`, true], [2, `${BASE}/s/seasons/season-2/`, false]]);
+    assert.equal(one.season, 1);
+    assert.equal(two.season, 2);
+    assert.equal(two.title.value, 'Сериал Сезоны 2 сезон');
+    const c2 = toContribution(two);
+    assert.equal(c2.series.season, 2);
+    assert.equal(c2.series.franchise.length, 2);
+    /* a page with a single season link is not a franchise */
+    assert.deepEqual(seriesPage('links').franchise, []);
+  });
+});
+
 describe('into the catalog', () => {
   test('series page then episode page: episodes with dubs and sources', () => {
     const s = createSeries({ sourceUrl: `${BASE}/s/links/` });

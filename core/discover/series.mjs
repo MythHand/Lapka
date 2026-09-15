@@ -90,4 +90,43 @@ export function findCurrentEpisode(doc, url) {
   })).sort((a, b) => b.confidence - a.confidence);
 }
 
+/* "2 сезон", "Season 2", "2nd season", "S2" in a title */
+const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/];
+export function seasonFromText(text) {
+  for (const re of SEASON) { const m = re.exec(String(text || '')); if (m) return Number(m[1]); }
+  return null;
+}
+
+/* Links to the other seasons: anchors whose text names a season, or
+   options of a select of seasons. The current season is the one whose
+   address is this page's, or, as pages usually do not link to
+   themselves, the one number missing from the run of links. */
+export function findFranchise(doc, url, ownSeason = null) {
+  const out = new Map();
+  const page = (() => { try { return new URL(url).toString().replace(/\/+$/, ''); } catch { return url; } })();
+  for (const el of doc.querySelectorAll('a[href], option[value]')) {
+    const text = textOf(el);
+    const n = seasonFromText(text);
+    if (n === null) continue;
+    const raw = el.getAttribute('href') ?? el.getAttribute('value');
+    let abs; try { abs = new URL(raw, url).toString(); } catch { continue; }
+    if (/^(javascript|mailto):/i.test(abs) || abs.includes('#')) continue;
+    const key = abs.replace(/\/+$/, '');
+    if (!out.has(key)) out.set(key, { order: n, title: text, url: abs, kind: 'tv', self: key === page });
+  }
+  const list = [...out.values()].sort((a, b) => a.order - b.order);
+  if (!list.length) return [];
+  if (!list.some(f => f.self)) {
+    const have = new Set(list.map(f => f.order));
+    const top = Math.max(...have, ownSeason || 0);
+    const missing = [];
+    for (let n = 1; n <= top; n++) if (!have.has(n)) missing.push(n);
+    const mine = ownSeason !== null && !have.has(ownSeason) ? ownSeason : missing.length === 1 ? missing[0] : null;
+    if (mine !== null) list.push({ order: mine, title: '', url: String(url).replace(/#.*$/, ''), kind: 'tv', self: true });
+    list.sort((a, b) => a.order - b.order);
+  }
+  /* a lone season link is a menu item, not a franchise */
+  return list.length >= 2 ? list : [];
+}
+
 export { titleFromText };

@@ -41,7 +41,10 @@ export function merge(series, contribution) {
   const c = contribution || {};
 
   if (c.series) {
-    fill(series, c.series, ['title', 'cover', 'year']);
+    fill(series, c.series, ['title', 'cover', 'year', 'season', 'kind']);
+    /* the first stage to know the franchise names it; a later one cannot reorder it */
+    if (!series.franchise.length && Array.isArray(c.series.franchise) && c.series.franchise.length)
+      series.franchise = c.series.franchise.map((f, i) => ({ order: f.order ?? i + 1, title: f.title || '', url: f.url || null, kind: f.kind || null, year: f.year || null, relation: f.relation || null, self: !!f.self }));
     union(series.altTitles, c.series.altTitles);
     /* A title that is not the one we already have is still a title. */
     if (has(c.series.title) && c.series.title !== series.title) union(series.altTitles, [c.series.title]);

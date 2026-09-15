@@ -39,13 +39,13 @@ export function startSite({ port = 0, media } = {}) {
 
     if (p === '/') return html(res, renderHome());
 
-    if ((m = /^\/s\/([a-z]+)\/?$/.exec(p))) {
-      const c = caseById(m[1]);
-      return c ? html(res, renderSeries(c)) : notFound(res);
+    if ((m = /^\/s\/([a-z]+)(?:\/season-(\d+))?\/?$/.exec(p))) {
+      const c = caseById(m[1]), season = m[2] ? Number(m[2]) : 1;
+      return c && season <= (c.layout.seasons || 1) ? html(res, renderSeries(c, season)) : notFound(res);
     }
-    if ((m = /^\/s\/([a-z]+)\/ep-(\d+)$/.exec(p))) {
-      const c = caseById(m[1]), ep = Number(m[2]);
-      return c && ep >= 1 && ep <= c.episodes ? html(res, renderEpisode(c, ep)) : notFound(res);
+    if ((m = /^\/s\/([a-z]+)(?:\/season-(\d+))?\/ep-(\d+)$/.exec(p))) {
+      const c = caseById(m[1]), season = m[2] ? Number(m[2]) : 1, ep = Number(m[3]);
+      return c && season <= (c.layout.seasons || 1) && ep >= 1 && ep <= c.episodes ? html(res, renderEpisode(c, ep, season)) : notFound(res);
     }
     if ((m = /^\/embed\/alpha\/([a-z]+)-(\d+)-([a-z0-9]+)$/.exec(p))) {
       const c = caseById(m[1]), ep = Number(m[2]);
