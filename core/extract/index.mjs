@@ -8,6 +8,7 @@
      extract(embedUrl, context, session) → {
        streams: [{ kind, url, quality?, headers? }],   what the embed plays as it is
        dubs:    [{ name, streams: [...] }],             if the embed carries a dub switch of its own
+       subs:    [{ url, lang?, label?, format?, default? }],   subtitle tracks the embed offers
      }
 
    The registry loads the folder at start and asks the extractors in
