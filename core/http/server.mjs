@@ -95,6 +95,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const q = url.searchParams;
         try {
           const ep = q.get('open') === '1' ? await lapka.openAllSources(q.get('series'), Number(q.get('episode'))) : await lapka.openEpisode(q.get('series'), Number(q.get('episode')));
+          await lapka.levelsOf(ep);   // the variants inside adaptive streams, for the qualities shown
           return json(res, 200, { episode: ep.number, dubs: lapka.dubsOf(ep) });
         } catch (e) { return json(res, e.code || 500, { error: e.message }); }
       }

@@ -1007,6 +1007,20 @@ function loadSource(it, src, token, onMeta, play) {
   if (play) video.play().catch(() => {});
 }
 
+/* The quality the user wants, applied inside an adaptive stream: the
+   level of that height, else the tallest below it; "auto" gives the
+   choice back to hls.js. A stream of one quality is left alone. */
+function applyLevelPref() {
+  const it = cur();
+  if (!hls || !hls.levels || hls.levels.length < 2 || (it && it.stream && it.stream.quality)) return;
+  if (state.quality === 'auto') { if (!hls.autoLevelEnabled) hls.currentLevel = -1; return; }
+  const want = qualityNum(state.quality);
+  let best = -1, bestH = 0;
+  hls.levels.forEach((l, i) => { const h = l.height || 0; if (h <= want && h > bestH) { bestH = h; best = i; } });
+  if (best < 0) hls.levels.forEach((l, i) => { const h = l.height || 0; if (!bestH || h < bestH) { bestH = h; best = i; } });
+  if (best >= 0 && hls.currentLevel !== best) hls.currentLevel = best;
+}
+
 /* The stream carries several audio renditions, one per dub: the one
    this dub is, by its index among the renditions of the group in
    play, is switched to inside hls.js; no other stream is loaded. */
@@ -1035,8 +1049,8 @@ function attachSource(stream) {
       const it = cur();
       if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true });
     });
-    hls.on(Hls.Events.MANIFEST_PARSED, () => { syncQualityButton(); pickAudioTrack(stream); });
-    hls.on(Hls.Events.LEVEL_SWITCHED, syncQualityButton);
+    hls.on(Hls.Events.MANIFEST_PARSED, () => { applyLevelPref(); syncQualityButton(); pickAudioTrack(stream); });
+    hls.on(Hls.Events.LEVEL_SWITCHED, () => { syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu(); });
     hls.loadSource(stream.play);
     hls.attachMedia(video);
     return;
@@ -1317,7 +1331,9 @@ function buildAudioMenu() {
     if (info && info.qualities.length) {
       for (const q of info.qualities) {
         const tg = document.createElement('span');
-        tg.className = 'qtag' + (o.sel && it.stream && it.stream.id === q.id ? ' sel' : '');
+        const nowQ = it.stream && (it.stream.quality || (hls && hls.levels && hls.currentLevel >= 0 && !hls.autoLevelEnabled && hls.levels[hls.currentLevel] ? hls.levels[hls.currentLevel].height + 'p' : null));
+        const on = o.sel && it.stream && it.stream.id === q.id && (q.quality ? q.quality === nowQ : !nowQ);
+        tg.className = 'qtag' + (on ? ' sel' : '');
         tg.textContent = q.quality || (q.kind === 'hls' ? t('quality.auto') : q.kind.toUpperCase());   // a file of unknown size is named by what it is, not called adaptive
         tg.title = q.player + ' · ' + q.kind.toUpperCase();
         tg.onclick = ev => {
@@ -1344,7 +1360,13 @@ function pickAudio(opt, quality = null) {
   const it = cur();
   if (!it) return;
   if (quality) { state.quality = quality; saveStr('lapka.quality', quality); }
-  if (it.dub && it.dub.key === opt.id) { if (quality) switchTrack(it); return; }
+  if (it.dub && it.dub.key === opt.id) {
+    if (!quality) return;
+    /* the same dub: a quality inside the stream playing is a level of it; another stream is a switch */
+    if (it.stream && !it.stream.quality && hls) { applyLevelPref(); setTimeout(syncQualityButton, 300); if (audioMenu.classList.contains('open')) buildAudioMenu(); return; }
+    switchTrack(it);
+    return;
+  }
   state.dubKey = opt.id;
   post(`/api/state/dub?series=${it.seriesId}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
   hideNotice();

@@ -267,15 +267,48 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   }
 
   /* what each dub of an episode offers: its live sources and their qualities */
+  /* An adaptive HLS names its qualities inside its master playlist
+     (RESOLUTION on every variant). Read once per stream, through the
+     delivery, so the audio menu can offer them the way it offers a
+     player's separate qualities. */
+  async function readLevels(st) {
+    if (st.kind !== 'hls' || st.quality || st.levels || !st.id || !delivery) return st.levels || null;
+    const entry = delivery.get(st.id);
+    if (!entry) return null;
+    try { st.levels = levelsOfMaster(await delivery.playlist(entry)); }
+    catch { st.levels = []; }
+    return st.levels;
+  }
+  async function levelsOf(ep, { limit = 4 } = {}) {
+    const todo = ep.dubs.flatMap(d => d.sources.filter(x => x.health.ok !== false)).flatMap(x => x.streams).filter(st => st.kind === 'hls' && !st.quality && !st.levels && st.id);
+    let i = 0;
+    const worker = async () => { while (i < todo.length) await readLevels(todo[i++]); };
+    await Promise.all(Array.from({ length: Math.min(limit, todo.length) }, worker));
+    return ep;
+  }
+
   function dubsOf(ep) {
+    /* a stream of one quality is that quality; an adaptive one is every variant its master names, else "auto" */
+    const entries = (x, st) => {
+      const one = q => [q || 'auto', { quality: q, kind: st.kind, player: x.player, id: st.id, play: st.play, level: !!(q && !st.quality) }];
+      if (st.quality) return [one(st.quality)];
+      if (st.levels && st.levels.length > 1) return st.levels.map(one);
+      return [one(null)];
+    };
     return ep.dubs.map(d => ({
       key: d.key, name: d.name, kind: d.kind,
       alive: d.sources.filter(x => x.health.ok !== false).length, sources: d.sources.length,
       unopened: d.sources.filter(x => !x.streams.length && x.health.ok !== false).length,
-      qualities: [...new Map(d.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => [st.quality || (st.kind === 'hls' ? 'auto' : '?'), { quality: st.quality || null, kind: st.kind, player: x.player, id: st.id, play: st.play }])).sort((a, b) => rankQ(b[1]) - rankQ(a[1]))).values()],
+      qualities: [...new Map(d.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).flatMap(st => entries(x, st))).sort((a, b) => rankQ(b[1]) - rankQ(a[1]))).values()],
     }));
   }
   const rankQ = st => { const m = /(\d{3,4})/.exec(String(st.quality || '')); return m ? Number(m[1]) : st.kind === 'hls' ? 9999 : 0; };
+  /* "1280x720" on a variant line is 720p; the list, tallest first, one of each */
+  function levelsOfMaster(text) {
+    const heights = new Set();
+    for (const m of String(text || '').matchAll(/^#EXT-X-STREAM-INF:[^\n]*RESOLUTION=(\d+)x(\d+)/gm)) heights.add(Number(m[2]));
+    return [...heights].sort((a, b) => b - a).map(h => `${h}p`);
+  }
 
   /* One address in, a catalog and the reports behind it out. */
   async function look(url) {
@@ -331,7 +364,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       start: startAt !== null ? { episode: startAt } : null };
   }
 
-  return { look, readPage, context, series, adopt, openEpisode, openAllSources, dubsOf, resolve, session, extractors, sites, profiles };
+  return { look, readPage, context, series, adopt, openEpisode, openAllSources, levelsOf, dubsOf, levelsOfMaster, resolve, session, extractors, sites, profiles };
 }
 
 function plural(n, one, few, many) {

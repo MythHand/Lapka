@@ -112,6 +112,23 @@ describe('the site around it', () => {
   });
 });
 
+describe('the qualities inside one HLS', () => {
+  test('the master names the variants; the menu offers them as qualities of the dub, one level each', async () => {
+    const master = snap('venom', 'master.m3u8');
+    const ids = new Map();
+    const delivery = { register: st => { if (!ids.has(st.url)) ids.set(st.url, 'id' + (ids.size + 1)); return ids.get(st.url); }, get: id => ({ id, stream: {} }), playlist: async () => master };
+    const lapka = createLapka({ session: fakeSession(), extractors: await loadExtractors(), delivery });
+    assert.deepEqual(lapka.levelsOfMaster(master), ['720p', '360p']);
+    const r = await lapka.look(PAGE);
+    const ep = await lapka.openEpisode(r.series.id, 2);
+    await lapka.levelsOf(ep);
+    const dubs = lapka.dubsOf(ep);
+    const lf = dubs.find(d => d.key === 'lostfilm');
+    assert.deepEqual(lf.qualities.map(q => [q.quality, q.level]), [['720p', true], ['360p', true]]);
+    assert.equal(new Set(lf.qualities.map(q => q.id)).size, 1, 'both are the one stream');
+  });
+});
+
 describe('saving with the sound of its own', { skip: !(await haveFfmpeg()) && 'ffmpeg not installed' }, () => {
   let site, lapka, home;
   const get = p => fetch(lapka.base + p);
