@@ -17,7 +17,13 @@ import { studioFor } from '../catalog/studios.mjs';
 import { textOf } from './text.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
-const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-player-url', 'data-link', 'data-file', 'data-video'];
+const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-player', 'data-player-url', 'data-link', 'data-file', 'data-video'];
+/* data-src is how images load lazily too: on anything but a frame or a video it is a picture */
+const LAZY_MEDIA = /^(iframe|video|audio|source|embed|object)$/i;
+/* a switch item may name its dub and its player in attributes rather than in its text */
+const DUB_ATTRS = ['data-translation-title', 'data-dubbing-title', 'data-dubbing', 'data-voice', 'data-studio', 'data-dub'];
+const PLAYER_ATTRS = ['data-provider-title', 'data-player-title', 'data-player-name'];
+const firstAttr = (el, names) => { for (const n of names) { const v = clean(el.getAttribute(n)); if (v) return v; } return null; };
 const STREAM_RE = /https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?|(?<![\w/])\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?/g;
 const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server)\b/i;
 
@@ -62,6 +68,7 @@ export function playerId(embedUrl, pageUrl) {
 
 function embedOf(el, url) {
   for (const a of EMBED_ATTRS) {
+    if (a === 'data-src' && !LAZY_MEDIA.test(el.tagName)) continue;
     const v = el.getAttribute(a);
     if (v && /[/.]/.test(v) && !/^#/.test(v)) { try { return new URL(v, url).toString(); } catch { /* not an address */ } }
   }
@@ -113,21 +120,23 @@ export function findPlayers(doc, url, { profile } = {}) {
     if (!embed) continue;
     const parent = el.parentNode;
     if (!groups.has(parent)) groups.set(parent, []);
-    groups.get(parent).push({ el, embed, label: textOf(el) || clean(el.getAttribute('title')) });
+    const dub = firstAttr(el, DUB_ATTRS), plr = firstAttr(el, PLAYER_ATTRS);
+    groups.get(parent).push({ el, embed, label: dub || textOf(el) || clean(el.getAttribute('title')), dub, plr });
   }
 
   for (const [parent, items] of groups) {
     const labels = items.map(i => i.label);
-    const saysPlayer = items.some(i => i.el.hasAttribute('data-player')) || labels.some(l => PLAYER_WORDS.test(l));
+    const saysPlayer = items.some(i => i.el.hasAttribute('data-player') && !i.dub) || labels.some(l => PLAYER_WORDS.test(l));
     const saysStudio = labels.some(l => studioFor(l));
-    let kind = saysStudio ? 'dubs' : saysPlayer ? 'players' : 'dubs';
+    /* an item that names its dub in an attribute is a dub, whatever its text says (its text may name the player) */
+    let kind = items.some(i => i.dub) ? 'dubs' : saysStudio ? 'dubs' : saysPlayer ? 'players' : 'dubs';
     if (profile?.players?.list && parent.querySelector(profile.players.list)) kind = 'players';
     if (profile?.dubs?.list && parent.querySelector(profile.dubs.list)) kind = 'dubs';
     const scope = parent.getAttribute('data-for') || parent.getAttribute('data-player') || null;
     const where = parent.tagName.toLowerCase() + (parent.id ? '#' + parent.id : parent.className ? '.' + String(parent.className).split(/\s+/)[0] : '');
     switches.push({ kind, scope, where, items: items.map(i => ({ label: i.label, url: i.embed })) });
     for (const i of items) {
-      const p = add(i.embed, 'switch', where, kind === 'dubs' ? { dubLabel: i.label } : { playerLabel: i.label });
+      const p = add(i.embed, 'switch', where, kind === 'dubs' ? { dubLabel: i.label, playerLabel: i.plr } : { playerLabel: i.label });
       if (p && kind === 'dubs' && scope) p.scope = scope;
     }
   }

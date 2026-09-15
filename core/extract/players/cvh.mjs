@@ -33,6 +33,22 @@ export function readEmbed(url) {
   };
 }
 
+/* A wrapper page of a site's own that drops the <video-player> in
+   with everything as attributes: the title, the publisher, the
+   aggregator, the episode and the wanted voice. animego's
+   /cdn-iframe/… is one. */
+export function readWrapper(page) {
+  const tag = /<video-player\b([^>]*)>/i.exec(String(page || ''));
+  if (!tag) return null;
+  const a = Object.fromEntries([...tag[1].matchAll(/([\w-]+)\s*=\s*"([^"]*)"/g)].map(m => [m[1], m[2]]));
+  if (!a['data-title-id']) return null;
+  return {
+    titleId: a['data-title-id'], episode: a.episode ? Number(a.episode) : null, season: a.season ? Number(a.season) : null,
+    voice: a['priority-voice'] || a.voice || null,
+    publisher: a['data-publisher-id'] ? Number(a['data-publisher-id']) : null, aggregator: a['data-aggregator'] || null,
+  };
+}
+
 /* the publisher and the aggregator, out of the embed's script */
 export function readModule(js) {
   const pub = /"data-publisher-id"\s*:\s*(\d+)/.exec(js);
@@ -49,24 +65,27 @@ async function json(session, url, referer) {
 
 export default {
   name: 'cvh',
-  match: url => { try { const u = new URL(url); return /cdnvideohub\.com$/i.test(u.hostname) || /iframeCVH\.html/i.test(u.pathname); } catch { return false; } },
+  match: url => { try { const u = new URL(url); return /cdnvideohub\.com$/i.test(u.hostname) || /iframeCVH\.html/i.test(u.pathname) || /\/cdn-iframe\//i.test(u.pathname); } catch { return false; } },
 
   async extract(embedUrl, { referer = null } = {}, session) {
-    const want = readEmbed(embedUrl);
-    if (!want.titleId) throw new Error('no title on the embed');
+    let want = readEmbed(embedUrl);
     const base = new URL(embedUrl);
 
-    /* the publisher and the aggregator from the embed's own script, once per site */
+    /* the publisher and the aggregator from the embed's own script, once
+       per site; a wrapper page names them, and the title, in attributes */
     let ids = FALLBACK;
     try {
       const page = await session.fetch(embedUrl, { referer });
+      const wrapped = !want.titleId ? readWrapper(page.body) : null;
+      if (wrapped) { want = wrapped; ids = { publisher: wrapped.publisher || FALLBACK.publisher, aggregator: wrapped.aggregator || FALLBACK.aggregator }; }
       const src = /<script[^>]+src="([^"]*players-cvh[^"]*\.js)"/i.exec(page.body)?.[1];
-      if (src) {
+      if (src && !wrapped) {
         const key = new URL(src, base).toString();
         if (!scripts.has(key)) { const js = await session.fetch(key, { referer: embedUrl }); if (js.status < 400) scripts.set(key, readModule(js.body)); }
         ids = scripts.get(key) || FALLBACK;
       }
     } catch { /* the fallback stands in */ }
+    if (!want.titleId) throw new Error('no title on the embed');
 
     const q = new URLSearchParams({ pub: String(ids.publisher), id: String(want.titleId), aggr: ids.aggregator });
     const list = await json(session, `${API}/player/sv/playlist?${q}`, base.origin + '/');

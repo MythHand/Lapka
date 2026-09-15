@@ -38,8 +38,13 @@ export function createLapka({ session = createSession(), profiles = [], extracto
 
   const profileFor = url => profileOf(profiles, url);
 
+  /* A site the adapter knows may fetch its pages its own way: an
+     episode that lives in a fragment answered only to a script's
+     request, wrapped in JSON. The reading of what comes back stays
+     general. */
   async function readPage(url, referer = null) {
-    const res = await session.fetch(url, { referer });
+    const site = siteFor(sites, url);
+    const res = site && site.fetch ? await site.fetch(url, { referer }, session) : await session.fetch(url, { referer });
     if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
     return discover({ html: res.body, url: res.url || url, profile: profileFor(url) });
   }

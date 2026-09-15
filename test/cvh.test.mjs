@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import cvh, { readEmbed, readModule } from '../core/extract/players/cvh.mjs';
+import cvh, { readEmbed, readModule, readWrapper } from '../core/extract/players/cvh.mjs';
 import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
 
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'cvh');
@@ -39,6 +39,12 @@ function fakeSession() {
 describe('reading CVH', () => {
   test('the embed says the title, the episode and the voice', () => {
     assert.deepEqual(readEmbed(EMBED), { titleId: '30831', episode: 2, season: null, voice: 'AnilibriaTV' });
+  });
+  test('a wrapper page of a site\'s own names everything in attributes', () => {
+    const w = readWrapper(fs.readFileSync(path.join(SNAP, '..', 'animego', 'cdn-iframe.html'), 'utf8'));
+    assert.deepEqual(w, { titleId: '60636', episode: 1, season: null, voice: 'Jam Club', publisher: 747, aggregator: 'mali' });
+    assert.equal(readWrapper('<html></html>'), null);
+    assert.ok(cvh.match('https://animego.me/cdn-iframe/60636/Jam%20Club/4/1'));
   });
   test('the publisher and the aggregator come from the script', () => {
     assert.deepEqual(readModule(snap('module.js')), { publisher: 745, aggregator: 'mali' });
