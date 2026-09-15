@@ -132,17 +132,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 .app{ position:relative; z-index:1; height:100%; display:grid; grid-template-rows:1fr; }
 
 /* ───────────── buttons ───────────── */
-.btn{
-  padding:10px 20px; border-radius:999px;
-  background:var(--glass-soft); border:1px solid var(--line-2);
-  color:var(--tx-1); font-size:calc(13.5px + var(--fs));
-  transition:background .15s, border-color .15s, transform .1s;
-}
-.btn:hover{ background:var(--glass-hi); border-color:var(--line-3); }
-.btn:active{ transform:translateY(1px); }
-.btn--solid{ background:#fff; color:#0b0b0c; border-color:#fff; font-weight:520; }
-.btn--solid:hover{ background:#e6e6e8; border-color:#e6e6e8; }
-.btn--sm{ padding:7px 14px; font-size:calc(12.5px + var(--fs)); }
 .row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
 
 /* the round buttons of the deck */
@@ -174,15 +163,6 @@ svg.ph{ fill:currentColor; stroke:none; }
    element instead of one per class. */
 [hidden]{ display:none !important; }
 
-.tag{
-  padding:7px 14px; border-radius:999px;
-  background:var(--glass-soft); border:1px solid var(--line);
-  color:var(--tx-2); font-size:calc(12.5px + var(--fs));
-  transition:background .15s, color .15s, border-color .15s;
-}
-.tag:hover{ background:var(--glass-hi); color:var(--tx-1); border-color:var(--line-2); }
-.tag--quiet{ color:var(--tx-3); }
-.tag--quiet:hover{ color:var(--tx-1); }
 
 /* ───────────── workspace ───────────── */
 /* no overflow:hidden here, it would clip the menus that pop up above
@@ -601,12 +581,12 @@ svg.ph{ fill:currentColor; stroke:none; }
   background:radial-gradient(60% 50% at calc(50% + var(--shift) / 2) 42%, #17181b, #0b0b0c 78%);
 }
 .empty.hide{ display:none; }
-.empty__box{ text-align:center; max-width:520px; padding:0 24px; }
+.empty__box{ text-align:center; max-width:560px; padding:0 24px; }
 
 .empty h1{ font-size:calc(23px + var(--fs)); margin-bottom:12px; }
 .empty p{ font-size:calc(14px + var(--fs)); color:var(--tx-3); line-height:1.53; margin-bottom:28px; }
 /* the hint about the current mode, under the start screen buttons */
-.empty__hint{ margin-top:26px; font-size:calc(12.5px + var(--fs)); color:var(--tx-3); line-height:1.53; }
+.empty__hint{ margin:26px auto 0; max-width:440px; font-family:var(--mono); font-size:calc(12px + var(--fs)); color:var(--tx-3); line-height:1.6; }
 .empty__hint b{ color:var(--tx-2); font-weight:500; }
 .empty__hint code{
   font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:calc(12px + var(--fs));
@@ -1004,7 +984,6 @@ svg.ph{ fill:currentColor; stroke:none; }
    "Leeren" in German at 504px, and at 360px in every language. */
 .queue__add--grid{ display:grid; grid-template-columns:1fr 1fr; flex:1 1 100%; }
 .queue__add--grid .tag{ justify-content:center; }
-.queue__add .tag{ display:inline-flex; align-items:center; gap:7px; }
 .queue__add svg{ width:15px; height:15px; }
 
 /* ───────────── modals ───────────── */
@@ -1262,14 +1241,6 @@ video::cue{
   margin-top:-4px; min-height:1.4em;
 }
 .cache__bar.over + .cache__note{ color:var(--tx-1); }
-.cache__clear{
-  padding:8px 6px; border-radius:9px;
-  border:1px solid var(--line); background:transparent;
-  color:var(--tx-2); font-size:calc(12px + var(--fs)); line-height:1.35;
-  transition:background .14s, color .14s, border-color .14s;
-}
-.cache__clear:hover:not(:disabled){ background:var(--glass-hi); color:var(--tx-1); }
-.cache__clear:disabled{ opacity:.4; cursor:default; }
 
 /* ───────────── menus in two columns ─────────────
    The subtitle menu: tracks on the left, styling on the right, each
@@ -1440,16 +1411,6 @@ video::cue{
 
 /* ── the link ───────────────────────────────────────────────── */
 .linkform{ display:flex; gap:8px; width:100%; max-width:560px; margin:0 auto; }
-.linkform__in{
-  flex:1; min-width:0; height:40px; padding:0 14px;
-  font:inherit; font-size:calc(14px + var(--fs)); letter-spacing:var(--track);
-  color:var(--tx-1); background:var(--glass-soft); border:1px solid var(--line-2);
-  border-radius:var(--r-md); outline:none;
-}
-.linkform__in::placeholder{ color:var(--tx-3); }
-.linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
-.linkform--foot{ max-width:none; flex:1; }
-.linkform--foot .linkform__in{ height:32px; padding:0 10px; font-size:calc(13px + var(--fs)); }
 
 /* ── skipping the opening or the ending ─────────────────────── */
 .skip{
@@ -1517,7 +1478,6 @@ video::cue{
 /* ── the Lapka folder in the settings ───────────────────────── */
 .home__path{ font-size:calc(12px + var(--fs)); color:var(--tx-2); word-break:break-all; margin:4px 0 8px; }
 .home__form{ display:flex; gap:6px; }
-.home__form .home__in{ height:30px; font-size:calc(12px + var(--fs)); }
 
 /* ── the language as chips, each as wide as its name ────────── */
 .langs{ display:flex; flex-wrap:wrap; gap:6px; }
@@ -1611,7 +1571,7 @@ video::cue{
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
 /* the field keeps the width a bare input has, plus forty pixels; the footer's row is as it was */
 .linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
-.linkform__wrap .linkform__in{ width:calc(20ch + 62px); padding-right:34px; }
+.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 62px); }   /* the footer's field: a bare field's width and forty pixels */
 .linkform__enter{
   position:absolute; right:8px; top:50%; transform:translateY(-50%);
   font:inherit; font-size:calc(11px + var(--fs)); line-height:1; padding:3px 6px; border-radius:6px;
@@ -1635,7 +1595,7 @@ video::cue{
 /* ── the folder's buttons, each on a full line ── */
 .home__acts{ display:grid; grid-template-columns:1fr; gap:6px; }
 /* a button's text is never cut: the buttons stand one per line and take the height their words need */
-.home__acts .cache__clear{ white-space:normal; height:auto; min-height:32px; line-height:1.3; padding-top:6px; padding-bottom:6px; }
+.home__acts .cache__clear{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
 
 /* ── the busy line: in the middle of the picture, a spinner for an icon ── */
 .notice.notice--busy{ top:50%; transform:translateX(-50%) translateY(-50%); font-size:calc(14px + var(--fs)); padding:14px 16px 14px 18px; }
@@ -1678,29 +1638,6 @@ video::cue{
 /* nothing open: the panel is the about page, without a header and without a count */
 .queue--empty .queue__tools{ display:none; }
 .queue--empty .queue__sum{ display:none; }   /* only the count; the mini brand stays */
-/* the footer's field and its button: the prompt of the panel. Both in
-   the monospace, one height, one corner, one line around them; the
-   field opens with the same › the state line opens with, the Enter
-   sign at its end is set in the same face */
-.linkform--foot .linkform__in{
-  height:34px; border-radius:8px; padding:0 36px 0 28px;
-  font-family:var(--mono); font-size:calc(13px + var(--fs)); letter-spacing:0;
-  background:var(--glass-soft); border:1px solid var(--line-2); color:var(--tx-1);
-}
-.linkform--foot .linkform__in::placeholder{ color:var(--tx-3); }
-.linkform--foot .linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
-.linkform__wrap::before{
-  content:'›'; position:absolute; left:12px; top:50%; transform:translateY(-50%);
-  font-family:var(--mono); font-size:calc(13px + var(--fs)); color:var(--tx-3); pointer-events:none;
-}
-.linkform__wrap .linkform__in:focus ~ .linkform__enter{ color:var(--tx-2); }
-.linkform__enter{ font-family:var(--mono); border-radius:5px; }
-.queue__add .tag{
-  height:34px; padding:0 14px; display:inline-flex; align-items:center; border-radius:8px;
-  font-family:var(--mono); font-size:calc(13px + var(--fs)); letter-spacing:0;
-  background:var(--glass-soft); border:1px solid var(--line-2); color:var(--tx-2);
-}
-.queue__add .tag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
 .about__rule{ margin:1em 0; color:var(--line-3); overflow:hidden; white-space:nowrap; user-select:none; }
 /* the description: the text face, set as text is set — a lead, headings,
    numbered steps, rows of a bold label and a line */
@@ -1719,3 +1656,54 @@ video::cue{
 .about__unit{ white-space:nowrap; }
 .about__sep{ color:var(--tx-3); }
 .about__note{ color:var(--tx-3); }
+
+/* ── controls: fields and buttons, one system ───────────────────
+   Every field a link or a path is typed into and every text button
+   share one height, one corner, one line and one face: the
+   monospace, the voice the system speaks in. A field opens with the
+   same › the state line opens with and shows Enter once something is
+   typed. The solid button is the one primary action on a screen.
+   Two sizes: the usual 34px and the large 40px of the start screen.
+   The deck's round buttons, the toolbar and the menus are their own
+   thing and stay as they are. */
+:root{ --ctl-h:34px; --ctl-h-lg:40px; --ctl-r:8px; --ctl-fs:calc(13px + var(--fs)); }
+.linkform__in, .home__in{
+  flex:1; min-width:0; height:var(--ctl-h); padding:0 12px;
+  font-family:var(--mono); font-size:var(--ctl-fs); letter-spacing:0; font-variant-ligatures:none;
+  color:var(--tx-1); background:var(--glass-soft); border:1px solid var(--line-2);
+  border-radius:var(--ctl-r); outline:none;
+  transition:background .15s, border-color .15s;
+}
+.linkform__in::placeholder, .home__in::placeholder{ color:var(--tx-3); }
+.linkform__in:focus, .home__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
+.linkform{ display:flex; gap:8px; width:100%; max-width:560px; margin:0 auto; }
+.linkform--foot{ max-width:none; flex:1; }
+.linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
+.linkform__wrap .linkform__in{ width:100%; padding-left:28px; padding-right:38px; }
+.linkform__wrap::before{
+  content:'›'; position:absolute; left:12px; top:50%; transform:translateY(-50%);
+  font-family:var(--mono); font-size:var(--ctl-fs); color:var(--tx-3); pointer-events:none;
+}
+.linkform__enter{
+  position:absolute; right:9px; top:50%; transform:translateY(-50%);
+  font-family:var(--mono); font-size:calc(11px + var(--fs)); line-height:1; padding:3px 6px; border-radius:5px;
+  color:var(--tx-3); border:1px solid var(--line-2); background:var(--glass-soft); opacity:0; transition:opacity .14s; pointer-events:none;
+}
+.linkform__in:not(:placeholder-shown) + .linkform__enter{ opacity:1; }
+.linkform--lg .linkform__in{ height:var(--ctl-h-lg); font-size:calc(14px + var(--fs)); }
+.linkform--lg .linkform__wrap::before{ font-size:calc(14px + var(--fs)); }
+
+.btn, .tag, .cache__clear{
+  display:inline-flex; align-items:center; justify-content:center; gap:7px;
+  height:var(--ctl-h); padding:0 14px; border-radius:var(--ctl-r);
+  font-family:var(--mono); font-size:var(--ctl-fs); letter-spacing:0; font-variant-ligatures:none; white-space:nowrap;
+  color:var(--tx-2); background:var(--glass-soft); border:1px solid var(--line-2);
+  transition:background .15s, color .15s, border-color .15s, transform .1s;
+}
+.btn:hover, .tag:hover, .cache__clear:hover:not(:disabled){ color:var(--tx-1); background:var(--glass-hi); border-color:var(--line-3); }
+.btn:active, .tag:active{ transform:translateY(1px); }
+.tag--quiet{ color:var(--tx-3); }
+.cache__clear:disabled{ opacity:.4; cursor:default; }
+.btn--solid{ color:#0b0b0c; background:#fff; border-color:#fff; font-weight:500; }
+.btn--solid:hover{ color:#0b0b0c; background:#e6e6e8; border-color:#e6e6e8; }
+.btn--lg{ height:var(--ctl-h-lg); padding:0 18px; font-size:calc(14px + var(--fs)); }
