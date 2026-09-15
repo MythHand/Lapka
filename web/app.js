@@ -888,6 +888,8 @@ async function sourceFor(it) {
   /* the dub the server settled on is the one carried on */
   if (state.dubKey && r.dub && r.dub.key !== state.dubKey) toast(t('toast.carried', { name: r.dub.name }));
   if (r.dub) state.dubKey = r.dub.key;
+  /* mid-switch: the line now names the source being tried */
+  if (it.switching && r.source) showNotice(t('notice.switchingTo', { from: it.switching.from || '?', to: r.source.player, n: it.switching.n, total: 3 }), { kind: 'switching', busy: true });
   paintMeta();
   return r.stream;
 }
@@ -989,6 +991,7 @@ async function playItem(it, autoplay = true, glide = true) {
 function loadSource(it, src, token, onMeta, play) {
   it.loadedSrc = src.play;
   attachSource(src);
+  sayLoading(it);
   const reveal = fadeIn();
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
@@ -1002,8 +1005,15 @@ function loadSource(it, src, token, onMeta, play) {
 function attachSource(stream) {
   if (hls) { hls.destroy(); hls = null; }
   if (stream.kind === 'hls' && window.Hls && Hls.isSupported()) {
-    hls = new Hls({ enableWorker: true });
-    hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) video.dispatchEvent(new Event('error')); });
+    /* fewer silent retries than the defaults: a source that does not
+       answer is given up on in seconds, not in a minute, and its
+       trouble is said on the stage as soon as it starts */
+    hls = new Hls({ enableWorker: true, manifestLoadingTimeOut: 8000, manifestLoadingMaxRetry: 1, levelLoadingTimeOut: 8000, levelLoadingMaxRetry: 1, fragLoadingTimeOut: 12000, fragLoadingMaxRetry: 2 });
+    hls.on(Hls.Events.ERROR, (_, d) => {
+      if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
+      const it = cur();
+      if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true });
+    });
     hls.on(Hls.Events.MANIFEST_PARSED, syncQualityButton);
     hls.on(Hls.Events.LEVEL_SWITCHED, syncQualityButton);
     hls.loadSource(stream.play);
@@ -1904,16 +1914,34 @@ document.addEventListener('click', e => {
 
 /* ── the notice over the picture ───────────────────────────── */
 /* a line over the picture: what went wrong, and one thing to do about it */
-let noticeDo = null, noticeUndo = null;
-function showNotice(text, { action = null, onAction = null, onClose = null } = {}) {
+let noticeDo = null, noticeUndo = null, noticeKind = null;
+/* busy: the player is working (opening, waiting, trying another
+   source); the line stands in the middle of the picture with a
+   spinner, so a pause never reads as a dead player */
+function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false } = {}) {
   noticeText.textContent = text;
   const btn = $('#noticeAction');
   btn.hidden = !action;
   btn.textContent = action || '';
-  noticeDo = onAction; noticeUndo = onClose;
+  noticeDo = onAction; noticeUndo = onClose; noticeKind = kind;
+  notice.classList.toggle('notice--busy', busy);
   notice.classList.add('show');
 }
-function hideNotice() { notice.classList.remove('show'); noticeDo = null; noticeUndo = null; }
+function hideNotice(kind = null) {
+  if (kind && noticeKind !== kind) return;   // another line is up: leave it
+  notice.classList.remove('show', 'notice--busy'); noticeDo = null; noticeUndo = null; noticeKind = null;
+}
+/* the busy lines: what is being opened, a source that is slow to answer */
+let loadingT = 0, stallT = 0;
+function sayLoading(it) {
+  clearTimeout(loadingT);
+  loadingT = setTimeout(() => { if (it === cur() && !it.switching && video.paused === false && video.readyState < 3) showNotice(t('notice.loading', { name: it.name, player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 1500);
+}
+function sayStalled(it) {
+  clearTimeout(stallT);
+  stallT = setTimeout(() => { if (it === cur() && !it.switching && video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 2500);
+}
+function busyOver() { clearTimeout(loadingT); clearTimeout(stallT); hideNotice('busy'); }
 $('#noticeClose').onclick = () => { const f = noticeUndo; hideNotice(); if (f) f(); };
 $('#noticeAction').onclick = () => { const f = noticeDo; hideNotice(); if (f) f(); };
 
@@ -3040,12 +3068,15 @@ video.addEventListener('ratechange', () => {
 });
 video.addEventListener('playing', () => {
   state.errStreak = 0; state.seekPreview = null; autoSwitch = false; syncStatus();
+  busyOver();
   const it = cur();
   if (it) {
-    if (it.switching) { flash(t('flash.source', { player: (it.source && it.source.player) || '' })); it.switching = null; hideNotice(); }
+    if (it.switching) { flash(t('flash.source', { player: (it.source && it.source.player) || '' })); it.switching = null; hideNotice('switching'); }
     it.retries = 0;                  // it plays: the count of tries starts over
   }
 });
+video.addEventListener('waiting', () => { const it = cur(); if (it && it.loadedSrc) sayStalled(it); });
+video.addEventListener('canplay', () => { clearTimeout(stallT); hideNotice('busy'); });
 video.addEventListener('ended', () => {
   /* looping one file works even with autoplay off: it is a mode set
      explicitly, not an automatic decision */
@@ -3079,11 +3110,13 @@ video.addEventListener('error', () => {
     it.avoid = failed;
     const from = it.source && it.source.player;
     it.switching = { from, n: it.retries };
-    showNotice(t('notice.switching', { from: from || '?', n: it.retries, total: 3 }));
+    busyOver();
+    showNotice(t('notice.switching', { from: from || '?', n: it.retries, total: 3 }), { kind: 'switching', busy: true });
     playItem(it, true, false);
     return;
   }
   it.switching = null;
+  busyOver();
   stopPlayback();
   showNotice(t('notice.allFailed', { name: it.name }), { action: t('notice.retry'), onAction: () => { it.err = false; it.retries = 0; playItem(it); } });
   it.err = true;

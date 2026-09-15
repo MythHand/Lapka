@@ -368,6 +368,9 @@ en: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -707,6 +710,9 @@ ru: {
   'notice.homeMove': 'Папка выбрана: {path}. Перенести туда файлы из прежней папки? Крестик оставит их на месте.',
   'notice.homeMoveGo': 'Перенести',
   'toast.homeMoved': 'Перенесено в {path}',
+  'notice.loading': 'Открываю {name}: источник {player}…',
+  'notice.slow': 'Источник {player} не отвечает, жду ответа…',
+  'notice.switchingTo': 'Источник {from} не ответил. Пробую {to}, попытка {n} из {total}…',
 
 },
 
@@ -1046,6 +1052,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -1385,6 +1394,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -1724,6 +1736,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -2063,6 +2078,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -2402,6 +2420,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -2741,6 +2762,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -3080,6 +3104,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 
@@ -3419,6 +3446,9 @@ ru: {
   'notice.homeMove': 'Folder chosen: {path}. Move the files of the old folder there? The cross leaves them where they are.',
   'notice.homeMoveGo': 'Move',
   'toast.homeMoved': 'Moved to {path}',
+  'notice.loading': 'Opening {name}: source {player}…',
+  'notice.slow': 'The source {player} is not answering, waiting…',
+  'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
 
 },
 

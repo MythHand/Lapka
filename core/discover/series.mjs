@@ -209,22 +209,31 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
     if (u.origin !== pageUrl.origin || String(a.getAttribute('href')).includes('#')) continue;
     const n = seasonFromUrl(u.toString());
     if (n === null || !slugOf(u.pathname).includes(stem)) continue;
-    /* the season's own page, not an episode inside it */
+    /* the season's own page, not an episode inside it: nothing may
+       follow the season's segment but a site engine's id ("10-1-0-834") */
     const segs = slugOf(u.pathname).split('/').filter(Boolean);
     const at = segs.findIndex(sg => SEASON_PATH.test(sg));
-    if (segs.slice(at + 1).some(sg => /seri|episod|\bep\b|ep-?\d/i.test(sg))) continue;
+    if (segs.slice(at + 1).some(sg => !/^\d+(?:-\d+){2,}$/.test(sg))) continue;
     const key = u.toString().replace(/\/+$/, '');
     if (!out.has(key)) out.set(key, { order: n, title: '', url: u.toString(), kind: 'tv', self: key === page });
   }
-  const list = [...out.values()].sort((a, b) => a.order - b.order);
+  /* one part per season: the page itself first, else the one with the
+     shortest address (a season's page, not a page inside it) */
+  const byOrder = new Map();
+  for (const f of [...out.values()].sort((a, b) => a.order - b.order || (b.self - a.self) || a.url.length - b.url.length)) if (!byOrder.has(f.order)) byOrder.set(f.order, f);
+  const list = [...byOrder.values()];
   if (!list.length) return [];
   if (!list.some(f => f.self)) {
     const have = new Set(list.map(f => f.order));
     const top = Math.max(...have, ownSeason || 0);
     const missing = [];
     for (let n = 1; n <= top; n++) if (!have.has(n)) missing.push(n);
-    const mine = ownSeason !== null && !have.has(ownSeason) ? ownSeason : missing.length === 1 ? missing[0] : null;
-    if (mine !== null) list.push({ order: mine, title: '', url: String(url).replace(/#.*$/, ''), kind: 'tv', self: true });
+    /* the page's own season: the one its title or address names; when
+       a link already claims that number it is this very season seen
+       from another address, and the page takes its place */
+    const mine = ownSeason !== null ? ownSeason : missing.length === 1 ? missing[0] : null;
+    if (mine !== null && have.has(mine)) { const twin = list.find(f => f.order === mine); twin.self = true; twin.url = String(url).replace(/#.*$/, ''); }
+    else if (mine !== null) list.push({ order: mine, title: '', url: String(url).replace(/#.*$/, ''), kind: 'tv', self: true });
     list.sort((a, b) => a.order - b.order);
   }
   /* a lone season link is a menu item, not a franchise */
