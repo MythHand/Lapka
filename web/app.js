@@ -2118,10 +2118,13 @@ async function showSavePop() {
   const items = state.list, saved = items.filter(isSaved);
   const savedBytes = saved.reduce((a, it) => a + sizeOf(it), 0);
   const known = items.filter(it => it.dur), dur = known.reduce((a, it) => a + it.dur, 0);
-  /* what the rest would take, judged by what is saved already */
-  const perSec = savedBytes && saved.some(it => it.dur) ? savedBytes / saved.reduce((a, it) => a + (it.dur || 0), 0) : 0;
-  const restDur = items.filter(it => !isSaved(it)).reduce((a, it) => a + (it.dur || 0), 0);
-  const estimate = perSec && restDur ? perSec * restDur : 0;
+  /* what the rest would take, judged by what is saved already: by the
+     minute where an episode's length is known, by the episode where not */
+  const rest = items.filter(it => !isSaved(it));
+  const savedDur = saved.reduce((a, it) => a + (it.dur || 0), 0);
+  const perSec = savedBytes && savedDur ? savedBytes / savedDur : 0;
+  const perEp = saved.length ? savedBytes / saved.length : 0;
+  const estimate = rest.reduce((a, it) => a + (it.dur && perSec ? it.dur * perSec : perEp), 0);
 
   const frag = document.createDocumentFragment();
   const q = popSection(t('pop.queue'));
