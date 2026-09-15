@@ -93,9 +93,13 @@ export function findCurrentEpisode(doc, url) {
 /* "2 сезон", "Season 2", "2nd season", "S2", or a bare number at the
    end of a title ("Богиня благословляет этот прекрасный мир 2",
    "Этот Замечательный Мир! 3 (OVA)"): the season a title names */
-const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/, /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i];
-export function seasonFromText(text) {
-  for (const re of SEASON) { const m = re.exec(String(text || '')); if (m) return Number(m[1]); }
+const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/];
+const TRAILING = /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i;
+/* bare: whether a number at the end counts; it does in a title, not in a link ("3" in a strip of episodes) */
+export function seasonFromText(text, { bare = true } = {}) {
+  const t = String(text || '');
+  for (const re of SEASON) { const m = re.exec(t); if (m) return Number(m[1]); }
+  if (bare) { const m = TRAILING.exec(t); if (m) return Number(m[1]); }
   return null;
 }
 
@@ -108,7 +112,7 @@ export function findFranchise(doc, url, ownSeason = null) {
   const page = (() => { try { return new URL(url).toString().replace(/\/+$/, ''); } catch { return url; } })();
   for (const el of doc.querySelectorAll('a[href], option[value]')) {
     const text = textOf(el);
-    const n = seasonFromText(text);
+    const n = seasonFromText(text, { bare: false });
     if (n === null) continue;
     const raw = el.getAttribute('href') ?? el.getAttribute('value');
     let abs; try { abs = new URL(raw, url).toString(); } catch { continue; }
