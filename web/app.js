@@ -720,7 +720,12 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   const first = state.list.find(i => i.seriesId === wantedSeries && i.number === wantedNumber)
     || state.list.find(i => i.seriesId === got.series.id) || state.list[0];
   if (autoplay) playItem(first);
-  else { state.current = first; paintTitle(); paintActive(); }
+  else {
+    /* the series is back but not started: the stage shows the episode it stopped on, not the start screen */
+    state.current = first;
+    emptyEl.classList.add('hide'); stage.classList.remove('is-empty');
+    paintTitle(); paintActive(); syncStatus();
+  }
   return true;
 }
 

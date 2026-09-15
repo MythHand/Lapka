@@ -290,6 +290,7 @@ describe('after a reload', { skip }, () => {
         rows: $$('#queueList .item').map(li => li.classList.contains('active')),
         src: $('#video').getAttribute('src'),
         title: $('#titleName').textContent,
+        emptyHidden: $('#empty').classList.contains('hide'),
       });
     `, { site: site.base, budget: 15000, home, seed });
   });
@@ -299,6 +300,7 @@ describe('after a reload', { skip }, () => {
     assert.deepEqual(r.rows, [false, false, true]);
     assert.match(r.title, /\b3\b/);
     assert.equal(r.src, null);
+    assert.equal(r.emptyHidden, true, 'the start screen is gone, the queue is there');
   });
 });
 
