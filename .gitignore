@@ -8,3 +8,6 @@ test/site/The Legend of Vox Machina*/
 
 # working data during development, never in the repo
 .dev/
+
+# what Dima drops in by hand for me to place: never part of the repo
+user_input/
