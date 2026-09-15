@@ -2204,9 +2204,8 @@ function aboutBlock() {
   const mark = el('div', 'mark mark--left'); mark.setAttribute('aria-hidden', 'true');
   mark.append(el('pre', 'paw mono-art', PAW_FRAMES[0]), el('pre', 'banner mono-art', BANNER));
 
-  /* the state, large, then the invitation, then a line the paw says */
   const state = el('div', 'about__state about__mono');
-  state.append(el('p', 'about__line about__line--now', '› ' + t('about.state')), el('p', 'about__line about__line--hint', t('about.hint')), el('p', 'about__line about__line--paw', t('about.paw')));
+  state.append(el('p', 'about__line about__line--now', '› ' + t('about.state')), el('p', 'about__line about__line--hint', '  ' + t('about.hint')));
 
   /* what Lapka is: a lead line, then how it works in three steps,
      what it does and what it stands for as label + line, all in the
