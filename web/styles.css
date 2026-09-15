@@ -1671,7 +1671,7 @@ video::cue{
    the monospace parts are rows of it. */
 :root{ --mono:"Iosevka Charon Mono", "DejaVu Sans Mono", Menlo, monospace; }
 .about__mono{ font-family:var(--mono); font-size:calc(12px + var(--fs)); line-height:1.5; letter-spacing:0; font-variant-ligatures:none; }
-.about__state{ margin:0; }
+.about__state{ margin:0; font-size:calc(13.5px + var(--fs)); line-height:1.55; }
 .about__line{ margin:0; white-space:pre-wrap; }
 .about__line--now{ color:var(--tx-1); }
 .about__line--hint{ color:var(--tx-3); }
