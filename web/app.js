@@ -2846,6 +2846,7 @@ video.addEventListener('ratechange', () => {
 });
 video.addEventListener('playing', () => {
   state.errStreak = 0; state.seekPreview = null; autoSwitch = false; syncStatus();
+  if (cur()) cur().retries = 0;      // it plays: the count of tries starts over
 });
 video.addEventListener('ended', () => {
   /* looping one file works even with autoplay off: it is a mode set
@@ -2870,9 +2871,11 @@ video.addEventListener('error', () => {
   stage.classList.remove('fading');
   const it = cur();
   if (!it || !it.loadedSrc) return;
+  /* another source, another try: up to three per episode, then it is broken */
   const failed = it.stream && it.stream.id;
-  if (failed && it.retried !== failed) {
-    it.retried = failed; it.avoid = failed;
+  it.retries = (it.retries || 0) + 1;
+  if (failed && it.retries <= 3) {
+    it.avoid = failed;
     toast(t('toast.otherSource'));
     playItem(it, true, false);
     return;
