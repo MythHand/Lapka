@@ -2109,10 +2109,18 @@ function popRow(grid, k, v, small) {
   if (small) { val.append(' '); val.append(el('small', '', small)); }
   grid.append(val);
 }
+/* under the button, on the body, so the queue panel cannot clip it */
+function placeSavePop() {
+  if (savePop.parentNode !== document.body) document.body.append(savePop);
+  const r = btnSaveAll.getBoundingClientRect();
+  savePop.style.top = (r.bottom + 8) + 'px';
+  savePop.style.left = Math.max(12, Math.min(r.left, window.innerWidth - savePop.offsetWidth - 12)) + 'px';
+}
 async function showSavePop() {
   clearTimeout(popT);
   savePop.hidden = false;
   if (!savePop.children.length) savePop.textContent = '…';
+  placeSavePop();
   let d = null, lib = null;
   try { [d, lib] = await Promise.all([api('/api/home'), api('/api/library')]); } catch (_) { /* then the local numbers alone */ }
   const items = state.list, saved = items.filter(isSaved);
@@ -2168,6 +2176,7 @@ async function showSavePop() {
     frag.append(l);
   }
   savePop.replaceChildren(frag);
+  placeSavePop();
 }
 function hideSavePop() { popT = setTimeout(() => { savePop.hidden = true; }, 120); }
 btnSaveAll.addEventListener('pointerenter', showSavePop);
