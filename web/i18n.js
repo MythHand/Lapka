@@ -371,7 +371,7 @@ en: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -412,6 +412,7 @@ en: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -754,7 +755,7 @@ ru: {
   'notice.slow': 'Источник {player} не отвечает, жду ответа…',
   'notice.switchingTo': 'Источник {from} не ответил. Пробую {to}, попытка {n} из {total}…',
   'about.state': 'ничего не открыто',
-  'about.hint': 'вставьте ссылку на сериал или серию, остальное Лапка сделает сама',
+  'about.hint': 'вставьте ссылку на сериал или серию',
   'about.doors': 'двери',
   'about.doorOk': 'открыта',
   'about.doorPart': 'приоткрыта',
@@ -795,6 +796,7 @@ ru: {
   'about.p.doors': 'открытые сайты работают сами; закрытые плееры Лапка не ломает',
   'about.p.open.k': 'открытый код',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'лапка › остальное сделаю сама',
 
 },
 
@@ -1137,7 +1139,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -1178,6 +1180,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -1520,7 +1523,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -1561,6 +1564,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -1903,7 +1907,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -1944,6 +1948,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -2286,7 +2291,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -2327,6 +2332,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -2669,7 +2675,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -2710,6 +2716,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -3052,7 +3059,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -3093,6 +3100,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -3435,7 +3443,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -3476,6 +3484,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
@@ -3818,7 +3827,7 @@ ru: {
   'notice.slow': 'The source {player} is not answering, waiting…',
   'notice.switchingTo': 'The source {from} failed. Trying {to}, attempt {n} of {total}…',
   'about.state': 'nothing is open',
-  'about.hint': 'paste a link to a series or an episode, Lapka does the rest',
+  'about.hint': 'paste a link to a series or an episode',
   'about.doors': 'doors',
   'about.doorOk': 'open',
   'about.doorPart': 'ajar',
@@ -3859,6 +3868,7 @@ ru: {
   'about.p.doors': 'open sites work on their own; guarded players are not forced',
   'about.p.open.k': 'open source',
   'about.p.open': 'MythHand · github.com/MythHand/Lapka',
+  'about.paw': 'lapka › the rest I do myself',
 
 },
 
