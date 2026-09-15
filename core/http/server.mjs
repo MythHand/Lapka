@@ -131,6 +131,20 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first' });
         return json(res, 202, saver.start(ctx.stream.id, ctx));
       }
+      if (saver && req.method === 'GET' && p === '/api/saves') {
+        const active = [...saver.jobs.values()].filter(j => j.state === 'working').map(j => ({ id: j.id, key: j.key, seriesId: j.seriesId, episode: j.episode, dub: j.dub, quality: j.quality, phase: j.phase, done: j.done, total: j.total }));
+        return json(res, 200, { pending: state ? state.saves() : {}, active });
+      }
+      if (saver && mutating && p === '/api/saves/resume') {
+        ctx.resumeSaves && ctx.resumeSaves().catch(() => {});
+        return json(res, 202, { ok: true });
+      }
+      if (state && mutating && p === '/api/saves/forget') { state.clearSave(url.searchParams.get('key') || ''); return json(res, 200, { ok: true }); }
+      if (state && mutating && p === '/api/state/setting') {
+        const k = url.searchParams.get('k'); if (!/^[a-zA-Z]{1,40}$/.test(k || '')) return json(res, 400, { error: 'bad key' });
+        state.setSetting(k, url.searchParams.has('v') ? url.searchParams.get('v') : undefined);
+        return json(res, 200, { ok: true });
+      }
       if (saver && req.method === 'GET' && (m = /^\/api\/save\/([\w-]+)$/.exec(p))) {
         const job = saver.job(m[1]);
         return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });

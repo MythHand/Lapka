@@ -357,6 +357,9 @@ en: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -685,6 +688,9 @@ ru: {
   'pop.free': 'Свободно',
   'pop.ofDisk': 'из {total}',
   'queue.saveStopped': 'Дошло до {done} из {total} ({pct}%). Нажмите, чтобы продолжить',
+  'set.saveQuality': 'Качество сохранения',
+  'set.autoResume': 'Продолжать незавершённые сохранения',
+  'queue.saveAs': 'Сохранить в качестве',
 
 },
 
@@ -1013,6 +1019,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -1341,6 +1350,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -1669,6 +1681,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -1997,6 +2012,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -2325,6 +2343,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -2653,6 +2674,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -2981,6 +3005,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 
@@ -3309,6 +3336,9 @@ ru: {
   'pop.free': 'Free',
   'pop.ofDisk': 'of {total}',
   'queue.saveStopped': 'Got to {done} of {total} ({pct}%). Click to try again',
+  'set.saveQuality': 'Quality to save in',
+  'set.autoResume': 'Take up saves that were cut short',
+  'queue.saveAs': 'Save in quality',
 
 },
 

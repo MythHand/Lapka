@@ -148,3 +148,33 @@ describe('the state', () => {
     assert.equal((await fetch(lapka.base + '/api/state/dub?series=s9&dub=x', { method: 'POST' })).status, 403);
   });
 });
+
+/* ── saves that were cut short are taken up again ── */
+describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  test('a pending record becomes a file, and goes; the routes list and forget', async () => {
+    const r = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/links/ep-3')}`)).json();
+    const ep = r.series.episodes.find(e => e.number === 3);
+    const dub = ep.dubs.find(d => d.key === 'anidub');
+    /* as if a save had been asked for and the program had stopped halfway */
+    lapka.state.setSave(`${r.series.id}/3/anidub`, { seriesUrl: r.series.sourceUrl, seriesId: r.series.id, episode: 3, dubKey: 'anidub', quality: 'auto', phase: 'fetch', done: 1, total: 3 });
+    await lapka.state.flush();
+    const listed = await (await get('/api/saves')).json();
+    assert.ok(listed.pending[`${r.series.id}/3/anidub`], 'listed as pending');
+    const out = await lapka.saver.resume(lapka.lapka);
+    assert.deepEqual(out.map(x => x.state), ['done']);
+    const lib = await (await get('/api/library')).json();
+    assert.ok(lib.series.some(s => s.episodes.some(e => e.episode === 3 && e.dubKey === 'anidub')), 'the file is there');
+    assert.equal(Object.keys((await (await get('/api/saves')).json()).pending).length, 0, 'the record is gone');
+    /* a record that cannot be resumed says why and stays; forgetting drops it */
+    lapka.state.setSave('nope/1/x', { seriesUrl: site.base + '/s/nope/', seriesId: 'nope', episode: 1, dubKey: 'x', quality: 'auto' });
+    const out2 = await lapka.saver.resume(lapka.lapka);
+    assert.equal(out2[0].state, 'error');
+    assert.ok((await (await get('/api/saves')).json()).pending['nope/1/x'].error);
+    assert.equal((await post('/api/saves/forget?key=nope/1/x')).status, 200);
+    assert.equal(Object.keys((await (await get('/api/saves')).json()).pending).length, 0);
+    /* a setting through its route */
+    assert.equal((await post('/api/state/setting?k=autoResume&v=off')).status, 200);
+    assert.equal((await (await get('/api/state')).json()).settings.autoResume, 'off');
+    assert.equal((await post('/api/state/setting?k=bad%20key&v=1')).status, 400);
+  });
+});

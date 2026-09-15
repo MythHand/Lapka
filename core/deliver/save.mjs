@@ -67,8 +67,17 @@ async function segmentsOf(delivery, entry, url, depth = 0) {
   return { segments, keys, localPlaylist: out.join('\n') };
 }
 
-export function createSaver({ delivery, cache, library }) {
+/* the stream for a wanted quality, out of every stream of a dub's live sources */
+export function streamForQuality(streams, quality) {
+  const rank = st => { const m = /(\d{3,4})/.exec(String(st.quality || '')); return m ? Number(m[1]) : st.kind === 'hls' ? 9999 : 0; };
+  const sorted = [...streams].sort((a, b) => rank(b) - rank(a));
+  if (quality && quality !== 'auto') { const same = sorted.find(st => st.quality === quality); if (same) return same; }
+  return sorted[0] || null;
+}
+
+export function createSaver({ delivery, cache, library, state = null }) {
   const jobs = new Map();
+  const keyOf = ctx => `${ctx.series.id}/${ctx.episode.number}/${ctx.dub.key}`;
 
   async function save(streamId, { series, episode, dub, source, stream, onProgress = () => {} }) {
     const entry = delivery.get(streamId);
@@ -115,16 +124,52 @@ export function createSaver({ delivery, cache, library }) {
     return { file: place.file, sidecar: place.sidecar, size: st.size };
   }
 
-  /* a job the UI can poll */
+  /* A job the UI can poll. It is also written down by identity, with
+     its progress, so that a save cut short is known and taken up
+     again; done, the record goes. */
   function start(streamId, ctx) {
+    const key = keyOf(ctx);
+    const running = [...jobs.values()].find(j => j.key === key && j.state === 'working');
+    if (running) return running;
     const id = `${streamId}-${Date.now().toString(36)}`;
-    const job = { id, streamId, state: 'working', phase: 'fetch', done: 0, total: 0, file: null, error: null, started: Date.now() };
+    const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, quality: ctx.stream.quality || 'auto', state: 'working', phase: 'fetch', done: 0, total: 0, file: null, error: null, started: Date.now() };
     jobs.set(id, job);
-    save(streamId, { ...ctx, onProgress: p => Object.assign(job, p) })
-      .then(r => Object.assign(job, { state: 'done', file: r.file, size: r.size }))
-      .catch(e => Object.assign(job, { state: 'error', error: e.message }));
+    const note = () => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, error: job.error });
+    note();
+    save(streamId, { ...ctx, onProgress: p => { Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); } })
+      .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(key); })
+      .catch(e => { Object.assign(job, { state: 'error', error: e.message }); note(); });
     return job;
   }
 
-  return { save, start, job: id => jobs.get(id) || null, jobs };
+  /* Every save that was asked for and is not done, taken up again:
+     the series is looked at, the episode resolved, the stream of the
+     wanted quality saved. One at a time; the segments already in the
+     cache come from there. */
+  let resuming = null;
+  function resume(lapka) {
+    if (!state || resuming) return resuming || Promise.resolve([]);
+    resuming = (async () => {
+      const out = [];
+      for (const [key, rec] of Object.entries(state.saves())) {
+        if ([...jobs.values()].some(j => j.key === key && j.state === 'working')) continue;
+        try {
+          const already = (await library.list()).some(s => s.episodes.some(e => e.seriesId === rec.seriesId && e.episode === rec.episode && e.dubKey === rec.dubKey));
+          if (already) { state.clearSave(key); continue; }
+          if (!lapka.series(rec.seriesId)) await lapka.look(rec.seriesUrl);
+          const r = await lapka.resolve({ seriesId: rec.seriesId, number: rec.episode, dubKey: rec.dubKey });
+          const st = streamForQuality(r.streams || [], rec.quality);
+          const ctx = st && lapka.context(st.id);
+          if (!ctx) { state.setSave(key, { error: 'no stream' }); continue; }
+          const job = start(st.id, ctx);
+          await new Promise(res => { const t = setInterval(() => { if (job.state !== 'working') { clearInterval(t); res(); } }, 500); });
+          out.push({ key, state: job.state, error: job.error });
+        } catch (e) { state.setSave(key, { error: e.message }); out.push({ key, state: 'error', error: e.message }); }
+      }
+      return out;
+    })().finally(() => { resuming = null; });
+    return resuming;
+  }
+
+  return { save, start, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }

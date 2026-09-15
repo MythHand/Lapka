@@ -1596,3 +1596,7 @@ video::cue{
 .switch.on{ background:var(--tx-1); border-color:var(--tx-1); }
 .switch.on i{ transform:translateX(16px); background:var(--s-0); }
 .switch:hover i{ background:var(--tx-1); } .switch.on:hover i{ background:var(--s-0); }
+
+/* ── the small menu by a row's save button ──────────────────── */
+.menu--float{ position:fixed; bottom:auto; right:auto; z-index:60; min-width:200px; display:block; }
+.menu--float[hidden]{ display:none; }

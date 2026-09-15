@@ -19,7 +19,7 @@ async function openHome(home, delivery) {
   const store = await openStore({ home });
   const state = await openState(store.own);
   const library = openLibrary(store.home);
-  const saver = createSaver({ delivery, cache: store.cache, library });
+  const saver = createSaver({ delivery, cache: store.cache, library, state });
   return { home: store.home, store, state, library, saver };
 }
 
@@ -46,6 +46,9 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     return check;
   };
   const server = await startServer({ port, webDir, ctx });
+  /* saves cut short last time are taken up again, a moment after start, unless switched off */
+  ctx.resumeSaves = () => (ctx.state.setting('autoResume') === 'off' ? Promise.resolve([]) : ctx.saver.resume(ctx.lapka));
+  if (!process.env.NODE_TEST_CONTEXT) setTimeout(() => ctx.resumeSaves().catch(() => {}), 4000);
   const close = async () => { await server.close(); await ctx.state.close(); };
   return { ctx, get lapka() { return ctx.lapka; }, get store() { return ctx.store; }, get state() { return ctx.state; }, get library() { return ctx.library; }, get delivery() { return ctx.delivery; }, get saver() { return ctx.saver; }, ...server, close };
 }

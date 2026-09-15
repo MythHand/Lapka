@@ -14,7 +14,7 @@ const POS_KEEP = 500;
 
 export async function openState(own) {
   const file = path.join(own, 'state.json');
-  let data = { v: STATE_V, positions: {}, dubs: {}, settings: {} };
+  let data = { v: STATE_V, positions: {}, dubs: {}, settings: {}, saves: {} };
   try {
     const got = JSON.parse(await fsp.readFile(file, 'utf8'));
     if (got && got.v === STATE_V) data = { ...data, ...got };
@@ -45,6 +45,10 @@ export async function openState(own) {
     dub(seriesId) { return data.dubs[seriesId] || null; },
     setDub(seriesId, dubKey) { if (dubKey) data.dubs[seriesId] = dubKey; else delete data.dubs[seriesId]; soon(); },
     setting(k) { return data.settings[k]; },
+    /* saves that were asked for and are not done: series/episode/dub → what is known about them */
+    saves() { return { ...data.saves }; },
+    setSave(key, rec) { data.saves[key] = { ...(data.saves[key] || {}), ...rec, at: Date.now() }; soon(); },
+    clearSave(key) { delete data.saves[key]; soon(); },
     setSetting(k, v) { if (v === undefined) delete data.settings[k]; else data.settings[k] = v; soon(); },
     flush,
     close: async () => { if (timer) await flush(); else if (writing) await writing; },

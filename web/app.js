@@ -712,7 +712,7 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   state.dubKey = (state.remote.dubs || {})[got.series.id] || null;
   linkInput.value = '';
   render(); paintTitle();
-  loadLibrary();
+  loadLibrary(); watchSaves();
   if (!quiet) toast(t('toast.opened', { n: state.list.length }));
 
   /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
@@ -1768,6 +1768,18 @@ function buildGearMenu() {
   menuTitle(place, t('set.place'));
   homeRow(place);
   cacheRow(place);
+  /* how episodes are saved */
+  const saveQ = state.remote.settings?.saveQuality || 'auto';
+  segRow(place, t('set.saveQuality'), saveQ, [['auto', t('quality.auto')], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], val => {
+    state.remote.settings = { ...(state.remote.settings || {}), saveQuality: val };
+    post('/api/state/setting?k=saveQuality&v=' + val).catch(() => {});
+    buildGearMenu();
+  });
+  switchRow(place, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
+    state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
+    post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
+    buildGearMenu();
+  });
 
   gearMenu.append(keys, opts, place);
 }
@@ -2063,9 +2075,52 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
-  if (e.target.closest('.item__save')) return saveItem(it);
+  if (e.target.closest('.item__save')) return offerSave(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
+
+/* The qualities an episode can be saved in, across the live sources
+   of its dub; with one to choose from, a small menu by the button. */
+const saveQualities = it => {
+  const out = new Map();
+  for (const s of [...(it.streams || [])].sort((a, b) => streamRank(b) - streamRank(a))) {
+    const q = s.quality || (s.kind === 'hls' ? t('quality.auto') : null);
+    if (!q || out.has(q)) continue;
+    out.set(q, s);
+  }
+  return [...out.entries()].map(([label, stream]) => ({ label, stream }));
+};
+const saveMenu = $('#saveMenu');
+async function offerSave(it, btn) {
+  if (isSaved(it) || (it.save && !it.save.error)) return;
+  if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
+  const opts = saveQualities(it);
+  if (opts.length < 2) return saveItem(it, opts[0] && opts[0].stream);
+  saveMenu.replaceChildren();
+  menuTitle(saveMenu, t('queue.saveAs'));
+  for (const o of opts) {
+    const b = document.createElement('button');
+    b.className = 'menu__item';
+    b.innerHTML = `<span class="menu__tick"></span><span class="menu__body"><span class="menu__main"></span><span class="menu__sub"></span></span>`;
+    b.querySelector('.menu__main').textContent = o.label;
+    b.querySelector('.menu__sub').textContent = [o.stream.player, o.stream.kind.toUpperCase()].filter(Boolean).join(' · ');
+    b.onclick = ev => { ev.stopPropagation(); saveMenu.hidden = true; saveItem(it, o.stream); };
+    saveMenu.append(b);
+  }
+  const r = btn.getBoundingClientRect();
+  saveMenu.hidden = false;
+  saveMenu.style.top = Math.min(r.bottom + 6, window.innerHeight - saveMenu.offsetHeight - 8) + 'px';
+  saveMenu.style.left = Math.max(8, Math.min(r.right - saveMenu.offsetWidth, window.innerWidth - saveMenu.offsetWidth - 8)) + 'px';
+}
+document.addEventListener('click', e => { if (!e.target.closest('#saveMenu') && !e.target.closest('.item__save')) saveMenu.hidden = true; });
+
+/* the stream to save in the wanted quality, for saving many at once */
+const streamToSave = it => {
+  const want = state.remote.settings?.saveQuality || 'auto';
+  const opts = saveQualities(it);
+  const same = want !== 'auto' && opts.find(o => o.label === want);
+  return (same || opts[0] || {}).stream || it.stream;
+};
 queueList.addEventListener('click', e => {
   const g = e.target.closest('.queue__group-save');
   if (!g) return;
@@ -2091,6 +2146,28 @@ async function loadLibrary() {
     }
   } catch (_) { /* the server may be starting */ }
   paintSaved();
+}
+
+/* Saves the server runs by itself, taken up again after a start, and
+   the ones it could not finish: read now and then, shown on the rows. */
+let savesT = null;
+async function watchSaves() {
+  clearTimeout(savesT);
+  let d = null;
+  try { d = await api('/api/saves'); } catch (_) { return; }
+  let active = false;
+  for (const it of state.list) {
+    if (it.save && !it.save.error && it.save.mine) continue;   // this page is running it and knows better
+    const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
+    const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
+    const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
+    if (job) { it.save = { phase: job.phase, done: job.done, total: job.total }; active = true; }
+    else if (rec && rec.error) it.save = { error: rec.error, done: rec.done || 0, total: rec.total || 0, phase: rec.phase };
+    else if (it.save && !it.save.mine) it.save = null;
+  }
+  paintSaved();
+  if (active) savesT = setTimeout(watchSaves, 1500);
+  else if (d.active.length) savesT = setTimeout(watchSaves, 3000);
 }
 
 /* every row's save mark, every part's count, the header's count */
@@ -2270,15 +2347,16 @@ savePop.addEventListener('pointerleave', hideSavePop);
 /* ── saving an episode into the library ────────────────────────
    The episode is opened if it was not, then its stream is handed to
    the server, which assembles the file; the row shows how far it is. */
-async function saveItem(it) {
+async function saveItem(it, stream = null) {
   if ((it.save && !it.save.error) || isSaved(it)) return false;
-  it.save = { phase: 'fetch', done: 0, total: 0 }; paintSaved();
+  it.save = { phase: 'fetch', done: 0, total: 0, mine: true }; paintSaved();
   try {
     if (!it.stream) await resolveItem(it);
-    if (!it.stream) throw new Error(t('toast.noStream', { name: it.name }));
-    let job = await post('/api/save?stream=' + it.stream.id);
+    const st = stream || streamToSave(it);
+    if (!st) throw new Error(t('toast.noStream', { name: it.name }));
+    let job = await post('/api/save?stream=' + st.id);
     while (job.state === 'working') {
-      it.save = { phase: job.phase, done: job.done, total: job.total }; paintSaved();
+      it.save = { phase: job.phase, done: job.done, total: job.total, mine: true }; paintSaved();
       await sleep(500);
       job = await api('/api/save/' + job.id);
     }
@@ -2287,7 +2365,7 @@ async function saveItem(it) {
     await loadLibrary();
     return true;
   } catch (e) {
-    it.save = { ...(it.save || {}), error: e.message }; paintSaved();
+    it.save = { ...(it.save || {}), error: e.message, mine: false }; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
     return false;
   }
