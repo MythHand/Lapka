@@ -301,6 +301,9 @@ en: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -573,6 +576,9 @@ ru: {
   'toast.noStream': 'Нет потока: {name}',
   'toast.otherSource': 'Источник не пошёл, пробую другой…',
   'about.placeholder': 'тут будет описание',
+  'skip.opening': 'Пропустить заставку',
+  'skip.ending': 'Пропустить титры',
+  'skip.hide': 'Скрыть кнопку',
 
 },
 
@@ -845,6 +851,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -1117,6 +1126,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -1389,6 +1401,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -1661,6 +1676,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -1933,6 +1951,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -2205,6 +2226,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -2477,6 +2501,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 
@@ -2749,6 +2776,9 @@ ru: {
   'toast.noStream': 'No stream for: {name}',
   'toast.otherSource': 'That source failed, trying another…',
   'about.placeholder': 'description to come',
+  'skip.opening': 'Skip the opening',
+  'skip.ending': 'Skip the ending',
+  'skip.hide': 'Hide the button',
 
 },
 

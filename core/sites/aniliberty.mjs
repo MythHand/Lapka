@@ -19,6 +19,13 @@ const STUDIO = 'AniLibria';
 
 const originOf = url => new URL(url).origin;
 
+/* where the opening and the ending are, when the release says */
+function marksOf(e) {
+  const span = m => m && m.start != null && m.stop != null && m.stop > m.start ? { start: m.start, stop: m.stop } : null;
+  const opening = span(e.opening), ending = span(e.ending);
+  return opening || ending ? { opening, ending } : undefined;
+}
+
 async function json(session, url) {
   const res = await session.fetch(url, { headers: { accept: 'application/json' } });
   if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
@@ -62,6 +69,7 @@ export default {
         title: e.name || undefined,
         sourceUrl: `${site}/anime/video/episode/${e.id}`,
         duration: e.duration || undefined,
+        marks: marksOf(e),
         dubs: [{
           name: STUDIO, lang: 'ru',
           sources: [{

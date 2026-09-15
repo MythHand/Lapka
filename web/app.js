@@ -113,6 +113,7 @@ function repaintUi() {
   applySettings();
   paintPlay(); paintLoop(); paintAuto(); paintSeek(); paintVolume(); paintView();
   paintTitle(); paintEndMeta(); paintModeHint();
+  if (skipNow) btnSkip.textContent = t('skip.' + skipNow.name);
   syncAudioButton(); syncSubsButton(); syncStatus();
   render();
   closeMenus();
@@ -150,6 +151,7 @@ const dropveil = $('#dropveil'), toastEl = $('#toast');
 const deckPack = $('#deckPack'), btnPack = $('#btnPack'), queueAdd = $('.queue__add');
 const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
+const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, gearMenu];
 
@@ -624,6 +626,8 @@ function itemFor(ep) {
     source: null,     // the player it comes from
     stream: null,     // the stream, with its address on the server
     opening: null, loadedSrc: null, avoid: null,
+    marks: null,      // opening and ending, if the source says where they are
+    skipHidden: {},   // the marks whose button was dismissed for this episode
   };
 }
 
@@ -674,6 +678,8 @@ async function resolveItem(it, { avoid = null } = {}) {
     if (avoid) q.set('avoid', avoid);
     const r = await api('/api/resolve?' + q);
     it.dubs = r.dubs; it.dub = r.dub; it.source = r.source; it.stream = r.stream;
+    it.marks = r.episode.marks || null;
+    if (r.episode.duration && !it.dur) it.dur = r.episode.duration;
     if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode); }
     return r;
   })();
@@ -738,6 +744,7 @@ async function playItem(it, autoplay = true, glide = true) {
   if (!it) return;
   state.current = it;
   state.seekPreview = null;
+  skipNow = null; skipEl.hidden = true;
   hideNotice();
   endCard.classList.remove('show');
   emptyEl.classList.add('hide');
@@ -2286,8 +2293,39 @@ video.addEventListener('pause', () => {
   deckShow(true);
 });
 let posT = 0;
+/* ── skipping the opening or the ending ─────────────────────────
+   While the time is inside a mark the button is there; press it and
+   the mark is jumped over, dismiss it and it stays away for this
+   mark of this episode, do nothing and it goes when the mark ends. */
+let skipNow = null;
+function paintSkip() {
+  const it = cur();
+  const t0 = video.currentTime;
+  let found = null;
+  if (it && it.marks) for (const name of ['opening', 'ending']) {
+    const m = it.marks[name];
+    if (m && !it.skipHidden[name] && t0 >= m.start && t0 < m.stop - 1) { found = { name, ...m }; break; }
+  }
+  if (!found) { if (skipNow) { skipNow = null; skipEl.hidden = true; } return; }
+  if (skipNow && skipNow.name === found.name) return;
+  skipNow = found;
+  btnSkip.textContent = t('skip.' + found.name);
+  skipEl.hidden = false;
+}
+btnSkip.onclick = () => {
+  if (!skipNow) return;
+  seekTo(skipNow.stop);
+  flash(t('skip.' + skipNow.name));
+  skipNow = null; skipEl.hidden = true;
+};
+btnSkipHide.onclick = () => {
+  const it = cur();
+  if (it && skipNow) it.skipHidden[skipNow.name] = true;
+  skipNow = null; skipEl.hidden = true;
+};
+
 video.addEventListener('timeupdate', () => {
-  paintSeek(); updatePositionState();
+  paintSeek(); updatePositionState(); paintSkip();
   const now = Date.now();
   if (now - posT < 5000) return;
   posT = now;

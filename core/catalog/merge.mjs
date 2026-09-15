@@ -50,7 +50,7 @@ export function merge(series, contribution) {
   for (const ep of c.episodes || []) {
     let episode = findEpisode(series, ep.number);
     if (!episode) { episode = createEpisode(ep); series.episodes.push(episode); added.episodes++; }
-    else fill(episode, ep, ['title', 'sourceUrl', 'duration']);
+    else fill(episode, ep, ['title', 'sourceUrl', 'duration', 'marks']);
 
     for (const d of ep.dubs || []) {
       /* an unnamed dub whose streams a named dub already has is that

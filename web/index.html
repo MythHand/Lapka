@@ -63,6 +63,14 @@
         </div>
         <div class="flash" id="flash" aria-hidden="true"></div>
 
+        <!-- skipping the opening or the ending: shown only while inside one -->
+        <div class="skip" id="skip" hidden>
+          <button class="skip__go" id="btnSkip"></button>
+          <button class="skip__x" id="btnSkipHide" data-i18n-title="skip.hide">
+            <svg class="ph" viewBox="12.0 12.0 231.9 231.9"><path d="M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z"/></svg>
+          </button>
+        </div>
+
         <!-- warning about audio the browser cannot decode -->
         <div class="notice" id="notice">
           <svg class="ph notice__ico" viewBox="-3.5 -3.5 262.9 262.9"><path d="M128,20A108,108,0,1,0,236,128,108.12,108.12,0,0,0,128,20Zm0,192a84,84,0,1,1,84-84A84.09,84.09,0,0,1,128,212Zm-12-80V80a12,12,0,0,1,24,0v52a12,12,0,0,1-24,0Zm28,40a16,16,0,1,1-16-16A16,16,0,0,1,144,172Z"/></svg>

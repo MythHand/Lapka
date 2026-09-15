@@ -64,9 +64,10 @@ export function createSeries({ sourceUrl, title = '', altTitles = [], cover = nu
   };
 }
 
-export function createEpisode({ number, title = '', sourceUrl = null, duration = null }) {
+export function createEpisode({ number, title = '', sourceUrl = null, duration = null, marks = null }) {
   if (!Number.isFinite(number)) throw new Error('an episode needs a number');
-  return { number, title, sourceUrl, duration, dubs: [], opened: false };
+  /* marks: { opening: { start, stop }, ending: { start, stop } }, seconds, what can be skipped */
+  return { number, title, sourceUrl, duration, marks, dubs: [], opened: false };
 }
 
 export function createDub({ name, studio = null, lang = null, kind = 'dub' }) {

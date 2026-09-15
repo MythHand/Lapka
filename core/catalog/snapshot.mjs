@@ -22,7 +22,7 @@ export function toSnapshot(series) {
     updatedAt: series.updatedAt,
     provenance: series.provenance.map(p => ({ ...p, added: { ...p.added } })),
     episodes: series.episodes.map(e => ({
-      number: e.number, title: e.title, sourceUrl: e.sourceUrl, duration: e.duration,
+      number: e.number, title: e.title, sourceUrl: e.sourceUrl, duration: e.duration, marks: e.marks,
       dubs: e.dubs.map(d => ({
         key: d.key, name: d.name, studio: d.studio, lang: d.lang, kind: d.kind,
         sources: d.sources.map(s => ({
@@ -40,7 +40,7 @@ export function fromSnapshot(snap) {
   series.updatedAt = snap.updatedAt || series.updatedAt;
   series.provenance = (snap.provenance || []).map(p => ({ ...p }));
   series.episodes = (snap.episodes || []).map(e => ({
-    number: e.number, title: e.title || '', sourceUrl: e.sourceUrl || null, duration: e.duration || null,
+    number: e.number, title: e.title || '', sourceUrl: e.sourceUrl || null, duration: e.duration || null, marks: e.marks || null,
     dubs: (e.dubs || []).map(d => ({
       key: d.key, name: d.name, studio: d.studio || null, lang: d.lang || null, kind: d.kind || 'dub',
       sources: (d.sources || []).map(s => ({

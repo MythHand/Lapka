@@ -113,6 +113,17 @@ describe('merging layers', () => {
     assert.equal(s.episodes[0].sourceUrl, 'https://example.test/1');
   });
 
+  test('length and marks fill in and travel through a snapshot', () => {
+    const s = createSeries({ sourceUrl: URL_A });
+    merge(s, { origin: 'x', episodes: [{ number: 1, duration: 1422, marks: { opening: { start: 60, stop: 150 }, ending: null } }] });
+    merge(s, { origin: 'y', episodes: [{ number: 1, duration: 9, marks: { opening: { start: 1, stop: 2 }, ending: null } }] });
+    assert.equal(s.episodes[0].duration, 1422);
+    assert.equal(s.episodes[0].marks.opening.stop, 150);
+    const back = fromSnapshot(JSON.parse(JSON.stringify(toSnapshot(s))));
+    assert.equal(back.episodes[0].duration, 1422);
+    assert.deepEqual(back.episodes[0].marks, { opening: { start: 60, stop: 150 }, ending: null });
+  });
+
   test('streams are replaced, not accumulated', () => {
     const s = built();
     const src = s.episodes[0].dubs[0].sources[0];

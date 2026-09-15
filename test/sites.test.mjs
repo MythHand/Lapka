@@ -80,6 +80,10 @@ describe('the aniliberty adapter', () => {
     assert.equal(src.player, 'aniliberty');
     assert.deepEqual(src.streams.map(s => s.quality), ['480p', '720p', '1080p']);
     assert.equal(src.streams[0].headers.referer, `${SITE}/`);
+    /* where the opening and the ending are, so the player can offer to skip them */
+    assert.deepEqual(ep.marks, { opening: { start: 42, stop: 132 }, ending: { start: 1330, stop: 1421 } });
+    /* the first episode has no opening marked: only the ending is offered */
+    assert.deepEqual(c.episodes.find(e => e.number === 1).marks, { opening: null, ending: { start: 1170, stop: 1290 } });
     assert.ok(c.series.altTitles.includes('Re:Creators'));
     assert.match(c.series.cover, /^https:\/\/aniliberty\.top\/storage\//);
   });
@@ -97,6 +101,9 @@ describe('look() on aniliberty, page and adapter together', () => {
     assert.equal(series.episodes.length, 22);
     assert.deepEqual(start, { episode: 8 });
     assert.deepEqual(dubs, ['AniLibria']);
+    const r = await lapka.resolve({ seriesId: series.id, number: 8 });
+    assert.deepEqual(r.episode.marks, { opening: { start: 42, stop: 132 }, ending: { start: 1330, stop: 1421 } });
+    assert.ok(r.episode.duration > 1000);
     const ep = series.episodes.find(e => e.number === 8);
     assert.equal(ep.dubs.length, 1);
     /* the adapter and the page each give a source of the same dub: two ways to the same streams, three qualities each */
