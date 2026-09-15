@@ -1682,7 +1682,7 @@ video::cue{
 .about__head{ margin:0 0 0.5em; color:var(--tx-3); }
 .about__list{ display:grid; grid-template-columns:max-content 1fr; column-gap:2ch; row-gap:0.35em; margin:0; }
 .about__list dt{ color:var(--tx-3); }
-.about__list dd{ margin:0; color:var(--tx-2); }
+.about__list dd{ margin:0; color:var(--tx-2); min-width:0; overflow-wrap:anywhere; }
 .about__unit{ white-space:nowrap; }
 .about__sep{ color:var(--tx-3); }
 .about__note{ color:var(--tx-3); }

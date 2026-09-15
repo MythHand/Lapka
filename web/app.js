@@ -2217,13 +2217,15 @@ function aboutBlock() {
     if (!sites.length) return;
     dl.append(el('dt', null, t(key)));
     const dd = el('dd');
-    /* a site and the dot after it never part at a line's end */
+    /* a site and the dot after it never part; the lines break at the
+       spaces between the units */
     sites.forEach((x, i) => {
       const unit = el('span', 'about__unit');
       if (typeof x === 'string') unit.append(el('span', 'about__site', x));
       else { unit.append(el('span', 'about__site', x.site)); unit.append(el('span', 'about__note', ' — ' + t(x.note))); }
-      if (i < sites.length - 1) unit.append(el('span', 'about__sep', ' · '));
+      if (i < sites.length - 1) unit.append(el('span', 'about__sep', ' ·'));
       dd.append(unit);
+      if (i < sites.length - 1) dd.append(document.createTextNode(' '));
     });
     dl.append(dd);
   };
