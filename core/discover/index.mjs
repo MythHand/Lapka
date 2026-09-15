@@ -10,7 +10,7 @@
    right.
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
-import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, findFranchise, franchiseFromBlock, findSelf } from './series.mjs';
+import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, seasonFromUrl, tidyTitle, findFranchise, franchiseFromBlock, findSelf } from './series.mjs';
 import { numberFromText } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
@@ -29,7 +29,7 @@ export function discover({ html, url, profile = null }) {
   const { players, switches } = findPlayers(doc, url, { profile });
   const seriesUrl = findSeriesUrl(doc, url);
   const current = findCurrentEpisode(doc, url);
-  const ownSeason = seasonFromText(title[0]?.value || '');
+  const ownSeason = seasonFromText(title[0]?.value || '') ?? seasonFromUrl(url);
   /* season links first; without them, a block the site heads as the franchise */
   const bySeasons = findFranchise(doc, url, ownSeason, title[0]?.value || '');
   const self = findSelf(doc);
@@ -59,6 +59,9 @@ export function discover({ html, url, profile = null }) {
     else seriesTitle = titleFromText(parts[0]) || titleValue;
   }
 
+  /* the tail a site writes for search engines goes; a year in brackets is the year */
+  const tidy = tidyTitle(seriesTitle);
+  seriesTitle = tidy.title;
   if (seriesTitle) steps.push(`Сериал: ${seriesTitle}`);
   if (episodes.items.length) steps.push(`Нашла ${episodes.items.length} ${plural(episodes.items.length, 'серию', 'серии', 'серий')}`);
   const dubLabels = [...new Set(players.filter(p => p.dubLabel).map(p => p.dubLabel))];
@@ -76,7 +79,7 @@ export function discover({ html, url, profile = null }) {
     seriesUrl: { value: kind === 'episode' ? seriesUrl[0]?.value || null : null, candidates: seriesUrl },
     episode: { value: kind === 'episode' ? current[0]?.value ?? null : null, candidates: current },
     season: ownSeason ?? (franchise.find(f => f.self)?.order ?? null),
-    year: self.year, kind_: self.kind,
+    year: self.year ?? tidy.year, kind_: self.kind,
     franchise,
     episodes,
     players, switches,

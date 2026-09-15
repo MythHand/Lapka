@@ -98,7 +98,29 @@ export function findCurrentEpisode(doc, url) {
 /* "2 сезон", "Season 2", "2nd season", "S2", or a bare number at the
    end of a title ("Богиня благословляет этот прекрасный мир 2",
    "Этот Замечательный Мир! 3 (OVA)"): the season a title names */
-const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/];
+const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /сезон\s*№?\s*(\d{1,2})(?!\d)/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/];
+
+/* "neobjatnyj-okean-sezon-3", "one_piece_season_2", "…/s2/": the season an address names */
+const SEASON_PATH = /(?:^|[-_/])(?:sezon|season|s)[-_]?(\d{1,2})(?=[-_/.]|$)/i;
+export function seasonFromUrl(url) {
+  let u; try { u = new URL(url); } catch { return null; }
+  const m = SEASON_PATH.exec(u.pathname.toLowerCase());
+  return m ? Number(m[1]) : null;
+}
+
+/* A title the way a site writes it for search engines: "Необъятный
+   океан, Сезон 3 (2026) все серии онлайн". The name is what is left
+   once the year in brackets and the tail of watch-words go; the year
+   is kept. */
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free)\s*$/i;
+export function tidyTitle(text) {
+  let t = String(text || '');
+  let year = null;
+  t = t.replace(/\s*\(((?:19|20)\d{2})\)\s*/g, (_, y) => { year = year || Number(y); return ' '; });
+  for (let i = 0; i < 6; i++) { const was = t; t = t.replace(SEO_TAIL, ''); if (t === was) break; }
+  t = t.replace(/\s+/g, ' ').replace(/[\s,:·|—–-]+$/g, '').trim();
+  return { title: t || String(text || '').trim(), year };
+}
 const TRAILING = /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i;
 /* bare: whether a number at the end counts; it does in a title, not in a link ("3" in a strip of episodes) */
 export function seasonFromText(text, { bare = true } = {}) {
@@ -131,10 +153,32 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
     const n = seasonFromText(text, { bare: false });
     if (n === null || !aboutThisSeries(text, title)) continue;
     const raw = el.getAttribute('href') ?? el.getAttribute('value');
-    let abs; try { abs = new URL(raw, url).toString(); } catch { continue; }
-    if (/^(javascript|mailto):/i.test(abs) || abs.includes('#')) continue;
-    const key = abs.replace(/\/+$/, '');
-    if (!out.has(key)) out.set(key, { order: n, title: text, url: abs, kind: 'tv', self: key === page });
+    let abs; try { abs = new URL(raw, url); } catch { continue; }
+    if (/^(javascript|mailto):/i.test(abs.href) || String(raw).includes('#')) continue;
+    if (abs.origin !== new URL(url).origin) continue;   // a season of this series lives on this site; a chat or a news site does not
+    const key = abs.toString().replace(/\/+$/, '');
+    if (!out.has(key)) out.set(key, { order: n, title: text, url: abs.toString(), kind: 'tv', self: key === page });
+  }
+  /* Links that say nothing (a picture) but whose address is this
+     page's slug with another season: "neobjatnyj-okean-sezon-2" and
+     "neobjatnyj_okean_sezon_1_2018_720_hd" beside
+     "neobjatnyj-okean-sezon-3". The slug's stem before the season
+     marker names the series. */
+  let pageUrl; try { pageUrl = new URL(url); } catch { pageUrl = null; }
+  const slugOf = p => p.toLowerCase().replace(/[-_]+/g, '-');
+  const stemOf = p => { const seg = slugOf(p).split('/').filter(Boolean).find(s => SEASON_PATH.test(s)); if (!seg) return null; const stem = seg.replace(/(?:^|-)(?:sezon|season|s)-?\d{1,2}(?=-|$).*$/, ''); return stem.length >= 5 ? stem : null; };
+  const stem = pageUrl ? stemOf(pageUrl.pathname) : null;
+  if (stem) for (const a of doc.querySelectorAll('a[href]')) {
+    let u; try { u = new URL(a.getAttribute('href'), url); } catch { continue; }
+    if (u.origin !== pageUrl.origin || String(a.getAttribute('href')).includes('#')) continue;
+    const n = seasonFromUrl(u.toString());
+    if (n === null || !slugOf(u.pathname).includes(stem)) continue;
+    /* the season's own page, not an episode inside it */
+    const segs = slugOf(u.pathname).split('/').filter(Boolean);
+    const at = segs.findIndex(sg => SEASON_PATH.test(sg));
+    if (segs.slice(at + 1).some(sg => /seri|episod|\bep\b|ep-?\d/i.test(sg))) continue;
+    const key = u.toString().replace(/\/+$/, '');
+    if (!out.has(key)) out.set(key, { order: n, title: '', url: u.toString(), kind: 'tv', self: key === page });
   }
   const list = [...out.values()].sort((a, b) => a.order - b.order);
   if (!list.length) return [];
