@@ -632,6 +632,65 @@ function hideProgress() {
   paintFavicon();
 }
 
+/* ═══════════════ the mark ═══════════════
+   The paw is a few frames of block characters: it presses down and
+   lets go, the way a cat's does, every few seconds. Frame by frame,
+   textContent only: nothing moves by pixels. Under
+   prefers-reduced-motion it stands still on the first frame. The
+   name is set the way software greets in a terminal. */
+const PAW_FRAMES = [
+`    ▄▄  ▄▄    
+   ████████   
+ ▄▄ ▀▀▀▀▀▀ ▄▄ 
+ ██        ██ 
+ ▀▀ ▄████▄ ▀▀ 
+   ████████   
+    ▀████▀    `,
+`              
+    ▄▄  ▄▄    
+ ▄▄ ██████ ▄▄ 
+ ██ ▀▀▀▀▀▀ ██ 
+ ▀▀ ▄████▄ ▀▀ 
+   ████████   
+    ▀████▀    `,
+`              
+              
+ ▄▄  ▄▄▄▄  ▄▄ 
+ ██ ▄████▄ ██ 
+ ▀▀ ██████ ▀▀ 
+   ████████   
+    ▀████▀    `,
+`              
+              
+              
+ ▄▄▄▄▄  ▄▄▄▄▄ 
+ ▀▀▀▄████▄▀▀▀ 
+   ████████   
+    ▀████▀    `,
+];
+const BANNER = `██╗      █████╗ ██████╗ ██╗  ██╗ █████╗ 
+██║     ██╔══██╗██╔══██╗██║ ██╔╝██╔══██╗
+██║     ███████║██████╔╝█████╔╝ ███████║
+██║     ██╔══██║██╔═══╝ ██╔═██╗ ██╔══██║
+███████╗██║  ██║██║     ██║  ██╗██║  ██║
+╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝`;
+const pawEl = $('#paw'), bannerEl = $('#banner');
+if (bannerEl) bannerEl.textContent = BANNER;
+if (pawEl) {
+  pawEl.textContent = PAW_FRAMES[0];
+  const still = matchMedia('(prefers-reduced-motion: reduce)');
+  /* down through the frames and back up: one press */
+  const press = () => {
+    if (still.matches || emptyEl.classList.contains('hide')) return;
+    const order = [...PAW_FRAMES.keys(), ...[...PAW_FRAMES.keys()].reverse().slice(1)];
+    let i = 0;
+    const tick = () => { pawEl.textContent = PAW_FRAMES[order[i]]; if (++i < order.length) setTimeout(tick, i === PAW_FRAMES.length ? 260 : 90); };
+    tick();
+  };
+  setTimeout(press, 700);
+  setInterval(press, 4200);
+}
+
 /* ═══════════════ opening a link ═══════════════
    One address in. The server reads the page, finds the series and
    its episodes, and the queue is those episodes. Each episode is

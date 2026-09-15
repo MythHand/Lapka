@@ -1653,3 +1653,15 @@ video::cue{
 .queue__sites-head:first-child{ margin-top:0; }
 .queue__sites{ margin:0 0 6px; padding-left:18px; color:var(--tx-3); line-height:1.6; }
 .queue__sites li{ margin:0; }
+
+/* ── the mark: characters on a grid ───────────────────────────
+   Everything drawn in characters sits on the cell grid of the
+   monospace: pre, no tracking, tight leading, no ligatures. */
+.mono-art{
+  font-family:"Iosevka Charon Mono", "DejaVu Sans Mono", Menlo, monospace;
+  white-space:pre; letter-spacing:0; line-height:1.05; font-variant-ligatures:none; font-feature-settings:"liga" 0, "calt" 0;
+  margin:0; display:inline-block; text-align:left;
+}
+.mark{ display:flex; flex-direction:column; align-items:center; gap:14px; margin:6px 0 22px; }
+.paw{ font-size:calc(15px + var(--fs)); color:var(--tx-2); }
+.banner{ font-size:calc(9.5px + var(--fs)); color:var(--tx-1); }
