@@ -24,6 +24,10 @@ async function openHome(home, delivery) {
 }
 
 export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
+  /* a folder given here (by a test, by a script) is this run's alone
+     and is never written into the config; the config is for the
+     folder the user chose in the settings */
+  const explicit = !!home;
   home = home || (await readConfig()).home || undefined;
   const session = createSession();
   const ctx = { session };
@@ -38,7 +42,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     const old = ctx.state;
     Object.assign(ctx, await openHome(check.path, delivery));
     await old.close().catch(() => {});
-    if (!process.env.LAPKA_HOME) await writeConfig({ home: check.path });
+    if (!explicit && !process.env.LAPKA_HOME) await writeConfig({ home: check.path });
     return check;
   };
   const server = await startServer({ port, webDir, ctx });
