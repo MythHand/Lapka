@@ -113,7 +113,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const ep = findEpisode(s, number);
     if (!ep) throw Object.assign(new Error('unknown episode'), { code: 404 });
     if (ep.opened) return ep;
-    if (!ep.sourceUrl) { ep.opened = true; return ep; }
+    /* an episode without a page of its own has nothing to read */
+    if (!ep.sourceUrl || ep.sourceUrl === s.sourceUrl) { ep.opened = true; return ep; }
     const report = await readPage(ep.sourceUrl, s.sourceUrl);
     if (report.kind === 'episode' && report.episode.value === null) report.episode.value = number;
     merge(s, toContribution(report));
@@ -190,11 +191,17 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       catch (e) { first.steps.push(`${site.name}: ${e.message}`); }
     }
 
-    const seriesUrl = (first.kind === 'episode' && first.seriesUrl.value) || (extra && extra.seriesUrl) || first.url;
+    /* The adapter knows the series page best. Without one, an
+       episode page leads up to its series only when it is certainly
+       an episode page: one that names its number. A page that only
+       looks like one (a decorative iframe, no number) is left alone,
+       or the way up ends on a catalog. */
+    const certain = first.kind === 'episode' && first.episode.value !== null;
+    const seriesUrl = (extra && extra.seriesUrl) || (certain && first.seriesUrl.value) || first.url;
     /* no title yet: the adapter, then the series page, then the episode page fill it in that order */
     const series = createSeries({ sourceUrl: seriesUrl });
 
-    if (first.kind === 'episode' && seriesUrl !== first.url) {
+    if (certain && seriesUrl !== first.url && !(extra && extra.seriesUrl)) {
       try { reports.push(await readPage(seriesUrl, first.url)); } catch (e) { first.steps.push(`Страница сериала не открылась: ${e.message}`); }
     }
     /* the adapter names things best, then the series page, then the episode page */
