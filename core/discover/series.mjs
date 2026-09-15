@@ -21,6 +21,11 @@ export function findTitle(doc, { profile } = {}) {
   add(doc.querySelector('meta[property="og:title"]')?.getAttribute('content'), 'og:title', 0.9, 'meta[property="og:title"]');
   const h1 = doc.querySelector('h1'); if (h1) add(textOf(h1), 'h1', 0.8, 'h1');
   add(stripSite(doc.querySelector('title')?.textContent), 'title', 0.5, 'title');
+  /* "Клинок, рассекающий демонов смотреть на джутсу" in og:title and
+     "Клинок, рассекающий демонов" in the heading: the heading is the
+     name, the rest is a tail for search engines */
+  const og = out.find(c => c.by === 'og:title'), head = out.find(c => c.by === 'h1');
+  if (og && head && og.value.length > head.value.length && og.value.toLowerCase().startsWith(head.value.toLowerCase() + ' ')) head.confidence = 0.95;
   out.sort((a, b) => b.confidence - a.confidence);
   return out;
 }
@@ -107,13 +112,24 @@ export function seasonFromText(text, { bare = true } = {}) {
    options of a select of seasons. The current season is the one whose
    address is this page's, or, as pages usually do not link to
    themselves, the one number missing from the run of links. */
-export function findFranchise(doc, url, ownSeason = null) {
+/* A season link that names another series ("О моём перерождении в
+   слизь 2 сезон" on the page of "Клинок, рассекающий демонов") is a
+   recommendation, not a part of this franchise. A link that names
+   only a season, or names this series, is. The test is the first
+   long word of the title: a part's name carries it. */
+function aboutThisSeries(text, title) {
+  const stem = (String(title || '').toLowerCase().match(/[a-zа-яё0-9]{4,}/) || [''])[0].slice(0, 5);
+  const words = String(text).toLowerCase().replace(/\d+|сезон\w*|season|s\d+/gi, ' ').match(/[a-zа-яё]{4,}/g) || [];
+  return !words.length || !stem || words.some(w => w.startsWith(stem) || stem.startsWith(w.slice(0, 5)));
+}
+
+export function findFranchise(doc, url, ownSeason = null, title = '') {
   const out = new Map();
   const page = (() => { try { return new URL(url).toString().replace(/\/+$/, ''); } catch { return url; } })();
   for (const el of doc.querySelectorAll('a[href], option[value]')) {
     const text = textOf(el);
     const n = seasonFromText(text, { bare: false });
-    if (n === null) continue;
+    if (n === null || !aboutThisSeries(text, title)) continue;
     const raw = el.getAttribute('href') ?? el.getAttribute('value');
     let abs; try { abs = new URL(raw, url).toString(); } catch { continue; }
     if (/^(javascript|mailto):/i.test(abs) || abs.includes('#')) continue;

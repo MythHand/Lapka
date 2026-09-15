@@ -10,6 +10,7 @@
    ═══════════════════════════════════════════════════════════ */
 import { createSession } from './session/index.mjs';
 import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
+import { playerId } from './discover/players.mjs';
 import { loadExtractors, extractorFor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
@@ -47,10 +48,40 @@ export function createLapka({ session = createSession(), profiles = [], extracto
      this episode. A player the page named a dub for gets its streams
      under that dub; a player that carries its own dub switch brings
      its dubs along; a player that gives nothing is reported as such. */
+  /* A deferred player: the site's engine is asked where the player is.
+     It answers with JSON that names the address, or with the iframe
+     itself, or with the bare address. */
+  async function followDeferred(url, pageUrl) {
+    const res = await session.fetch(url, { referer: pageUrl, headers: { 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01' } });
+    if (res.status >= 400) throw new Error(`the site answered ${res.status} for the player`);
+    const body = String(res.body || '').trim();
+    let found = null;
+    try { const j = JSON.parse(body); found = typeof j === 'string' ? j : j.data || j.url || j.src || j.iframe || null; } catch { /* not JSON */ }
+    if (!found) found = /<iframe[^>]+src=["']([^"']+)["']/i.exec(body)?.[1] || (/^(https?:)?\/\/\S+$/.test(body) ? body : null);
+    if (!found || typeof found !== 'string') throw new Error('the site did not say where the player is');
+    return new URL(found.replace(/&amp;/g, '&'), pageUrl).toString();
+  }
+
   async function openPlayer(player, number, pageUrl) {
+    if (player.kind === 'deferred') {
+      try { const url = await followDeferred(player.url, pageUrl); player = { ...player, url, id: playerId(url, pageUrl), kind: 'iframe' }; }
+      catch (e) { return { player, error: e.message }; }
+    }
     const x = extractorFor(extractors, player.url);
     if (!x) return { player, error: 'no extractor' };
     try {
+      /* a player that holds the whole series: every episode and dub it
+         lists comes in, the streams wait until an episode is played */
+      if (x.unfold) {
+        const got = await x.unfold(player.url, { referer: pageUrl }, session);
+        if (got && got.episodes?.length) {
+          const episodes = got.episodes.map(e => ({ ...e, sourceUrl: e.sourceUrl || pageUrl,
+            dubs: (e.dubs || []).map(d => ({ ...d, sources: d.sources.map(src => ({ player: player.id, extractor: x.name, ...src })) })) }));
+          const dubs = new Set(episodes.flatMap(e => e.dubs.map(d => d.name)));
+          return { player, extractor: x.name, unfolded: { episodes: episodes.length, dubs: dubs.size }, contribution: { origin: `extract:${x.name}`, episodes } };
+        }
+      }
+      if (number === null) return { player, extractor: x.name, error: 'the page names no episode' };
       const got = await x.extract(player.url, { referer: pageUrl }, session);
       const source = streams => ({ player: player.id, embedUrl: player.url, extractor: x.name, streams });
       let dubs;
@@ -80,8 +111,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const results = await Promise.all(embeds.map(p => openPlayer(p, number, report.url)));
     const opened = [];
     for (const r of results) {
-      opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null,
-        streams: r.contribution ? r.contribution.episodes[0].dubs.reduce((n, d) => n + d.sources[0].streams.length, 0) : 0 });
+      opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null, unfolded: r.unfolded || null,
+        streams: r.contribution && !r.unfolded ? r.contribution.episodes[0].dubs.reduce((n, d) => n + (d.sources[0].streams || []).length, 0) : 0 });
       if (r.contribution) merge(series, r.contribution);
     }
     const ep = findEpisode(series, number);
@@ -95,6 +126,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       steps.push(ok === embeds.length ? `Открыла ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}, потоки есть`
         : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
       for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
+      for (const r of results) if (r.unfolded) steps.push(`${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`);
     }
     if (ep) ep.opened = true;
     registerStreams(series);
@@ -257,7 +289,11 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const steps = [...new Set(reports.flatMap(r => r.steps))];
     let opened = [];
     const number = first.episode.value;
-    if (first.kind === 'episode' && number !== null) {
+    /* the players are opened for a page that names its episode, and
+       for one whose player may hold the whole series: a deferred one,
+       or one its extractor can unfold */
+    const whole = first.players.some(p => p.kind === 'deferred' || extractorFor(extractors, p.url)?.unfold);
+    if (first.kind === 'episode' && (number !== null || whole)) {
       const got = await openPlayers(series, first);
       opened = got.opened; steps.push(...got.steps);
     }

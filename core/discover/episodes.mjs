@@ -17,6 +17,7 @@ const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 function candidatesFrom(doc, url, profile) {
   const out = [];
   const push = (el, href, text, by) => {
+    if (/^\s*#/.test(String(href))) return;   // a link to nowhere on the page is a button (rating stars "1".."10"), not an episode's page
     let abs; try { abs = new URL(href, url).toString(); } catch { return; }
     if (/^(javascript|mailto|tel):/i.test(abs)) return;
     const t = clean(text);

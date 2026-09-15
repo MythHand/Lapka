@@ -18,6 +18,7 @@
 const HOSTS = /(^|\.)(kodik\.(info|cc|biz)|kodikplayer\.com|aniqit\.com|anivod\.com)$/i;
 const FALLBACK = { endpoint: '/ftor', shift: 18 };
 const TTL_MS = 3 * 60 * 60 * 1000;
+const UNNAMED = 'Основной';
 
 /* one look at the player script per host and version */
 const scripts = new Map();
@@ -45,6 +46,32 @@ export function readScript(js) {
   };
 }
 
+/* A serial embed lists what the player holds: every translation with
+   the media id and hash of its own serial and its episode count, the
+   seasons of the translation shown, the episodes of its season. */
+export function readSerial(page) {
+  const attrs = tag => Object.fromEntries([...tag.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(m => [m[1], m[2] ?? '']));
+  const box = name => {
+    const i = page.indexOf(`class="${name}`); if (i < 0) return [];
+    const j = page.indexOf('</select>', i);
+    return [...page.slice(i, j < 0 ? undefined : j).matchAll(/<option\b[^>]*>/g)].map(m => attrs(m[0]));
+  };
+  /* "MedusaSub.Subtitles" is the MedusaSub subtitles: named the way the catalog names them */
+  const named = (title, kind) => { const base = String(title || '').replace(/[.\s]*subtitles$/i, '').trim(); return kind === 'sub' && base ? `${base} (субтитры)` : base; };
+  const translations = box('serial-translations-box').filter(o => o['data-media-id'] && o['data-media-hash']).map(o => {
+    const kind = /sub/i.test(o['data-translation-type'] || '') ? 'sub' : 'dub';
+    return {
+    id: o['data-id'] || o.value, title: named(o['data-title'], kind),
+    kind,
+    mediaType: o['data-media-type'] || 'serial', mediaId: o['data-media-id'], mediaHash: o['data-media-hash'],
+    count: Number(o['data-episode-count']) || 0,
+  }; });
+  const seasons = box('serial-seasons-box').map(o => ({ number: Number(o.value), selected: 'selected' in o })).filter(s => Number.isFinite(s.number));
+  const episodes = box('serial-series-box').map(o => ({ number: Number(o.value), id: o['data-id'], hash: o['data-hash'], title: o['data-title'] || '', selected: 'selected' in o })).filter(e => Number.isFinite(e.number));
+  const current = { id: /var\s+translationId\s*=\s*"?(\d+)/.exec(page)?.[1] || null, title: /var\s+translationTitle\s*=\s*"([^"]*)"/.exec(page)?.[1] || '' };
+  return { translations, seasons, episodes, current };
+}
+
 /* what the embed page says about the video and the site it serves */
 export function readEmbed(page) {
   const vi = {};
@@ -64,6 +91,38 @@ export function readEmbed(page) {
 export default {
   name: 'kodik',
   match: url => { try { return HOSTS.test(new URL(url).hostname); } catch { return false; } },
+
+  /* A serial embed holds the whole series: every translation, every
+     episode. Unfolded, it is a contribution of episodes and dubs, each
+     source the same serial embed opened at that episode
+     (…/serial/<id>/<hash>/720p?episode=N), asked for its streams only
+     when it is played. The other translations' episodes are counted,
+     not listed: the embed lists only the episodes of the translation
+     it shows. A single-video embed unfolds to nothing.
+     Seam: an embed with several seasons is read as the season it
+     shows; the other seasons of a Kodik serial are not followed. */
+  async unfold(embedUrl, { referer = null } = {}, session) {
+    let u; try { u = new URL(embedUrl); } catch { return null; }
+    if (!/^\/(serial|season)\//.test(u.pathname) || /only_episode=true/.test(u.search)) return null;
+    const res = await session.fetch(embedUrl, { referer });
+    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    const ser = readSerial(res.body);
+    const origin = new URL(res.url || embedUrl).origin;
+    const season = ser.seasons.length > 1 ? ser.seasons.find(s => s.selected)?.number ?? null : null;
+    const at = (t, n) => `${origin}/${t.mediaType}/${t.mediaId}/${t.mediaHash}/720p?${season !== null ? `season=${season}&` : ''}episode=${n}`;
+    /* the translation shown, when the embed names no others */
+    const own = /^\/(serial|season)\/(\d+)\/([a-f0-9]+)\//.exec(u.pathname);
+    const translations = ser.translations.length ? ser.translations
+      : own && ser.episodes.length ? [{ id: ser.current.id, title: ser.current.title, kind: 'dub', mediaType: own[1], mediaId: own[2], mediaHash: own[3], count: ser.episodes.length }] : [];
+    const numbers = t => (t.id === ser.current.id && ser.episodes.length ? ser.episodes.map(e => e.number) : Array.from({ length: t.count }, (_, i) => i + 1));
+    const episodes = new Map();
+    for (const t of translations) for (const n of numbers(t)) {
+      if (!episodes.has(n)) episodes.set(n, { number: n, dubs: [] });
+      episodes.get(n).dubs.push({ name: t.title || UNNAMED, kind: t.kind, sources: [{ embedUrl: at(t, n) }] });
+    }
+    if (episodes.size < 2 && translations.length < 2) return null;
+    return { episodes: [...episodes.values()].sort((a, b) => a.number - b.number) };
+  },
 
   async extract(embedUrl, { referer = null } = {}, session) {
     const res = await session.fetch(embedUrl, { referer });

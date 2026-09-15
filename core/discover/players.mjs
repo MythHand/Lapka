@@ -21,6 +21,19 @@ const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-
 const STREAM_RE = /https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?|(?<![\w/])\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?/g;
 const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server)\b/i;
 
+/* A player the page fetches after it loads: the element carries the
+   parameters of a request instead of an address, and the site's
+   engine answers with the embed's address. DLE's xfplayer is the
+   common case: data-params="mod=kodik-player&url=1&action=iframe&id=31"
+   is answered by /engine/ajax/controller.php with those parameters.
+   Such a player is deferred: the address is asked for when it is
+   opened, not while the page is read. */
+const DEFERRED = [{
+  attr: 'data-params', when: /(^|&)mod=[\w-]*player/i,
+  url: (v, page) => new URL('/engine/ajax/controller.php?' + v, page).toString(),
+  id: v => ((/(^|&)mod=([\w-]+?)(-player)?(&|$)/i.exec(v) || [])[2] || 'player').toLowerCase(),
+}];
+
 export const streamKind = u => /\.m3u8(\?|$)/i.test(u) ? 'hls' : /\.mpd(\?|$)/i.test(u) ? 'dash' : /\.mp4(\?|$)/i.test(u) ? 'mp4' : null;
 
 /* "720p" in the file name, or a bare 480/720/1080 as a folder of the
@@ -79,6 +92,13 @@ export function findPlayers(doc, url, { profile } = {}) {
     for (const s of v.querySelectorAll('source')) add(abs(s.getAttribute('src')), 'video', 'video source');
   }
   add(abs(doc.querySelector('meta[property="og:video"], meta[property="og:video:url"]')?.getAttribute('content')), 'og', 'meta[og:video]');
+  for (const d of DEFERRED) for (const el of doc.querySelectorAll(`[${d.attr}]`)) {
+    const v = el.getAttribute(d.attr) || '';
+    if (!d.when.test(v)) continue;
+    let u; try { u = d.url(v, url); } catch { continue; }
+    const p = add(u, 'deferred', `[${d.attr}]`);
+    if (p) p.id = d.id(v);
+  }
   for (const s of doc.querySelectorAll('script:not([src])')) {
     for (const m of s.textContent.matchAll(STREAM_RE)) add(abs(m[0]), 'script', 'script');
   }
