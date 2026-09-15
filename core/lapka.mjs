@@ -103,6 +103,9 @@ export function createLapka({ session = createSession(), profiles = [], extracto
 
   const series = id => seen.get(id) || null;
 
+  /* a series built elsewhere (a snapshot from disk, a test) becomes one Lapka knows */
+  function adopt(s) { registerStreams(s); seen.set(s.id, s); return s; }
+
   /* One episode of a known series, its page read and its players opened. */
   async function openEpisode(seriesId, number) {
     const s = seen.get(seriesId);
@@ -124,13 +127,44 @@ export function createLapka({ session = createSession(), profiles = [], extracto
      user wants or the nearest thing to it, a live source, its best
      stream. `avoid` is a stream that just failed: its source is
      marked dead and another is picked. */
+  /* A source's streams, asked for again: the links of some players
+     are signed for hours, and a failed stream may only be a stale
+     one. Only sources an extractor filled can be refreshed. */
+  async function refreshSource(source, ep, s) {
+    const x = (source.extractor && extractors.find(e => e.name === source.extractor)) || extractorFor(extractors, source.embedUrl);
+    if (!x) { markHealth(source, false, 'no extractor'); return false; }
+    try {
+      const got = await x.extract(source.embedUrl, { referer: ep.sourceUrl || s.sourceUrl }, session);
+      const streams = got.dubs?.length ? got.dubs.flatMap(d => d.streams) : (got.streams || []);
+      if (!streams.length) { markHealth(source, false, 'no streams'); return false; }
+      source.extractor = source.extractor || x.name;
+      source.streams = streams.map(st => ({ ...st, headers: { ...(st.headers || {}) } }));
+      markHealth(source, true);
+      registerStreams(s);
+      return true;
+    } catch (e) { markHealth(source, false, e.message); return false; }
+  }
+
+  const stale = source => source.streams.length && source.streams.every(st => st.expiresAt && st.expiresAt < Date.now());
+
   async function resolve({ seriesId, number, dubKey = null, avoid = null }) {
     const s = seen.get(seriesId);
     if (!s) throw Object.assign(new Error('unknown series; look at its page first'), { code: 404 });
     const ep = await openEpisode(seriesId, number);
-    if (avoid) for (const d of ep.dubs) for (const src of d.sources) if (src.streams.some(st => st.id === avoid)) markHealth(src, false, 'playback failed');
+    /* a stream that failed: its source gets one more try with fresh links, then counts as dead */
+    if (avoid) for (const d of ep.dubs) for (const src of d.sources) if (src.streams.some(st => st.id === avoid)) {
+      if (!(await refreshSource(src, ep, s))) markHealth(src, false, 'playback failed');
+      else if (src.streams.some(st => st.id === avoid)) markHealth(src, false, 'playback failed');
+    }
     const dub = pickDub(ep, dubKey ? { name: dubKey } : null);
-    const source = dub ? pickSource(dub) : null;
+    let source = dub ? pickSource(dub) : null;
+    /* no streams yet, or all of them past their time: ask the player
+       now; a player that gives nothing is passed over for the next */
+    for (let tries = dub ? dub.sources.length : 0; source && tries > 0 && (!source.streams.length || stale(source)); tries--) {
+      if (await refreshSource(source, ep, s)) break;
+      const next = pickSource(dub);
+      source = next === source ? null : next;
+    }
     const stream = source ? bestStream(source) : null;
     return {
       series: { id: s.id, title: s.title },
@@ -184,7 +218,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       start: startAt !== null ? { episode: startAt } : null };
   }
 
-  return { look, readPage, context, series, openEpisode, resolve, session, extractors, sites, profiles };
+  return { look, readPage, context, series, adopt, openEpisode, resolve, session, extractors, sites, profiles };
 }
 
 function plural(n, one, few, many) {
