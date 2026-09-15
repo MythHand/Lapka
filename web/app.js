@@ -181,6 +181,17 @@ function fourLetters() {
   textMeter.letterSpacing = cs.letterSpacing;   // the interface tracking, or four letters came out three
   return Math.ceil(textMeter.measureText(chars.length > 4 ? chars.slice(0, 4).join('') + '…' : chars.join('')).width) + 1;
 }
+/* The width a side of the deck needs: its groups laid side by side,
+   each holding its buttons. Not scrollWidth: an open menu is an
+   absolute box inside a group, and scrollWidth counts it, so with a
+   wide menu open the side seemed not to fit and the deck folded up.
+   Only what is in the flow and shown counts. */
+function sideWidth(side) {
+  const shown = el => [...el.children].filter(c => c.offsetWidth > 0 && !/^(absolute|fixed)$/.test(getComputedStyle(c).position));
+  const gapOf = el => parseFloat(getComputedStyle(el).columnGap) || 0;
+  const sum = (el, w) => { const cs = shown(el); return cs.reduce((a, c) => a + w(c), 0) + gapOf(el) * Math.max(0, cs.length - 1); };
+  return sum(side, g => g.classList.contains('deck__grp') ? sum(g, c => c.offsetWidth) : g.offsetWidth);
+}
 function fitDeck() {
   if (!deckRow.clientWidth) return;               // hidden, nothing to measure
   deck.classList.remove('deck--packed', 'deck--compact', 'deck--offcentre');
@@ -193,12 +204,12 @@ function fitDeck() {
   /* measured afresh each time: the compact step changes the padding
      and the size of the centre */
   const room = () => (deckRow.clientWidth - deckCenter.offsetWidth) / 2 - gap;
-  if (deckRight.scrollWidth > room()) deck.classList.add('deck--packed');
-  if (!fitLabel(room()) || deckRight.scrollWidth > room()) {
+  if (sideWidth(deckRight) > room()) deck.classList.add('deck--packed');
+  if (!fitLabel(room()) || sideWidth(deckRight) > room()) {
     deck.classList.add('deck--compact');
     /* the last step: the centre leaves the exact middle, and the sides
        share the row by what they hold rather than half and half */
-    if (!fitLabel(room()) || deckRight.scrollWidth > room()) deck.classList.add('deck--offcentre');
+    if (!fitLabel(room()) || sideWidth(deckRight) > room()) deck.classList.add('deck--offcentre');
   }
   if (!deck.classList.contains('deck--packed')) closePack();   // unfolded, the tray is gone with its state
 }
@@ -208,13 +219,13 @@ const LABEL_MAX = 180;
 function fitLabel(room) {
   btnAudio.classList.remove('rb--icon');
   audioLabel.style.maxWidth = LABEL_MAX + 'px';   // a steady width: the name does not grow and shrink with every change around it
-  const over = deckLeft.scrollWidth - room;
+  const over = sideWidth(deckLeft) - room;
   if (over <= 0) return true;
   if (btnAudio.hidden) return false;
   const left = Math.min(LABEL_MAX, audioLabel.getBoundingClientRect().width) - over;
   if (left >= fourLetters()) { audioLabel.style.maxWidth = Math.floor(left) + 'px'; return true; }
   btnAudio.classList.add('rb--icon');
-  return deckLeft.scrollWidth <= room;
+  return sideWidth(deckLeft) <= room;
 }
 new ResizeObserver(fitDeck).observe(deckRow);
 
@@ -1262,7 +1273,7 @@ function buildAudioMenu() {
       for (const q of info.qualities) {
         const tg = document.createElement('span');
         tg.className = 'tag' + (o.sel && it.stream && it.stream.id === q.id ? ' sel' : '');
-        tg.textContent = q.quality || t('quality.auto');
+        tg.textContent = q.quality || (q.kind === 'hls' ? t('quality.auto') : q.kind.toUpperCase());   // a file of unknown size is named by what it is, not called adaptive
         tg.title = q.player + ' · ' + q.kind.toUpperCase();
         tg.onclick = ev => { ev.stopPropagation(); pickAudio(o, q.quality || 'auto'); markPicked(b); };
         tags.append(tg);
