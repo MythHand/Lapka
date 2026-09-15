@@ -1678,7 +1678,7 @@ video::cue{
 .about__line--paw{ color:var(--tx-2); margin-top:0.6em; }
 /* nothing open: the panel is the about page, without a header and without a count */
 .queue--empty .queue__tools{ display:none; }
-.queue--empty .queue__sum{ display:none; }
+.queue--empty .queue__side{ display:none; }   /* the mini brand and the count go with it */
 /* the footer's field and its button: one height, one shape */
 .linkform--foot .linkform__in{ height:34px; border-radius:999px; padding:0 14px; }
 .linkform__wrap .linkform__in{ padding-right:36px; }
