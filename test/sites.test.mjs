@@ -121,3 +121,62 @@ describe('look() on aniliberty, page and adapter together', () => {
     assert.equal(one.dubs[0].sources[0].streams.length, 3);
   });
 });
+
+/* ── yummyani: a catalog whose player is a script; the API says it all ── */
+import yummyani, { dubOf, playerOf } from '../core/sites/yummyani.mjs';
+
+const YSNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'yummyani');
+const ysnap = f => fs.readFileSync(path.join(YSNAP, f), 'utf8');
+const YSITE = 'https://old.yummyani.me';
+const YURL = `${YSITE}/catalog/item/etot-zamechatel-nyj-mir`;
+const ysession = {
+  fetch: async url => {
+    const p = new URL(url).pathname;
+    let body = null;
+    if (p === '/api/anime/etot-zamechatel-nyj-mir') body = ysnap('api-anime.json');
+    else if (p === '/api/anime/107/videos') body = ysnap('api-videos.json');
+    else if (p === '/catalog/item/etot-zamechatel-nyj-mir') body = ysnap('item.html');
+    return { status: body ? 200 : 404, url, body: body || '', headers: {} };
+  },
+};
+
+describe('the yummyani adapter', () => {
+  test('labels become dubs and kinds, hosts become players', () => {
+    assert.deepEqual(dubOf('Озвучка AniDUB'), { name: 'AniDUB', kind: 'dub' });
+    assert.deepEqual(dubOf('Субтитры SovetRomantica'), { name: 'SovetRomantica (субтитры)', kind: 'sub' });
+    assert.deepEqual(dubOf('Субтитры'), { name: 'Субтитры', kind: 'dub' });
+    assert.equal(playerOf('//kodikplayer.com/season/3207/abc/720p?episode=1'), 'kodik');
+    assert.equal(playerOf('//alloha.yani.tv/?token_movie=x'), 'alloha');
+    assert.equal(playerOf('//ru.yummyani.me/iframeCVH.html?anime_id=1'), 'cvh');
+  });
+  test('eleven episodes, twelve dubs and subtitle tracks, three players, the marks of the openings', async () => {
+    const c = await yummyani.look(YURL, ysession);
+    assert.equal(c.series.title, 'Богиня благословляет этот прекрасный мир');
+    assert.match(c.series.cover, /^https:\/\/static\.yani\.tv\/posters\//);
+    assert.equal(c.seriesUrl, YURL);
+    /* ten episodes and one more that only Alloha carries */
+    assert.equal(c.episodes.length, 11);
+    assert.deepEqual(c.episodes[10].dubs.flatMap(d => d.sources.map(s => s.player)), ['alloha', 'alloha', 'alloha', 'alloha']);
+    const ep1 = c.episodes[0];
+    assert.equal(ep1.number, 1);
+    /* AniDUB, AniLibria, SHIZA, plain subtitles, Crunchyroll dub and subtitles, Animedia, Комната Диди, SovetRomantica subtitles, AniBaza, OnWave, RedMic */
+    assert.equal(ep1.dubs.length, 12);
+    assert.ok(ep1.dubs.some(d => d.name === 'Crunchyroll' && d.kind === 'dub') && ep1.dubs.some(d => d.name === 'Crunchyroll (субтитры)' && d.kind === 'sub'));
+    const anilibria = ep1.dubs.find(d => d.name === 'AniLibria');
+    assert.deepEqual(anilibria.sources.map(s => s.player).sort(), ['alloha', 'cvh', 'kodik']);
+    assert.match(anilibria.sources.find(s => s.player === 'kodik').embedUrl, /^https:\/\/kodikplayer\.com\/season\//);
+    assert.deepEqual(ep1.marks, { opening: { start: 107, stop: 196 }, ending: { start: 1405, stop: 1504 } });
+    assert.equal(ep1.duration, 1513);
+    /* a source has no stream yet: the extractors bring those */
+    assert.ok(anilibria.sources.every(s => !s.streams));
+  });
+  test('through look(): the page says nothing, the adapter says everything, the dubs merge by studio', async () => {
+    const lapka = createLapka({ session: ysession, sites: await loadSites(), profiles: await loadProfiles() });
+    const { series, dubs, steps } = await lapka.look(YURL);
+    assert.equal(series.episodes.length, 11);
+    assert.ok(dubs.includes('AniLibria') && dubs.includes('AniDub') && dubs.includes('SHIZA Project'), dubs.join(','));
+    assert.ok(steps.some(s => s.includes('Сайт знаком: yummyani')), steps.join(' | '));
+    const ep = series.episodes[0];
+    assert.equal(ep.dubs.find(d => d.key === 'anilibria').sources.length, 3);
+  });
+});
