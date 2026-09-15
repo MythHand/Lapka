@@ -1655,17 +1655,23 @@ video::cue{
 .queue__sites li{ margin:0; }
 
 /* ── the mark: characters on a grid ───────────────────────────
-   Everything drawn in characters sits on the cell grid of the
-   monospace: pre, no tracking, tight leading, no ligatures. */
+   The paw and the name are one seal, drawn in characters on one
+   grid. The grid is the cell of the monospace: one size for both,
+   leading of exactly one row, no tracking, no ligatures, and every
+   distance in the seal is cells too (ch across, em down), so the
+   drawing never depends on a pixel. */
 .mono-art{
   font-family:"Iosevka Charon Mono", "DejaVu Sans Mono", Menlo, monospace;
-  white-space:pre; letter-spacing:0; line-height:1.05; font-variant-ligatures:none; font-feature-settings:"liga" 0, "calt" 0;
-  margin:0; display:inline-block; text-align:left;
+  white-space:pre; letter-spacing:0; line-height:1; font-variant-ligatures:none; font-feature-settings:"liga" 0, "calt" 0;
+  margin:0; display:block; text-align:left;
 }
-/* the paw to the left of the name, both on one grid size, one line of a seal */
-.mark{ display:flex; flex-direction:row; align-items:center; justify-content:center; gap:26px; margin:6px 0 22px; }
-/* the cells show: a hair of air between characters and between rows,
-   so the paw reads as characters on a grid, not as a filled shape */
-.paw{ font-size:calc(15px + var(--fs)); color:var(--tx-2); letter-spacing:0.14em; line-height:1.22; }
-.banner{ font-size:calc(9.5px + var(--fs)); color:var(--tx-1); }
-.mark--left{ justify-content:flex-start; margin:0 0 18px; }
+.mark{
+  --cell:calc(11px + var(--fs));            /* the one size of the seal */
+  font-size:var(--cell);
+  display:flex; flex-direction:row; align-items:center; justify-content:center;
+  gap:3ch;                                  /* three cells between the paw and the name */
+  margin:0 0 2em;                           /* two rows before what follows */
+}
+.mark .paw{ color:var(--tx-2); }
+.mark .banner{ color:var(--tx-1); }
+.mark--left{ justify-content:flex-start; margin:0 0 1.5em; }
