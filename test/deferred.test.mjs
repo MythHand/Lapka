@@ -152,7 +152,7 @@ describe('through look() and resolve()', () => {
     /* the part that links to this page is this page; the head of the franchise, left without a link here, cannot be followed and is left out */
     const self = r.series.franchise.find(f => f.self);
     assert.deepEqual([self.year, self.kind, self.url], [2020, 'movie', FILM]);
-    assert.equal(r.series.franchise.length, 8);
+    assert.equal(r.series.franchise.length, 9);   // ten in the block, the unlinked head left out
     assert.ok(!r.series.franchise.some(f => f.year === 2019));
   });
 });
