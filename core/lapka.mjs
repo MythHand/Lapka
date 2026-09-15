@@ -132,6 +132,22 @@ export function createLapka({ session = createSession(), profiles = [], extracto
      are signed for hours, and a failed stream may only be a stale
      one. Only sources an extractor filled can be refreshed. */
   async function refreshSource(source, ep, s) {
+    /* a source that is the episode's own page, or an adapter's word, is
+       refreshed by reading that page again: the generic extractor on a
+       page that carries every episode's streams would bring them all */
+    if (source.player === 'page' || String(source.extractor || '').startsWith('site:')) {
+      if (!ep.sourceUrl || ep.sourceUrl === s.sourceUrl) { markHealth(source, false, 'nothing to re-read'); return false; }
+      try {
+        const before = source.streams.map(st => st.url).join('\n');
+        const report = await readPage(ep.sourceUrl, s.sourceUrl);
+        if (report.episode.value === null) report.episode.value = ep.number;
+        merge(s, toContribution(report));
+        const fresh = source.streams.length && source.streams.map(st => st.url).join('\n') !== before;
+        markHealth(source, !!source.streams.length, source.streams.length ? null : 'no streams');
+        registerStreams(s);
+        return fresh;
+      } catch (e) { markHealth(source, false, e.message); return false; }
+    }
     const x = (source.extractor && extractors.find(e => e.name === source.extractor)) || extractorFor(extractors, source.embedUrl);
     if (!x) { markHealth(source, false, 'no extractor'); return false; }
     try {

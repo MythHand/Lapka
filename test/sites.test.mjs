@@ -124,6 +124,21 @@ describe('look() on aniliberty, page and adapter together', () => {
     for (const s of ep.dubs[0].sources) assert.deepEqual(s.streams.map(st => st.quality).sort(), ['1080p', '480p', '720p']);
     assert.ok(steps.some(s => s.includes('Сайт знаком: aniliberty')), steps.join(' | '));
   });
+  test('a failed stream of a page source is re-read from that page, never from every episode at once', async () => {
+    const delivery = { register: () => 'id' + Math.random().toString(36).slice(2, 8), get: () => null };
+    const lapka = createLapka({ session, sites: await loadSites(), profiles: await loadProfiles(), delivery, extractors: await (await import('../core/extract/index.mjs')).loadExtractors() });
+    const { series } = await lapka.look(`${SITE}/anime/video/episode/${UUID}`);
+    const r = await lapka.resolve({ seriesId: series.id, number: 8 });
+    assert.equal(r.stream.quality, '1080p');
+    const r2 = await lapka.resolve({ seriesId: series.id, number: 8, avoid: r.stream.id });
+    const ep = series.episodes.find(e => e.number === 8);
+    for (const src of ep.dubs[0].sources) {
+      assert.ok(src.streams.length <= 3, `${src.player}: ${src.streams.length} streams`);
+      for (const st of src.streams) assert.match(st.url, /\/3993\/8\//, 'only this episode');
+    }
+    assert.ok(r2.stream, 'still something to play');
+  });
+
   test('without the adapter and the profile the page still plays, under the unnamed dub', async () => {
     const lapka = createLapka({ session });
     const { series, start } = await lapka.look(`${REL}/torrents`);
