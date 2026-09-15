@@ -697,7 +697,7 @@ async function openSeasons(main) {
   for (const e of main.franchise || []) add(e);
   if (known.size < 2) return [{ series: main, entry: (main.franchise || []).find(e => e.self) || null }];
   toast(t('toast.seasons', { n: known.size }));
-  for (let round = 0; round < 6; round++) {
+  for (let round = 0; round < 12; round++) {   // a long chain of neighbours takes a round per link
     const todo = [...known.values()].filter(x => !x.series && !x.failed);
     if (!todo.length) break;
     const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url))));
