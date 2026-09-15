@@ -922,7 +922,18 @@ async function playItem(it, autoplay = true, glide = true) {
   const faded = fadeOut();
   const src = await sourceFor(it);
   const reveal = fadeIn();
-  if (token !== playToken || it !== cur() || !src) { autoSwitch = false; reveal(); return; }
+  if (token !== playToken || it !== cur()) { autoSwitch = false; reveal(); return; }
+  if (!src) {
+    /* the episode asked for did not open: the one before it must not
+       go on as if nothing was clicked; the stage says what happened */
+    autoSwitch = false;
+    stopPlayback();
+    reveal();
+    paintPlay(); deckShow(true);
+    showNotice(t('notice.noOpen', { name: it.name, why: it.why || '' }), { action: t('notice.retry'), onAction: () => { it.err = false; it.retries = 0; playItem(it); } });
+    return;
+  }
+  hideNotice();
 
   await faded;                       // let the fade finish
   if (token !== playToken || it !== cur()) return;
@@ -1824,9 +1835,19 @@ document.addEventListener('click', e => {
 });
 
 /* ── the notice over the picture ───────────────────────────── */
-function hideNotice() { notice.classList.remove('show'); }
+/* a line over the picture: what went wrong, and one thing to do about it */
+let noticeDo = null;
+function showNotice(text, { action = null, onAction = null } = {}) {
+  noticeText.textContent = text;
+  const btn = $('#noticeAction');
+  btn.hidden = !action;
+  btn.textContent = action || '';
+  noticeDo = onAction;
+  notice.classList.add('show');
+}
+function hideNotice() { notice.classList.remove('show'); noticeDo = null; }
 $('#noticeClose').onclick = hideNotice;
-$('#noticeAction').onclick = hideNotice;
+$('#noticeAction').onclick = () => { const f = noticeDo; hideNotice(); if (f) f(); };
 
 /* ═══════════════ queue ═══════════════ */
 function render() {
@@ -2950,7 +2971,11 @@ video.addEventListener('ratechange', () => {
 });
 video.addEventListener('playing', () => {
   state.errStreak = 0; state.seekPreview = null; autoSwitch = false; syncStatus();
-  if (cur()) cur().retries = 0;      // it plays: the count of tries starts over
+  const it = cur();
+  if (it) {
+    if (it.switching) { flash(t('flash.source', { player: (it.source && it.source.player) || '' })); it.switching = null; hideNotice(); }
+    it.retries = 0;                  // it plays: the count of tries starts over
+  }
 });
 video.addEventListener('ended', () => {
   /* looping one file works even with autoplay off: it is a mode set
@@ -2975,20 +3000,27 @@ video.addEventListener('error', () => {
   stage.classList.remove('fading');
   const it = cur();
   if (!it || !it.loadedSrc) return;
-  /* another source, another try: up to three per episode, then it is broken */
+  /* another source, another try: up to three per episode, then it is
+     broken. Seen, not guessed at: the stage says the source failed and
+     which one is being tried, so a pause here never reads as a dead
+     player. */
   const failed = it.stream && it.stream.id;
   it.retries = (it.retries || 0) + 1;
   if (failed && it.retries <= 3) {
     it.avoid = failed;
-    toast(t('toast.otherSource'));
+    const from = it.source && it.source.player;
+    it.switching = { from, n: it.retries };
+    showNotice(t('notice.switching', { from: from || '?', n: it.retries, total: 3 }));
     playItem(it, true, false);
     return;
   }
+  it.switching = null;
+  stopPlayback();
+  showNotice(t('notice.allFailed', { name: it.name }), { action: t('notice.retry'), onAction: () => { it.err = false; it.retries = 0; playItem(it); } });
   it.err = true;
   render();
-  toast(t('toast.playFail', { name: it.name }));
   state.errStreak++;
-  if (state.errStreak < state.list.length) setTimeout(() => next(true), 1000);
+  if (state.errStreak < state.list.length && state.autoplay) setTimeout(() => { if (it === cur() && notice.classList.contains('show')) next(true); }, 4000);
   else state.errStreak = 0;
 });
 

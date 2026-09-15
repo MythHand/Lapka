@@ -360,6 +360,11 @@ en: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -691,6 +696,11 @@ ru: {
   'set.saveQuality': 'Качество сохранения',
   'set.autoResume': 'Продолжать незавершённые сохранения',
   'queue.saveAs': 'Сохранить в качестве',
+  'notice.noOpen': 'Не открылась: {name}. {why}',
+  'notice.retry': 'Попробовать снова',
+  'notice.switching': 'Источник {from} не ответил. Пробую другой, попытка {n} из {total}…',
+  'notice.allFailed': 'Ни один источник не воспроизвёл: {name}',
+  'flash.source': 'Источник: {player}',
 
 },
 
@@ -1022,6 +1032,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -1353,6 +1368,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -1684,6 +1704,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -2015,6 +2040,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -2346,6 +2376,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -2677,6 +2712,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -3008,6 +3048,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 
@@ -3339,6 +3384,11 @@ ru: {
   'set.saveQuality': 'Quality to save in',
   'set.autoResume': 'Take up saves that were cut short',
   'queue.saveAs': 'Save in quality',
+  'notice.noOpen': 'Could not open: {name}. {why}',
+  'notice.retry': 'Try again',
+  'notice.switching': 'The source {from} failed. Trying another, attempt {n} of {total}…',
+  'notice.allFailed': 'No source could play: {name}',
+  'flash.source': 'Source: {player}',
 
 },
 

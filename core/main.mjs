@@ -48,7 +48,23 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   const server = await startServer({ port, webDir, ctx });
   /* saves cut short last time are taken up again, a moment after start, unless switched off */
   ctx.resumeSaves = () => (ctx.state.setting('autoResume') === 'off' ? Promise.resolve([]) : ctx.saver.resume(ctx.lapka));
-  if (!process.env.NODE_TEST_CONTEXT) setTimeout(() => ctx.resumeSaves().catch(() => {}), 4000);
+  /* A save cut short is taken up again while Lapka runs: a moment
+     after start, and then whenever a save has failed, with a pause
+     that grows while the failures go on (a network that is down stays
+     down for a while) and resets once one succeeds. */
+  if (!process.env.NODE_TEST_CONTEXT) {
+    let wait = 30 * 1000;
+    const tick = async () => {
+      const pending = Object.values(ctx.state.saves());
+      const active = [...ctx.saver.jobs.values()].some(j => j.state === 'working');
+      if (pending.length && !active) {
+        const out = await ctx.resumeSaves().catch(() => []);
+        wait = out.some(r => r.state === 'done') ? 30 * 1000 : Math.min(wait * 2, 10 * 60 * 1000);
+      } else wait = 30 * 1000;
+      setTimeout(tick, wait).unref();
+    };
+    setTimeout(tick, 4000).unref();
+  }
   const close = async () => { await server.close(); await ctx.state.close(); };
   return { ctx, get lapka() { return ctx.lapka; }, get store() { return ctx.store; }, get state() { return ctx.state; }, get library() { return ctx.library; }, get delivery() { return ctx.delivery; }, get saver() { return ctx.saver; }, ...server, close };
 }
