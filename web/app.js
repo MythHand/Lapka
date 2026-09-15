@@ -293,7 +293,7 @@ document.fonts.ready.then(() => { fitDeck(); fitFoot(); });
 const SETTINGS = [
   { key: 'queueMode', def: 'docked', label: 'set.queueMode',
     opts: [['overlay', 'set.queueMode.overlay'], ['docked', 'set.queueMode.docked']] },
-  { key: 'drag', def: 'on', label: 'set.drag',
+  { key: 'drag', def: 'off', label: 'set.drag',
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'follow', def: 'on', label: 'set.follow',
     opts: [['on', 'common.on'], ['off', 'common.off']] },
@@ -302,7 +302,7 @@ const SETTINGS = [
   { key: 'font', def: 'fixel', label: 'set.font',
     opts: [['fixel', 'set.font.fixel'], ['inter', 'set.font.inter']] },
 ];
-const SETTINGS_V = '5';   // the defaults changed, so what was saved is dropped
+const SETTINGS_V = '6';   // the defaults changed, so what was saved is dropped
 
 function loadSettings() {
   try {
@@ -617,11 +617,17 @@ function hideProgress() {
    One address in. The server reads the page, finds the series and
    its episodes, and the queue is those episodes. Each episode is
    opened on the server only when it is about to play. */
-const nameFor = ep => ep.title ? `${ep.number} · ${ep.title}` : t('queue.episodeN', { n: ep.number });
+/* "3 · Название", "3 серия", or for a part that is one episode (a
+   film) its title alone: a lone number would mean nothing */
+const nameFor = (ep, series = null) => {
+  const alone = series && series.episodes.length === 1;
+  if (alone) return ep.title || series.title;
+  return ep.title ? `${ep.number} · ${ep.title}` : t('queue.episodeN', { n: ep.number });
+};
 
 function itemFor(ep, series) {
   return {
-    id: ++state.seq, number: ep.number, title: ep.title || '', name: nameFor(ep),
+    id: ++state.seq, number: ep.number, title: ep.title || '', name: nameFor(ep, series),
     seriesId: series.id, seriesTitle: series.title, season: series.season, kind: series.kind,
     group: series.id,
     dur: null, err: false, aspect: null,
@@ -642,15 +648,21 @@ function takeEpisode(it, ep) {
     alive: d.sources.filter(x => x.health.ok !== false).length }));
 }
 
-/* "2 сезон", "Фильм", "OVA": what a series of a franchise is called in the queue */
-function groupLabel(series) {
+/* What a part of a franchise is: a film, an OVA, a spin-off; a plain
+   season says nothing, its place in the order says it all */
+function kindLabel(series) {
   if (series.kind === 'movie') return t('queue.movie');
   if (series.kind === 'ova') return t('queue.ova');
   if (series.kind === 'special') return t('queue.special');
   if (series.kind === 'spinoff') return t('queue.spinoff');
-  if (series.season) return t('queue.season', { n: series.season });
-  return series.title;
+  return '';
 }
+/* the parts in the order they came out: by year, then as the site lists them */
+function orderSeasons(list) {
+  return list.map((s, i) => ({ ...s, i })).sort((a, b) => (a.series.year || 0) - (b.series.year || 0) || (a.entry?.order ?? a.i) - (b.entry?.order ?? b.i) || a.i - b.i)
+    .map(({ i, ...s }, n) => ({ ...s, ordinal: n + 1 }));
+}
+const seasonOf = it => state.seasons.find(s => s.series.id === it.seriesId) || null;
 
 /* The other seasons of the franchise, each a series of its own,
    opened at once. One that fails is left out and said so. */
@@ -666,7 +678,7 @@ async function openSeasons(main) {
     if (r.status === 'fulfilled' && r.value && r.value.series.episodes.length) out.push({ series: r.value.series, entry: e });
     else toast(t('toast.seasonFail', { title: e.title || e.url }));
   });
-  return out;
+  return orderSeasons(out);
 }
 
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
@@ -721,7 +733,7 @@ async function resolveItem(it, { avoid = null } = {}) {
     it.dubs = r.dubs; it.dub = r.dub; it.source = r.source; it.stream = r.stream;
     it.marks = r.episode.marks || null;
     if (r.episode.duration && !it.dur) it.dur = r.episode.duration;
-    if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode); }
+    if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode, state.seasons.find(s => s.series.id === it.seriesId)?.series); }
     return r;
   })();
   try { return await it.opening; } finally { it.opening = null; }
@@ -734,8 +746,8 @@ async function sourceFor(it) {
   try { r = await resolveItem(it, { avoid }); }
   catch (e) {
     clearTimeout(slow); hideProgress();
-    it.err = true; render();
-    toast(t('toast.openFail', { name: it.name }));
+    it.err = true; it.why = e.message; render();
+    toast(t('toast.openFail', { name: it.name, why: e.message }));
     return null;
   }
   clearTimeout(slow); hideProgress();
@@ -1515,29 +1527,45 @@ function homeRow(col) {
   line.innerHTML =
     '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__count"></span></div>' +
     '<div class="home__path"></div>' +
-    '<form class="home__form"><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
+    '<div class="home__acts"><button class="cache__clear home__open"></button><button class="cache__clear home__pick"></button><button class="home__manual"></button></div>' +
+    '<form class="home__form" hidden><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
     '<div class="cache__note home__note"></div>';
   col.append(line);
   const q = s => line.querySelector(s);
   q('.menu__rowlabel').textContent = t('set.home');
+  q('.home__open').textContent = t('set.homeOpen');
+  q('.home__pick').textContent = t('set.homePick');
+  q('.home__manual').textContent = t('set.homeManual');
   q('.home__go').textContent = t('set.homeChange');
-  q('.home__note').textContent = t('set.homeHint');
   q('.home__in').placeholder = t('set.homePlaceholder');
   const paint = d => {
     q('.home__path').textContent = d.home;
     q('.home__count').textContent = t('set.homeSeries', { n: d.series });
+    q('.home__pick').hidden = !d.canPick;
+    q('.home__open').hidden = !d.canOpen;
+    q('.home__note').textContent = d.canPick ? '' : t('set.homeHint');
+    if (!d.canPick) { q('.home__form').hidden = false; q('.home__manual').hidden = true; }
   };
   fetch('/api/home').then(r => r.json()).then(paint).catch(() => { q('.home__path').textContent = '—'; });
+  const took = r => {
+    toast(t(r.created ? 'toast.homeCreated' : 'toast.homeSet', { path: r.home }));
+    buildGearMenu(); gearMenu.classList.add('open');
+  };
+  q('.home__open').onclick = ev => { ev.stopPropagation(); post('/api/home/open').catch(e => toast(t('toast.homeFail', { why: e.message }))); };
+  q('.home__pick').onclick = async ev => {
+    ev.stopPropagation();
+    q('.home__pick').disabled = true;
+    try { const r = await post('/api/home/pick'); if (r.cancelled) return; took(r); }
+    catch (e) { toast(t('toast.homeFail', { why: e.message })); }
+    finally { q('.home__pick').disabled = false; }
+  };
+  q('.home__manual').onclick = ev => { ev.stopPropagation(); q('.home__form').hidden = false; q('.home__manual').hidden = true; q('.home__in').focus(); };
   q('.home__form').addEventListener('submit', async ev => {
     ev.preventDefault(); ev.stopPropagation();
     const path = q('.home__in').value.trim();
     if (!path) return;
-    try {
-      const r = await post('/api/home?path=' + encodeURIComponent(path));
-      toast(t(r.created ? 'toast.homeCreated' : 'toast.homeSet', { path: r.home }));
-      q('.home__in').value = '';
-      buildGearMenu(); gearMenu.classList.add('open');
-    } catch (e) { toast(t('toast.homeFail', { why: e.message })); }
+    try { took(await post('/api/home?path=' + encodeURIComponent(path))); }
+    catch (e) { toast(t('toast.homeFail', { why: e.message })); }
   });
   /* typing in the field must not seek the video */
   q('.home__in').addEventListener('keydown', ev => ev.stopPropagation());
@@ -1572,27 +1600,31 @@ function buildGearMenu() {
     keys.append(row);
   }
 
-  const langs = document.createElement('div');
-  langs.className = 'menu__col menu__col--side';
-  menuTitle(langs, t('set.lang'));
+  const opts = document.createElement('div');
+  opts.className = 'menu__col';
+  menuTitle(opts, t('set.head'));
+  /* the language first: chips as wide as their names */
+  const langRow = document.createElement('div');
+  langRow.className = 'menu__row';
+  const langLab = document.createElement('span');
+  langLab.className = 'menu__rowlabel';
+  langLab.textContent = t('set.lang');
+  const chips = document.createElement('div');
+  chips.className = 'langs';
   for (const [code, name] of LANG_LIST) {
     const b = document.createElement('button');
-    b.className = 'menu__item' + (code === lang ? ' sel' : '');
-    b.innerHTML = `<span class="menu__tick">${phSvg(PH.check)}</span>
-      <span class="menu__body"><span class="menu__main"></span></span>`;
-    b.querySelector('.menu__main').textContent = name;
+    b.className = 'lang' + (code === lang ? ' sel' : '');
+    b.textContent = name;
     b.onclick = ev => {
       ev.stopPropagation();
       setLang(code);                    // repaints everything and closes the menus
       buildGearMenu();
-      gearMenu.classList.add('open');   // but the language list stays open
+      gearMenu.classList.add('open');   // but the settings stay open
     };
-    langs.append(b);
+    chips.append(b);
   }
-
-  const opts = document.createElement('div');
-  opts.className = 'menu__col';
-  menuTitle(opts, t('set.head'));
+  langRow.append(langLab, chips);
+  opts.append(langRow);
   for (const row of SETTINGS) {
     segRow(opts, t(row.label), state.set[row.key],
            row.opts.map(([val, key]) => [val, t(key)]), val => {
@@ -1602,10 +1634,13 @@ function buildGearMenu() {
       buildGearMenu();
     });
   }
-  homeRow(opts);
-  cacheRow(opts);
+  const place = document.createElement('div');
+  place.className = 'menu__col menu__col--place';
+  menuTitle(place, t('set.place'));
+  homeRow(place);
+  cacheRow(place);
 
-  gearMenu.append(keys, opts, langs);
+  gearMenu.append(keys, opts, place);
 }
 
 btnGear.onclick = e => {
@@ -1680,7 +1715,7 @@ function render() {
     if (grouped && it.group !== group) {
       group = it.group;
       const s = state.seasons.find(x => x.series.id === it.group);
-      if (s) frag.append(groupRow(s.series));
+      if (s) frag.append(groupRow(s));
     }
     frag.append(grid ? tileFor(it) : rowFor(it));
   }
@@ -1697,14 +1732,18 @@ function render() {
    cards stay and only their classes change, which the transitions in
    styles.css play out. A list that no longer matches the queue is built
    anew as before. */
-/* the line that opens a season in the list */
-function groupRow(series) {
+/* the line that opens a part of the franchise in the list: its
+   number in the order, its title, its year, and what it is if it is
+   not a plain season */
+function groupRow(season) {
+  const { series, ordinal } = season;
   const li = document.createElement('li');
   li.className = 'queue__group';
-  li.innerHTML = '<span class="queue__group-label"></span><span class="queue__group-title"></span>';
-  li.querySelector('.queue__group-label').textContent = groupLabel(series);
-  const label = groupLabel(series);
-  li.querySelector('.queue__group-title').textContent = series.title !== label ? series.title : '';
+  li.innerHTML = '<span class="queue__group-label"></span><span class="queue__group-title"></span><span class="queue__group-year"></span><span class="queue__group-kind"></span>';
+  li.querySelector('.queue__group-label').textContent = ordinal;
+  li.querySelector('.queue__group-title').textContent = series.title;
+  li.querySelector('.queue__group-year').textContent = series.year || '';
+  li.querySelector('.queue__group-kind').textContent = kindLabel(series);
   li.title = series.title;
   return li;
 }
@@ -1811,11 +1850,10 @@ function rowFor(it) {
   li.innerHTML =
     `<span class="item__grip">${phSvg(PH.grip)}</span>` +
     `<span class="item__thumb"><span class="item__eq"><i></i><i></i><i></i></span><span class="pos"><i></i></span></span>` +
-    `<span class="item__body"><span class="item__head"><span class="item__num"></span><span class="item__name"></span></span><span class="item__meta"></span></span>` +
+    `<span class="item__body"><span class="item__name"></span><span class="item__meta"></span></span>` +
     `<span class="item__save">${phSvg(PH.download)}</span>` +
     `<span class="item__x" title="${t('queue.remove')}">${phSvg(PH.x)}</span>`;
-  li.querySelector('.item__num').textContent = it.number;
-  li.querySelector('.item__name').textContent = it.title || t('queue.episodeN', { n: it.number });
+  li.querySelector('.item__name').textContent = it.name;
   li.querySelector('.item__save').title = t('queue.save');
   if (it.thumb) putThumb(li, it.thumb);
   paintPos(li, it);
@@ -1878,7 +1916,7 @@ function paintMeta() {
     if (!box) continue;
     const fixed = `<span class="item__m item__m--dur">${it.dur ? fmt(it.dur) : '—'}</span>`;
     const rest = [];
-    if (it.err) rest.push(`<b>${t('queue.bad')}</b>`);
+    if (it.err) rest.push(`<b title="${escapeHtml(it.why || '')}">${t('queue.bad')}</b>`);
     /* one dub is named; several are counted */
     if (it.dubs && it.dubs.length === 1) rest.push(escapeHtml(it.dubs[0].name));
     else if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
@@ -2533,8 +2571,9 @@ video.addEventListener('error', () => {
 function paintTitle() {
   const it = cur();
   titleName.textContent = it ? it.name : '—';
-  const series = it ? state.seasons.find(s => s.series.id === it.seriesId)?.series : state.series;
-  titlePath.textContent = series ? series.title + (series.season && state.seasons.length > 1 ? ' · ' + t('queue.season', { n: series.season }) : '') : '';
+  const season = it ? seasonOf(it) : null;
+  const series = season ? season.series : state.series;
+  titlePath.textContent = series ? series.title + (state.seasons.length > 1 && series.year ? ' · ' + series.year : '') : '';
 }
 /* A line cut short shows itself whole in the ordinary tooltip. Only a
    cut one: over a line that fits, the tooltip would repeat it. */

@@ -20,6 +20,7 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
+import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 
 const VENDOR = { 'hls.min.js': createRequire(import.meta.url).resolve('hls.js/dist/hls.min.js') };
 
@@ -79,7 +80,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
       if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', home: store?.home || null });
-      if (req.method === 'GET' && p === '/api/home' && library) return json(res, 200, { home: store.home, series: (await library.list()).length, cache: await store.cache.stat() });
+      if (req.method === 'GET' && p === '/api/home' && library) return json(res, 200, { home: store.home, series: (await library.list()).length, cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
       if (req.method === 'GET' && VENDOR[p.slice('/vendor/'.length)] && p.startsWith('/vendor/')) {
         const file = VENDOR[p.slice('/vendor/'.length)];
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'max-age=86400' });
@@ -101,6 +102,18 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       const mutating = req.method === 'POST';
       if (mutating && req.headers['x-lapka'] !== '1') return json(res, 403, { error: 'x-lapka header required' });
 
+      if (store && mutating && p === '/api/home/open') {
+        try { await openFolder(store.home); return json(res, 200, { ok: true }); }
+        catch (e) { return json(res, 500, { error: e.message }); }
+      }
+      if (ctx.switchHome && mutating && p === '/api/home/pick') {
+        try {
+          const chosen = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
+          if (!chosen) return json(res, 200, { cancelled: true });
+          const r = await ctx.switchHome(chosen);
+          return json(res, 200, { ok: true, home: r.path, created: !r.existed });
+        } catch (e) { return json(res, e.code || 500, { error: e.message }); }
+      }
       if (ctx.switchHome && mutating && p === '/api/home') {
         try { const r = await ctx.switchHome(url.searchParams.get('path') || ''); return json(res, 200, { ok: true, home: r.path, created: !r.existed }); }
         catch (e) { return json(res, e.code || 500, { error: e.message }); }

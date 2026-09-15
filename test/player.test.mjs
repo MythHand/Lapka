@@ -143,17 +143,17 @@ describe('a series in seasons', { skip }, () => {
       await until('queue', () => $$('#queueList .item').length === 4);
       await until('source', () => $('#video').getAttribute('src'));
       const rows = $$('#queueList > li').map(li => li.classList.contains('queue__group')
-        ? 'group: ' + li.querySelector('.queue__group-label').textContent
-        : li.querySelector('.item__num').textContent + ' · ' + li.querySelector('.item__name').textContent + (li.classList.contains('active') ? ' *' : ''));
+        ? 'group: ' + li.querySelector('.queue__group-label').textContent + ' ' + li.querySelector('.queue__group-title').textContent
+        : li.querySelector('.item__name').textContent + (li.classList.contains('active') ? ' *' : ''));
       __report({ errors: window.__errors, rows, titlePath: $('#titlePath').textContent, grouped: $('#queue').classList.contains('queue--grouped'), sortHidden: getComputedStyle($('#btnSort')).display === 'none' });
     `, { site: site.base, budget: 20000 });
   });
   test('both seasons are in the queue, each under its own line, the linked one current', () => {
     ok(r, 'seasons'); assert.deepEqual(r.errors, []);
-    assert.deepEqual(r.rows, ['group: Season 1', '1 · Episode 1', '2 · Episode 2', 'group: Season 2', '1 · Episode 1', '2 · Episode 2 *']);
+    assert.deepEqual(r.rows, ['group: 1 Сериал Сезоны', 'Episode 1', 'Episode 2', 'group: 2 Сериал Сезоны 2 сезон', 'Episode 1', 'Episode 2 *']);
     assert.equal(r.grouped, true);
     assert.equal(r.sortHidden, true);
-    assert.match(r.titlePath, /Season 2$/);
+    assert.match(r.titlePath, /^Сериал Сезоны 2 сезон/);
   });
 });
 
@@ -261,14 +261,15 @@ describe('the interface holds together', { skip }, () => {
       const uneven = Object.entries(dict).filter(([, d]) => JSON.stringify(Object.keys(d).sort()) !== JSON.stringify(en)).map(([c]) => c);
       $('#btnGear').click(); await __settled();
       const cols = $$('#gearMenu .menu__col').length;
-      const langs = $$('#gearMenu .menu__col--side .menu__item').length;
-      const ruBtn = $$('#gearMenu .menu__col--side .menu__item').find(b => b.textContent.includes('Русский'));
+      const langs = $$('#gearMenu .langs .lang').length;
+      const placeCol = !!$('#gearMenu .menu__col--place .home__path') && !!$('#gearMenu .menu__col--place .cache__bar');
+      const ruBtn = $$('#gearMenu .langs .lang').find(b => b.textContent.includes('Русский'));
       ruBtn.click(); await __settled();
       const ruTitle = $('#empty h1').textContent, ruOpen = $('#btnOpen').textContent, ruPlaceholder = $('#linkInput').placeholder;
       /* icons: filled, none left as an outline */
       const icons = $$('svg.ph');
       const outlined = icons.filter(s => getComputedStyle(s).fill === 'none').length;
-      __report({ errors: window.__errors, uneven, cols, langs, ruTitle, ruOpen, ruPlaceholder, icons: icons.length, outlined, lang: document.documentElement.lang });
+      __report({ errors: window.__errors, uneven, cols, langs, placeCol, ruTitle, ruOpen, ruPlaceholder, icons: icons.length, outlined, lang: document.documentElement.lang, drag: $('#queueList').classList.contains('no-drag') });
     `, { budget: 8000, fonts: true });
   });
   test('ten languages, all with the same keys, and switching repaints the link screen', () => {
@@ -276,6 +277,8 @@ describe('the interface holds together', { skip }, () => {
     assert.deepEqual(r.uneven, []);
     assert.equal(r.langs, 10);
     assert.equal(r.cols, 3);
+    assert.equal(r.placeCol, true, 'the folder and the cache share the third column');
+    assert.equal(r.drag, true, 'reordering by drag is off by default');
     assert.equal(r.lang, 'ru');
     assert.equal(r.ruTitle, 'Вставьте ссылку');
     assert.equal(r.ruOpen, 'Открыть');
