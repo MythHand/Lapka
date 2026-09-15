@@ -2213,21 +2213,29 @@ function aboutBlock() {
   const desc = el('div', 'about__desc');
   desc.append(el('p', 'about__lead', t('about.lead')), el('p', 'about__tagline', t('about.tagline')));
 
+  /* the sections are text, set the way text is: a heading, then
+     rows of a bold label and a line, or numbered steps */
   const section = (headKey, rows, numbered = false) => {
-    const box = el('div', 'about__section about__mono');
-    box.append(el('p', 'about__head', t(headKey)));
-    const dl = el('dl', 'about__list');
-    rows.forEach(([k, v], i) => { dl.append(el('dt', null, numbered ? String(i + 1) : t(k)), el('dd', null, t(v))); });
-    box.append(dl);
+    const box = el('section', 'about__section');
+    box.append(el('h3', 'about__h', t(headKey)));
+    if (numbered) {
+      const ol = el('ol', 'about__steps');
+      rows.forEach(([, v]) => ol.append(el('li', null, t(v))));
+      box.append(ol);
+    } else {
+      const dl = el('dl', 'about__rows');
+      rows.forEach(([k, v]) => { dl.append(el('dt', null, t(k)), el('dd', null, t(v))); });
+      box.append(dl);
+    }
     return box;
   };
   const how = section('about.how', [['', 'about.step1'], ['', 'about.step2'], ['', 'about.step3']], true);
   const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'save', 'finish', 'sources'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
   const rules = section('about.rules', ['local', 'fair', 'general', 'doors', 'open'].map(k => [`about.p.${k}.k`, `about.p.${k}`]));
 
-  const doors = el('div', 'about__doors about__mono');
-  doors.append(el('p', 'about__head', t('about.doors')));
-  const dl = el('dl', 'about__list');
+  const doors = el('section', 'about__section about__doors');
+  doors.append(el('h3', 'about__h', t('about.doors')));
+  const dl = el('dl', 'about__rows');
   const row = (key, sites) => {
     if (!sites.length) return;
     dl.append(el('dt', null, t(key)));
