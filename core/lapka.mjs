@@ -191,6 +191,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       dub: dub ? { key: dub.key, name: dub.name } : null,
       source: source ? { id: source.id, player: source.player, extractor: source.extractor } : null,
       stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play } : null,
+      /* every stream of the source, so the player can offer the qualities */
+      streams: source ? source.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play })) : [],
     };
   }
 

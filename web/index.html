@@ -147,6 +147,12 @@
                   </button>
                   <div class="menu menu--left" id="subsMenu"></div>
                 </div>
+                <div class="menuwrap">
+                  <button class="rb rb--wide" id="btnQuality" data-i18n-title="quality.title" hidden>
+                    <span id="qualityLabel"></span>
+                  </button>
+                  <div class="menu menu--left" id="qualityMenu"></div>
+                </div>
               </span>
             </div>
             <div class="deck__center">
@@ -258,6 +264,13 @@
             <svg class="ph" viewBox="6.7 6.7 242.7 242.7"><path d="M120.49,167.51a12,12,0,0,1,0,17l-32,32a12,12,0,0,1-17,0l-32-32a12,12,0,1,1,17-17L68,179V48a12,12,0,0,1,24,0V179l11.51-11.52A12,12,0,0,1,120.49,167.51Zm96-96-32-32a12,12,0,0,0-17,0l-32,32a12,12,0,0,0,17,17L164,77V208a12,12,0,0,0,24,0V77l11.51,11.52a12,12,0,0,0,17-17Z"/></svg>
           </button>
           </div>
+        </div>
+        <div class="toolgrp toolgrp--save">
+          <button class="saveall" id="btnSaveAll" data-i18n-title="queue.saveAll">
+            <svg class="ph" viewBox="4.1 4.1 247.8 247.8"><path d="M224,152v56a20,20,0,0,1-20,20H52a20,20,0,0,1-20-20V152a12,12,0,0,1,24,0v52H200V152a12,12,0,0,1,24,0Zm-104.49,8.49a12,12,0,0,0,17,0l40-40a12,12,0,0,0-17-17L140,123V40a12,12,0,0,0-24,0v83L96.49,103.51a12,12,0,0,0-17,17Z"/></svg>
+            <span class="saveall__count" id="saveCount"></span>
+          </button>
+          <div class="savepop" id="savePop" hidden></div>
         </div>
         <div class="spacer"></div>
         <!-- scrolls the list to the file playing, in a long season it is easy to lose -->

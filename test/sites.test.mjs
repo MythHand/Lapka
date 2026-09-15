@@ -107,7 +107,8 @@ describe('the aniliberty adapter', () => {
 
 describe('look() on aniliberty, page and adapter together', () => {
   test('one dub, named by the adapter, no unnamed twin; the linked episode is the start', async () => {
-    const lapka = createLapka({ session, sites: await loadSites(), profiles: await loadProfiles() });
+    const delivery = { register: () => 'id' + Math.random().toString(36).slice(2, 8), get: () => null };
+    const lapka = createLapka({ session, sites: await loadSites(), profiles: await loadProfiles(), delivery });
     const { series, start, steps, dubs } = await lapka.look(`${SITE}/anime/video/episode/${UUID}`);
     assert.equal(series.title, 'Возрождающие');
     assert.equal(series.sourceUrl, `${REL}/episodes`);
@@ -116,6 +117,8 @@ describe('look() on aniliberty, page and adapter together', () => {
     assert.deepEqual(dubs, ['AniLibria']);
     const r = await lapka.resolve({ seriesId: series.id, number: 8 });
     assert.deepEqual(r.episode.marks, { opening: { start: 42, stop: 132 }, ending: { start: 1330, stop: 1421 } });
+    assert.deepEqual(r.streams.map(st => st.quality), ['480p', '720p', '1080p']);
+    assert.ok(r.streams.every(st => st.id && st.play));
     assert.ok(r.episode.duration > 1000);
     const ep = series.episodes.find(e => e.number === 8);
     assert.equal(ep.dubs.length, 1);

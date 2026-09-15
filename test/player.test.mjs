@@ -196,6 +196,47 @@ describe('the Lapka folder', { skip }, () => {
   });
 });
 
+describe('saving from the queue', { skip }, () => {
+  let r, home;
+  before(async () => {
+    home = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-home-'));
+    r = await openLapka('save', WAIT + `
+      await until('boot', () => !$('#empty').classList.contains('hide'));
+      $('#linkInput').value = site + '/s/links/ep-1';
+      $('#linkForm').requestSubmit();
+      await until('queue', () => $$('#queueList .item').length === 3);
+      await until('source', () => $('#video').getAttribute('src'));
+      await until('count', () => $('#saveCount').textContent === '0/3');
+      const marksBefore = $$('#queueList .item__save').map(b => b.className);
+      $('#btnSaveAll').click();
+      await until('saving', () => $$('#queueList .item__save.is-saving').length > 0, 40);
+      const spinner = !!$('#queueList .item__save.is-saving .spin');
+      await until('saved', () => $('#saveCount').textContent === '3/3', 300);
+      const marksAfter = $$('#queueList .item__save').map(b => b.className);
+      const title = $('#queueList .item__save').title;
+      $('#btnSaveAll').dispatchEvent(new PointerEvent('pointerenter'));
+      await until('pop', () => !$('#savePop').hidden && $('#savePop').children.length > 1, 40);
+      const pop = $('#savePop').textContent;
+      const lib = await (await fetch('/api/library')).json();
+      __report({ errors: window.__errors, marksBefore, spinner, marksAfter, title, pop, files: lib.series.flatMap(x => x.episodes.map(e => e.file)), qualityHidden: $('#btnQuality').hidden, done: $('#btnSaveAll').classList.contains('is-done') });
+    `, { site: site.base, budget: 60000, home });
+  });
+  after(async () => { if (home) await fsp.rm(home, { recursive: true, force: true }); });
+  test('the header counts, the rows spin and then show saved, the files are in the folder', () => {
+    ok(r, 'save'); assert.deepEqual(r.errors, []);
+    assert.ok(r.marksBefore.every(c => !c.includes('is-saved')));
+    assert.equal(r.spinner, true);
+    assert.ok(r.marksAfter.every(c => c.includes('is-saved')), r.marksAfter.join(','));
+    assert.match(r.title, /In the library/);
+    assert.match(r.pop, /Saved 3 of 3 episodes/);
+    assert.match(r.pop, /Free on disk/);
+    assert.equal(r.files.length, 3);
+    assert.equal(r.done, true);
+    /* one stream of one quality: nothing to choose from */
+    assert.equal(r.qualityHidden, true);
+  });
+});
+
 describe('choosing a dub', { skip }, () => {
   let r, home;
   before(async () => {

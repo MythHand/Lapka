@@ -114,7 +114,7 @@ function repaintUi() {
   paintPlay(); paintLoop(); paintAuto(); paintSeek(); paintVolume(); paintView();
   paintTitle(); paintEndMeta(); paintModeHint();
   if (skipNow) btnSkip.textContent = t('skip.' + skipNow.name);
-  syncAudioButton(); syncSubsButton(); syncStatus();
+  syncAudioButton(); syncSubsButton(); syncQualityButton(); syncStatus();
   render();
   closeMenus();
   fitFoot();         // the captions have changed length
@@ -142,6 +142,8 @@ const btnPipMode = $('#btnPipMode'), pipMenu = $('#pipMenu'), pipSeg = $('#pipSe
 const rateMenu = $('#rateMenu');
 const btnAudio = $('#btnAudio'), audioLabel = $('#audioLabel'), audioMenu = $('#audioMenu');
 const btnSubs = $('#btnSubs'), subsMenu = $('#subsMenu');
+const btnQuality = $('#btnQuality'), qualityLabel = $('#qualityLabel'), qualityMenu = $('#qualityMenu');
+const btnSaveAll = $('#btnSaveAll'), saveCount = $('#saveCount'), savePop = $('#savePop');
 const btnGear = $('#btnGear'), gearMenu = $('#gearMenu');
 const queueList = $('#queueList'), queueFiles = $('#queueFiles'), queueTotal = $('#queueTotal');
 const btnViewRows = $('#btnViewRows'), btnViewGrid = $('#btnViewGrid');
@@ -153,7 +155,7 @@ const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
 const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
-const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, gearMenu];
+const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, qualityMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
    The layout was drawn for a wide window. Next to an open queue the
@@ -433,6 +435,8 @@ const state = {
   series: null,      // the series the link named
   seasons: [],       // every series of its franchise that was opened, in viewing order: [{ series, entry }]
   dubKey: null,      // the dub chosen, carried to every episode and every season
+  quality: strFromStore('lapka.quality', 'auto'),   // '1080p', '720p', … or 'auto' for the best there is
+  saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, size, path }]
   positions: {},     // series/episode/dub → seconds, mirrored from the server
   remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,
@@ -706,6 +710,7 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   state.dubKey = (state.remote.dubs || {})[got.series.id] || null;
   linkInput.value = '';
   render(); paintTitle();
+  loadLibrary();
   if (!quiet) toast(t('toast.opened', { n: state.list.length }));
 
   /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
@@ -730,7 +735,9 @@ async function resolveItem(it, { avoid = null } = {}) {
     if (state.dubKey) q.set('dub', state.dubKey);
     if (avoid) q.set('avoid', avoid);
     const r = await api('/api/resolve?' + q);
-    it.dubs = r.dubs; it.dub = r.dub; it.source = r.source; it.stream = r.stream;
+    it.dubs = r.dubs; it.dub = r.dub; it.source = r.source;
+    it.streams = r.streams || [];
+    it.stream = pickStream(it.streams) || r.stream;
     it.marks = r.episode.marks || null;
     if (r.episode.duration && !it.dur) it.dur = r.episode.duration;
     if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode, state.seasons.find(s => s.series.id === it.seriesId)?.series); }
@@ -738,6 +745,89 @@ async function resolveItem(it, { avoid = null } = {}) {
   })();
   try { return await it.opening; } finally { it.opening = null; }
 }
+
+/* ── which quality plays ─────────────────────────────────────
+   The wanted quality when the source has it, else the best it has.
+   Qualities are read as numbers: "1080p" beats "720p". */
+const qualityNum = q => Number((/(\d{3,4})/.exec(String(q || '')) || [])[1]) || 0;
+function pickStream(streams) {
+  if (!streams || !streams.length) return null;
+  const sorted = [...streams].sort((a, b) => qualityNum(b.quality) - qualityNum(a.quality));
+  if (state.quality !== 'auto') {
+    const want = sorted.find(s => s.quality === state.quality);
+    if (want) return want;
+  }
+  return sorted[0];
+}
+
+/* The qualities on offer: the source's streams when there are several,
+   else the levels of an HLS master playlist that hls.js found. */
+function qualityOptions() {
+  const it = cur();
+  if (!it) return [];
+  const out = [];
+  const seen = new Set();
+  for (const s of [...(it.streams || [])].sort((a, b) => qualityNum(b.quality) - qualityNum(a.quality))) {
+    if (!s.quality || seen.has(s.quality)) continue;
+    seen.add(s.quality);
+    out.push({ id: s.quality, main: s.quality, sel: state.quality === s.quality, stream: s });
+  }
+  if (out.length < 2 && hls && hls.levels && hls.levels.length > 1) {
+    return [{ id: 'auto', main: t('quality.auto'), sel: hls.autoLevelEnabled, level: -1 },
+      ...hls.levels.map((l, i) => ({ id: 'L' + i, main: (l.height ? l.height + 'p' : Math.round(l.bitrate / 1000) + 'k'), sel: !hls.autoLevelEnabled && hls.currentLevel === i, level: i }))
+        .sort((a, b) => qualityNum(b.main) - qualityNum(a.main))];
+  }
+  if (out.length >= 2) out.unshift({ id: 'auto', main: t('quality.auto'), sel: state.quality === 'auto' });
+  return out;
+}
+
+function syncQualityButton() {
+  const opts = qualityOptions();
+  btnQuality.hidden = opts.length < 2;
+  const it = cur();
+  const now = it && it.stream && it.stream.quality ? it.stream.quality : (hls && hls.levels && hls.levels[hls.currentLevel] ? hls.levels[hls.currentLevel].height + 'p' : '');
+  qualityLabel.textContent = now || t('quality.short');
+  btnQuality.title = now ? t('quality.current', { name: now }) : t('quality.title');
+  if (opts.length < 2) qualityMenu.classList.remove('open');
+  fitDeck();
+}
+
+function buildQualityMenu() {
+  const opts = qualityOptions();
+  qualityMenu.replaceChildren();
+  menuTitle(qualityMenu, t('quality.title'));
+  for (const o of opts) {
+    const b = document.createElement('button');
+    b.className = 'menu__item' + (o.sel ? ' sel' : '');
+    b.innerHTML = `<span class="menu__tick">${phSvg(PH.check)}</span><span class="menu__body"><span class="menu__main"></span></span>`;
+    b.querySelector('.menu__main').textContent = o.main;
+    b.onclick = () => { pickQuality(o); markPicked(b); };
+    qualityMenu.append(b);
+  }
+}
+
+function pickQuality(opt) {
+  const it = cur();
+  if (!it) return;
+  if (opt.level !== undefined) {           // a level inside one HLS stream
+    if (hls) hls.currentLevel = opt.level;
+    toast(t('quality.current', { name: opt.main }));
+    setTimeout(syncQualityButton, 300);
+    return;
+  }
+  state.quality = opt.id;
+  saveStr('lapka.quality', opt.id);
+  const next = pickStream(it.streams);
+  if (!next || (it.stream && next.id === it.stream.id)) { syncQualityButton(); return; }
+  toast(t('quality.current', { name: opt.main }));
+  switchTrack(it);
+}
+btnQuality.onclick = e => {
+  e.stopPropagation();
+  buildQualityMenu();
+  closeMenus(qualityMenu);
+  qualityMenu.classList.toggle('open');
+};
 
 async function sourceFor(it) {
   const avoid = it.avoid; it.avoid = null;
@@ -829,7 +919,7 @@ async function playItem(it, autoplay = true, glide = true) {
     video.currentTime = back;
     toast(t('toast.resume', { time: fmt(back) }));
   }, autoplay);
-  syncAudioButton(); syncSubsButton(); applySubs(it);
+  syncAudioButton(); syncSubsButton(); syncQualityButton(); applySubs(it);
   prefetchNext();
 }
 
@@ -861,6 +951,8 @@ function attachSource(stream) {
   if (stream.kind === 'hls' && window.Hls && Hls.isSupported()) {
     hls = new Hls({ enableWorker: true });
     hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) video.dispatchEvent(new Event('error')); });
+    hls.on(Hls.Events.MANIFEST_PARSED, syncQualityButton);
+    hls.on(Hls.Events.LEVEL_SWITCHED, syncQualityButton);
     hls.loadSource(stream.play);
     hls.attachMedia(video);
     return;
@@ -1721,6 +1813,7 @@ function render() {
   }
   queueList.replaceChildren(frag);
   paintMeta();
+  paintSaved();
   const active = queueList.querySelector('.item.active, .tile.active');
   if (active) active.scrollIntoView({ block: 'nearest' });
   watchThumbs();
@@ -1739,7 +1832,9 @@ function groupRow(season) {
   const { series, ordinal } = season;
   const li = document.createElement('li');
   li.className = 'queue__group';
-  li.innerHTML = '<span class="queue__group-label"></span><span class="queue__group-title"></span><span class="queue__group-year"></span><span class="queue__group-kind"></span>';
+  li.dataset.group = series.id;
+  li.innerHTML = '<span class="queue__group-label"></span><span class="queue__group-title"></span><span class="queue__group-year"></span><span class="queue__group-kind"></span>' +
+    `<span class="queue__group-save">${phSvg(PH.download)}<span class="queue__group-count"></span></span>`;
   li.querySelector('.queue__group-label').textContent = ordinal;
   li.querySelector('.queue__group-title').textContent = series.title;
   li.querySelector('.queue__group-year').textContent = series.year || '';
@@ -1854,7 +1949,6 @@ function rowFor(it) {
     `<span class="item__save">${phSvg(PH.download)}</span>` +
     `<span class="item__x" title="${t('queue.remove')}">${phSvg(PH.x)}</span>`;
   li.querySelector('.item__name').textContent = it.name;
-  li.querySelector('.item__save').title = t('queue.save');
   if (it.thumb) putThumb(li, it.thumb);
   paintPos(li, it);
   paintShape(li, it);
@@ -1920,7 +2014,6 @@ function paintMeta() {
     /* one dub is named; several are counted */
     if (it.dubs && it.dubs.length === 1) rest.push(escapeHtml(it.dubs[0].name));
     else if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
-    if (it.saving) rest.push(`<span class="route">${it.saving}</span>`);
     if (it.stream) rest.push(`<span class="route">${it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
     if (it.source) rest.push(`<span class="route route--off">${it.source.player}</span>`);
     box.innerHTML = fixed + rest.map(b => `<span>${b}</span>`).join('');
@@ -1936,33 +2029,123 @@ queueList.addEventListener('click', e => {
   if (e.target.closest('.item__save')) return saveItem(it);
   playItem(it, true, false);
 });
+queueList.addEventListener('click', e => {
+  const g = e.target.closest('.queue__group-save');
+  if (!g) return;
+  const li = g.closest('.queue__group');
+  saveMany(state.list.filter(it => it.group === li.dataset.group));
+});
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ── the library, as the queue sees it ─────────────────────────
+   What is saved is read from the folder, never remembered here: a
+   file the user deleted is gone from the rows on the next look. */
+const savedKey = it => `${it.seriesId}/${it.number}`;
+const isSaved = it => state.saved.has(savedKey(it));
+async function loadLibrary() {
+  try {
+    const lib = await api('/api/library');
+    state.saved = new Map();
+    for (const s of lib.series) for (const e of s.episodes) {
+      const k = `${e.seriesId}/${e.episode}`;
+      if (!state.saved.has(k)) state.saved.set(k, []);
+      state.saved.get(k).push({ dub: e.dub, size: e.size, path: e.path });
+    }
+  } catch (_) { /* the server may be starting */ }
+  paintSaved();
+}
+
+/* every row's save mark, every part's count, the header's count */
+function paintSaved() {
+  for (const li of queueList.children) {
+    if (li.classList.contains('queue__group')) { paintGroupSave(li); continue; }
+    const it = byId(li.dataset.id);
+    const btn = it && li.querySelector('.item__save');
+    if (!btn) continue;
+    const saved = isSaved(it);
+    btn.classList.toggle('is-saved', saved && !it.saving);
+    btn.classList.toggle('is-saving', !!it.saving);
+    btn.innerHTML = it.saving ? '<span class="spin"></span>' : phSvg(saved ? PH.check : PH.download);
+    btn.title = it.saving ? it.saving : saved ? t('queue.savedAs', { size: fmtSize(state.saved.get(savedKey(it)).reduce((a, b) => a + (b.size || 0), 0)), dubs: state.saved.get(savedKey(it)).map(x => x.dub).join(', ') }) : t('queue.save');
+  }
+  const all = state.list.length, done = state.list.filter(isSaved).length;
+  saveCount.textContent = all ? `${done}/${all}` : '';
+  btnSaveAll.classList.toggle('is-done', all > 0 && done === all);
+  btnSaveAll.classList.toggle('is-busy', savingAll);
+  btnSaveAll.hidden = !all;
+}
+function paintGroupSave(li) {
+  const items = state.list.filter(it => it.group === li.dataset.group);
+  const done = items.filter(isSaved).length;
+  const el = li.querySelector('.queue__group-save');
+  if (!el) return;
+  el.querySelector('.queue__group-count').textContent = `${done}/${items.length}`;
+  el.classList.toggle('is-done', items.length > 0 && done === items.length);
+  el.title = t('queue.saveGroup');
+}
+
+/* the popover over the header's button: what the folder holds, in numbers */
+let popT = null;
+async function showSavePop() {
+  clearTimeout(popT);
+  savePop.hidden = false;
+  savePop.textContent = '…';
+  const bytes = state.list.filter(isSaved).reduce((a, it) => a + state.saved.get(savedKey(it)).reduce((x, y) => x + (y.size || 0), 0), 0);
+  let d = null;
+  try { d = await api('/api/home'); } catch (_) { /* then the local numbers alone */ }
+  const lines = [
+    t('queue.popSaved', { n: state.list.filter(isSaved).length, total: state.list.length, size: fmtSize(bytes) }),
+    d ? t('queue.popCache', { size: fmtSize(d.cache.bytes), limit: fmtSize(d.cache.limit) }) : '',
+    d && d.cache.free != null ? t('queue.popFree', { size: fmtSize(d.cache.free) }) : '',
+    d ? d.home : '',
+  ].filter(Boolean);
+  savePop.replaceChildren(...lines.map(l => { const p = document.createElement('div'); p.textContent = l; return p; }));
+}
+function hideSavePop() { popT = setTimeout(() => { savePop.hidden = true; }, 120); }
+btnSaveAll.addEventListener('pointerenter', showSavePop);
+btnSaveAll.addEventListener('pointerleave', hideSavePop);
+savePop.addEventListener('pointerenter', () => clearTimeout(popT));
+savePop.addEventListener('pointerleave', hideSavePop);
 
 /* ── saving an episode into the library ────────────────────────
    The episode is opened if it was not, then its stream is handed to
    the server, which assembles the file; the row shows how far it is. */
 async function saveItem(it) {
-  if (it.saving) return;
+  if (it.saving || isSaved(it)) return false;
   try {
     if (!it.stream) await resolveItem(it);
-    if (!it.stream) { toast(t('toast.noStream', { name: it.name })); return; }
-    it.saving = t('queue.saving', { done: 0, total: 0 }); paintMeta();
+    if (!it.stream) { toast(t('toast.noStream', { name: it.name })); return false; }
+    it.saving = t('queue.saving', { done: 0, total: 0 }); paintSaved();
     let job = await post('/api/save?stream=' + it.stream.id);
     while (job.state === 'working') {
       it.saving = job.phase === 'assemble' ? t('queue.assembling') : t('queue.saving', { done: job.done, total: job.total });
-      paintMeta();
+      paintSaved();
       await sleep(600);
       job = await api('/api/save/' + job.id);
     }
-    it.saving = job.state === 'done' ? t('queue.saved') : null;
-    paintMeta();
-    toast(job.state === 'done' ? t('toast.saved', { name: it.name }) : t('toast.saveFail', { why: job.error || '' }));
+    it.saving = null;
+    if (job.state !== 'done') toast(t('toast.saveFail', { why: job.error || '' }));
+    await loadLibrary();
+    return job.state === 'done';
   } catch (e) {
-    it.saving = null; paintMeta();
+    it.saving = null; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
+    return false;
   }
 }
+
+/* several episodes, one after another: the server assembles one file at a time anyway */
+let savingAll = false;
+async function saveMany(items) {
+  if (savingAll) return;
+  savingAll = true; paintSaved();
+  let n = 0;
+  try { for (const it of items) if (!isSaved(it)) { if (await saveItem(it)) n++; } }
+  finally { savingAll = false; paintSaved(); }
+  if (n) toast(t('toast.savedMany', { n }));
+}
+btnSaveAll.onclick = () => saveMany(state.list);
 
 function removeItem(it) {
   const i = idxOf(it), wasCurrent = it === cur();
@@ -2509,7 +2692,7 @@ video.addEventListener('loadedmetadata', () => {
   const it = cur();
   if (it && isFinite(video.duration) && video.duration) it.dur = video.duration;
   if (it && video.videoWidth && video.videoHeight) it.aspect = video.videoWidth / video.videoHeight;
-  paintSeek(); paintMeta(); syncAudioButton(); syncSubsButton();
+  paintSeek(); paintMeta(); syncAudioButton(); syncSubsButton(); syncQualityButton();
 });
 let volT = null;
 video.addEventListener('volumechange', () => {

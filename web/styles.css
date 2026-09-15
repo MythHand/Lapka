@@ -1462,12 +1462,23 @@ video::cue{
 
 /* ── the queue in seasons ───────────────────────────────────── */
 .queue__group{
-  display:flex; align-items:baseline; gap:10px; list-style:none;
-  padding:14px 14px 6px; margin:0;
+  display:flex; align-items:center; gap:10px; list-style:none;
+  padding:14px 14px 6px 0; margin:0;
   font-size:calc(12px + var(--fs)); letter-spacing:.06em; text-transform:uppercase; color:var(--tx-3);
 }
 .queue__group + .item, .queue__group + .tile{ border-top:0; }
-.queue__group-label{ color:var(--tx-2); font-weight:600; font-variant-numeric:tabular-nums; }
+/* the number as a bookmark: a light tab from the panel's edge, rounded on its free side */
+.queue__group-label{
+  flex:none; padding:3px 12px 3px 14px; border-radius:0 10px 10px 0;
+  color:var(--s-0); background:var(--tx-1); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0;
+}
+.queue__group-save{
+  flex:none; margin-left:auto; display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border-radius:8px;
+  color:var(--tx-3); cursor:pointer; text-transform:none; letter-spacing:var(--track); font-variant-numeric:tabular-nums;
+}
+.queue__group-save:hover{ color:var(--tx-1); background:var(--glass-hi); }
+.queue__group-save .ph{ width:14px; height:14px; fill:currentColor; }
+.queue__group-save.is-done{ color:var(--tx-2); } .queue__group-save.is-done .ph{ display:none; }
 .queue__group-title{ text-transform:none; letter-spacing:var(--track); color:var(--tx-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
 .queue__group-year{ font-variant-numeric:tabular-nums; }
 .queue__group-kind{ padding:0 .45em; border:1px solid var(--line-2); border-radius:999px; font-size:calc(11px + var(--fs)); }
@@ -1477,7 +1488,12 @@ video::cue{
 
 /* ── saving from the row ────────────────────────────────────── */
 .item__save{ flex:none; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:8px; color:var(--tx-3); opacity:0; cursor:pointer; }
-.item:hover .item__save, .item.active .item__save{ opacity:1; }
+.item:hover .item__save, .item.active .item__save, .item__save.is-saved, .item__save.is-saving{ opacity:1; }
+.item__save.is-saved{ color:var(--tx-2); cursor:default; }
+.item__save.is-saved:hover{ background:none; color:var(--tx-2); }
+/* the ring that turns while a file is being assembled */
+.spin{ width:14px; height:14px; border-radius:50%; border:2px solid var(--line-3); border-top-color:var(--tx-1); animation:spin .8s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
 .item__save:hover{ color:var(--tx-1); background:var(--glass-hi); }
 .item__save .ph{ width:16px; height:16px; fill:currentColor; }
 
@@ -1499,3 +1515,26 @@ video::cue{
 .home__acts{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
 .home__manual{ font:inherit; font-size:calc(12px + var(--fs)); color:var(--tx-3); background:none; border:0; cursor:pointer; text-decoration:underline; padding:4px 2px; }
 .home__manual:hover{ color:var(--tx-1); }
+
+/* ── saving the whole queue, from its header ────────────────── */
+.toolgrp--save{ position:relative; }
+.saveall{
+  display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border-radius:8px;
+  font:inherit; font-size:calc(12px + var(--fs)); font-variant-numeric:tabular-nums; letter-spacing:var(--track);
+  color:var(--tx-2); background:transparent; border:1px solid var(--line); cursor:pointer;
+}
+.saveall:hover{ color:var(--tx-1); border-color:var(--line-2); background:var(--glass-soft); }
+.saveall .ph{ width:15px; height:15px; fill:currentColor; }
+.saveall.is-done{ color:var(--tx-3); } .saveall.is-done .ph{ display:none; }
+.saveall.is-busy .ph{ animation:pulse 1s ease-in-out infinite; }
+@keyframes pulse{ 50%{ opacity:.3; } }
+.savepop{
+  position:absolute; top:calc(100% + 8px); left:0; z-index:30; min-width:240px; padding:10px 12px;
+  border-radius:var(--r-md); background:var(--glass); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  font-size:calc(12px + var(--fs)); line-height:1.5; color:var(--tx-2); white-space:nowrap;
+}
+.savepop div:last-child{ color:var(--tx-3); font-size:calc(11px + var(--fs)); white-space:normal; word-break:break-all; }
+.queue--empty .toolgrp--save{ display:none; }
+.saveall__count{ font-variant-numeric:tabular-nums; }
+.saveall__count:empty{ display:none; }
