@@ -56,6 +56,9 @@ export function discover({ html, url, profile = null }) {
         if (u.origin !== origin) continue;
         if ((numberFromUrl(u.toString()) ?? tailNumberOfUrl(u.toString())) === count) { stem = stemOfUrl(u.toString()); if (stem) break; }
       }
+      /* no such link: the script that draws the list may build the
+         address itself, "'…/grand-blue-season-2/' + item.number + '/'" */
+      if (!stem) stem = templateFromScripts(doc, url);
     }
     const dated = stem && /\/\d{4}\/\d{2}\/\d{2}\//.test(stem);   // an address with a date in it names one day's page, not a template
     if (count && count <= 2000 && stem && !dated) {
@@ -119,6 +122,22 @@ export function discover({ html, url, profile = null }) {
     players, switches,
     steps,
   };
+}
+
+/* An address the page's script builds for an episode: a string of
+   this site, a number-named variable glued after it, sometimes a
+   tail. The stem is that string with N where the number goes. */
+const BUILDER = /(['"])((?:https?:)?\/\/[^'"\s]+?\/|\/[^'"\s]*?\/)\1\s*\+\s*[\w.$]*(?:number|numero|num|episode|episodio|capitulo|cap|ep)\w*\s*(?:\+\s*(['"])([^'"\s]*)\3)?/i;
+function templateFromScripts(doc, url) {
+  let origin; try { origin = new URL(url).origin; } catch { return null; }
+  for (const s of doc.querySelectorAll('script:not([src])')) {
+    const m = BUILDER.exec(s.textContent || '');
+    if (!m) continue;
+    let base; try { base = new URL(m[2], url); } catch { continue; }
+    if (base.origin !== origin || base.pathname.length < 3) continue;
+    return base.pathname + 'N' + (m[4] || '') + base.search;
+  }
+  return null;
 }
 
 /* How many episodes the page says there are: an attribute of the

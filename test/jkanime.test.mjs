@@ -62,6 +62,12 @@ describe('jkanime', () => {
     assert.equal(s.episodes.items.length, 11);
     assert.equal(s.episodes.items[2].url, 'https://jkanime.net/grand-blue-season-3/3/');
   });
+  test('a finished season lists nothing on its page: the count is in the info, the address in the script that draws the list', () => {
+    const s = discover({ html: snap('jkanime', 'season2.html'), url: 'https://jkanime.net/grand-blue-season-2/' });
+    assert.equal(s.episodes.by, 'template');
+    assert.equal(s.episodes.items.length, 12);
+    assert.equal(s.episodes.items[2].url, 'https://jkanime.net/grand-blue-season-2/3/');
+  });
   test('through look(): eleven episodes, the eleventh plays from one of the open hosters', async () => {
     const delivery = { register: () => 'id' + Math.random().toString(36).slice(2, 8), get: () => null };
     const lapka = createLapka({ session: fakeSession(), extractors: await loadExtractors(), delivery });
