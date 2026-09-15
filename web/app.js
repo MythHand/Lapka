@@ -1272,13 +1272,13 @@ function buildAudioMenu() {
     if (info && info.qualities.length) {
       for (const q of info.qualities) {
         const tg = document.createElement('span');
-        tg.className = 'tag' + (o.sel && it.stream && it.stream.id === q.id ? ' sel' : '');
+        tg.className = 'qtag' + (o.sel && it.stream && it.stream.id === q.id ? ' sel' : '');
         tg.textContent = q.quality || (q.kind === 'hls' ? t('quality.auto') : q.kind.toUpperCase());   // a file of unknown size is named by what it is, not called adaptive
         tg.title = q.player + ' · ' + q.kind.toUpperCase();
         tg.onclick = ev => { ev.stopPropagation(); pickAudio(o, q.quality || 'auto'); markPicked(b); };
         tags.append(tg);
       }
-    } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'tag tag--wait'; w.textContent = '…'; tags.append(w); }
+    } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'qtag qtag--wait'; w.textContent = '…'; tags.append(w); }
     b.onclick = () => { pickAudio(o); markPicked(b); };
     audioMenu.append(b);
   }

@@ -1442,7 +1442,7 @@ video::cue{
 }
 .linkform__in::placeholder{ color:var(--tx-3); }
 .linkform__in:focus{ border-color:var(--line-3); background:var(--glass-hi); }
-.linkform--foot{ max-width:none; flex:1 1 auto; min-width:0; }
+.linkform--foot{ max-width:none; flex:1 1 0; min-width:0; }   /* basis nought: the field takes what is left and never pushes the button to a second line */
 .linkform--foot .linkform__in{ height:32px; padding:0 10px; font-size:calc(13px + var(--fs)); }
 
 /* ── skipping the opening or the ending ─────────────────────── */
@@ -1617,13 +1617,14 @@ video::cue{
 #audioMenu{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); }
 .menu__item--dub{ align-items:center; }
 .menu__tags{ flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:210px; margin-left:8px; }
-.tag{
+/* .qtag, not .tag: .tag is the queue's round button and must stay so */
+.qtag{
   font-size:calc(11px + var(--fs)); line-height:1; padding:4px 7px; border-radius:6px; cursor:pointer;
   color:var(--tx-2); border:1px solid var(--line); background:var(--glass-soft); font-variant-numeric:tabular-nums;
 }
-.tag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
-.tag.sel{ color:var(--s-0); background:var(--tx-1); border-color:var(--tx-1); }
-.tag--wait{ cursor:default; color:var(--tx-3); border-style:dashed; }
+.qtag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
+.qtag.sel{ color:var(--s-0); background:var(--tx-1); border-color:var(--tx-1); }
+.qtag--wait{ cursor:default; color:var(--tx-3); border-style:dashed; }
 
 /* ── the folder's buttons, each on a full line ── */
 .home__acts{ display:grid; grid-template-columns:1fr; gap:6px; }
