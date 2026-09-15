@@ -25,7 +25,7 @@ export function findTitle(doc, { profile } = {}) {
      "Клинок, рассекающий демонов" in the heading: the heading is the
      name, the rest is a tail for search engines */
   const og = out.find(c => c.by === 'og:title'), head = out.find(c => c.by === 'h1');
-  if (og && head && og.value.length > head.value.length && og.value.toLowerCase().startsWith(head.value.toLowerCase() + ' ')) head.confidence = 0.95;
+  if (og && head && og.value.length > head.value.length && head.value.length >= 4 && og.value.toLowerCase().includes(head.value.toLowerCase())) head.confidence = 0.95;
   out.sort((a, b) => b.confidence - a.confidence);
   return out;
 }
@@ -46,7 +46,7 @@ export function findCover(doc, url) {
 /* On an episode page, the link back to the series. The nearest link
    whose address is a parent of ours is the strongest sign; then the
    breadcrumb; then any link that says it goes up. */
-export function findSeriesUrl(doc, url) {
+export function findSeriesUrl(doc, url, seriesTitle = '') {
   const out = [];
   const page = new URL(url);
   const pagePath = page.pathname.replace(/\/+$/, '');
@@ -55,6 +55,15 @@ export function findSeriesUrl(doc, url) {
     if (!value || seen.has(value)) return;
     seen.add(value); out.push({ value, by, confidence, where });
   };
+  /* a link on this site named exactly as the series is: the way
+     WordPress themes lead from an episode to its series */
+  const want = clean(seriesTitle).toLowerCase();
+  if (want.length >= 4) for (const a of doc.querySelectorAll('a[href]')) {
+    if (clean(textOf(a)).toLowerCase() !== want) continue;
+    let u; try { u = new URL(a.getAttribute('href'), url); } catch { continue; }
+    if (u.origin !== page.origin || u.pathname.replace(/\/+$/, '') === pagePath || u.hash) continue;
+    add(u.toString(), 'named', 0.8, 'a[href]');
+  }
   for (const a of doc.querySelectorAll('a[href]')) {
     let u; try { u = new URL(a.getAttribute('href'), url); } catch { continue; }
     if (u.origin !== page.origin) continue;
@@ -98,7 +107,7 @@ export function findCurrentEpisode(doc, url) {
 /* "2 сезон", "Season 2", "2nd season", "S2", or a bare number at the
    end of a title ("Богиня благословляет этот прекрасный мир 2",
    "Этот Замечательный Мир! 3 (OVA)"): the season a title names */
-const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /сезон\s*№?\s*(\d{1,2})(?!\d)/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\bS(\d{1,2})\b(?!\d)/];
+const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /сезон\s*№?\s*(\d{1,2})(?!\d)/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\b(?:part|часть)\s*(\d{1,2})(?!\d)/i, /\bS(\d{1,2})\b(?!\d)/];
 
 /* "neobjatnyj-okean-sezon-3", "one_piece_season_2", "…/s2/": the season an address names */
 const SEASON_PATH = /(?:^|[-_/])(?:sezon|season|s)[-_]?(\d{1,2})(?=[-_/.]|$)/i;
@@ -112,9 +121,10 @@ export function seasonFromUrl(url) {
    океан, Сезон 3 (2026) все серии онлайн". The name is what is left
    once the year in brackets and the tail of watch-words go; the year
    is kept. */
-const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free)\s*$/i;
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+)\s*$/i;
+const SEO_HEAD = /^\s*(?:watch|смотреть)\s+(?:anime\s+|аниме\s+)?(?=\S)/i;
 export function tidyTitle(text) {
-  let t = String(text || '');
+  let t = String(text || '').replace(SEO_HEAD, '');
   let year = null;
   t = t.replace(/\s*\(((?:19|20)\d{2})\)\s*/g, (_, y) => { year = year || Number(y); return ' '; });
   for (let i = 0; i < 6; i++) { const was = t; t = t.replace(SEO_TAIL, ''); if (t === was) break; }

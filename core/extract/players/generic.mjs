@@ -33,9 +33,34 @@ function objectsIn(text) {
   return out;
 }
 
-function fileOf(o, base) {
-  for (const k of FILE_KEYS) if (typeof o[k] === 'string' && streamKind(o[k])) return abs(o[k], base);
+/* The kind of a file the object names: by its extension, else by
+   what the object says of it ("type": "mp4", "application/x-mpegURL"),
+   else by the mime in its query (googlevideo: mime=video%2Fmp4). */
+function kindOf(o, url) {
+  const byUrl = streamKind(url);
+  if (byUrl) return byUrl;
+  const said = String(o.type || o.mime || o.mimeType || o.kind || '').toLowerCase();
+  if (/mpegurl|hls|m3u8/.test(said)) return 'hls';
+  if (/mp4/.test(said)) return 'mp4';
+  const mime = /[?&]mime=([^&]+)/.exec(url);
+  if (mime) { const m = decodeURIComponent(mime[1]).toLowerCase(); if (/mp4/.test(m)) return 'mp4'; if (/mpegurl/.test(m)) return 'hls'; }
   return null;
+}
+function fileOf(o, base) {
+  for (const k of FILE_KEYS) if (typeof o[k] === 'string') { const u = abs(o[k], base); if (u && /^https?:/.test(u) && kindOf(o, u)) return u; }
+  return null;
+}
+/* the quality the object names, else the one the address carries;
+   googlevideo names it by itag */
+const ITAG = { 18: '360p', 22: '720p', 37: '1080p', 59: '480p', 43: '360p', 45: '720p', 46: '1080p' };
+function qualityOfObject(o, url) {
+  for (const k of ['label', 'quality', 'res', 'resolution', 'height']) {
+    const v = o[k]; const m = /(\d{3,4})/.exec(String(v ?? ''));
+    if (m) return `${m[1]}p`;
+  }
+  const itag = /[?&]itag=(\d+)/.exec(url);
+  if (itag && ITAG[itag[1]]) return ITAG[itag[1]];
+  return quality(url);
 }
 function nameOf(o) {
   for (const k of NAME_KEYS) if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim();
@@ -54,10 +79,12 @@ export default {
     const headers = { referer: base };
     const seen = new Set();
     const streams = [];
-    const push = (u) => {
+    const push = (u, kind = null, q = null) => {
       u = abs(u, base);
-      if (!u || seen.has(u) || !streamKind(u)) return;
-      seen.add(u); streams.push({ kind: streamKind(u), url: u, quality: quality(u), headers });
+      if (!u || seen.has(u)) return;
+      kind = kind || streamKind(u);
+      if (!kind) return;
+      seen.add(u); streams.push({ kind, url: u, quality: q || quality(u), headers });
     };
 
     for (const v of doc.querySelectorAll('video')) {
@@ -70,7 +97,10 @@ export default {
     for (const text of scripts) {
       for (const o of objectsIn(text)) {
         const file = fileOf(o, base), name = nameOf(o);
-        if (file && name) dubs.push({ name, streams: [{ kind: streamKind(file), url: file, quality: quality(file), headers }] });
+        if (!file) continue;
+        /* a name that is a quality ("360p") names no dub: the object is a source of the one video */
+        if (name && !/^\d{3,4}p?$/i.test(name)) dubs.push({ name, streams: [{ kind: kindOf(o, file), url: file, quality: qualityOfObject(o, file), headers }] });
+        else push(file, kindOf(o, file), qualityOfObject(o, file));
       }
       for (const m of text.matchAll(STREAM_RE)) push(m[0]);
     }

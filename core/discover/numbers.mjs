@@ -12,9 +12,18 @@ const TEXT_BEFORE = new RegExp(`${WORD}\\s*[#№]?\\s*(\\d{1,4})(?![\\d])`, 'iu'
 const BARE = /^\s*[#№]?\s*(\d{1,4})\s*$/;
 const URL_NUM = /(?:^|[/_\-=?&.])(?:s\d{1,2}e|ep|episode|seriya|serie|series|e)[-_/=]?(\d{1,4})(?![\dA-Za-z])/i;
 
+/* The number and the word it goes with. Russian says both "3 серия"
+   and "Серия 3"; English says "Episode 13", so in "Part 3 Episode 13"
+   the number after the word is the one: an English word takes what
+   follows it. */
+function episodeMatch(t) {
+  const after = TEXT_AFTER.exec(t), before = TEXT_BEFORE.exec(t);
+  if (after && before) return /episode|ep\b|ep\./i.test(after[0]) ? before : after;
+  return after || before;
+}
 export function numberFromText(text) {
   const t = String(text || '').trim();
-  let m = TEXT_AFTER.exec(t) || TEXT_BEFORE.exec(t);
+  let m = episodeMatch(t);
   if (m) return Number(m[1]);
   /* a bare number, unless it is a year: nothing calls episode 2024 by
      its number alone */
@@ -31,13 +40,28 @@ export function numberFromUrl(url) {
   return m ? Number(m[1]) : null;
 }
 
+/* The address with its episode number blanked: what one series'
+   episodes share. "/dr-stone-part-3-episode-13-english-subbed/" and
+   "/one-piece-episode-1178-english-subbed/" have one shape but two
+   stems. Null when the address carries no number. */
+export function stemOfUrl(url) {
+  let u;
+  try { u = new URL(url); } catch { return null; }
+  const path = u.pathname + u.search;
+  const m = URL_NUM.exec(path);
+  if (!m) return null;
+  const at = m.index + m[0].lastIndexOf(m[1]);
+  return path.slice(0, at) + 'N' + path.slice(at + m[1].length);
+}
+
 /* The text with its episode number taken out: what is left is the
    title, if the page gave one. "3 серия — Возвращение" → "Возвращение". */
 const DURATION = /(?:^|\s)\d{1,2}:\d{2}(?::\d{2})?(?=\s|$)/g;
 export function titleFromText(text) {
   if (BARE.test(text)) return '';
-  return String(text || '')
-    .replace(TEXT_AFTER, ' ').replace(TEXT_BEFORE, ' ')
+  const t = String(text || '');
+  const m = episodeMatch(t);
+  return (m ? t.slice(0, m.index) + ' ' + t.slice(m.index + m[0].length) : t)
     .replace(DURATION, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s\-–—:·|]+|[\s\-–—:·|]+$/g, '')

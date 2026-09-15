@@ -639,7 +639,7 @@ ru: {
   'toast.openFail': 'Не открылась: {name} ({why})',
   'toast.noStream': 'Нет потока: {name}',
   'toast.otherSource': 'Источник не пошёл, пробую другой…',
-  'about.placeholder': 'Сайты, на которых тестировали и работало: aniliberty.top · old.yummyani.me · jut-su.net · animego.me · anidubonline.ru',
+  'about.placeholder': 'Сайты, на которых тестировали и работало: aniliberty.top · old.yummyani.me · jut-su.net · animego.me · anidubonline.ru · gogoanime.by\nПробовали, дверь закрыта: aniwaves.ru · aniwatch.co.at',
   'skip.opening': 'Пропустить заставку',
   'skip.ending': 'Пропустить титры',
   'skip.hide': 'Скрыть кнопку',

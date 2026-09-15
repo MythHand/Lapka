@@ -9,7 +9,7 @@
    wins; the rest are kept in the report so the inspector can show
    what else was considered.
    ═══════════════════════════════════════════════════════════ */
-import { numberFromText, numberFromUrl, titleFromText, template } from './numbers.mjs';
+import { numberFromText, numberFromUrl, stemOfUrl, titleFromText, template } from './numbers.mjs';
 import { textOf } from './text.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
@@ -66,7 +66,10 @@ export function findEpisodes(doc, url, { profile } = {}) {
   const cands = candidatesFrom(doc, url, profile);
   const groups = new Map();
   for (const c of cands) {
-    const key = c.by + ' ' + template(c.url);
+    /* one series' episodes: links of one shape, and, when the address
+       carries the number, of one stem (the shape alone would mix in
+       another series' episodes linked beside them) */
+    const key = c.by + ' ' + (stemOfUrl(c.url) || template(c.url));
     if (!groups.has(key)) groups.set(key, { key, by: c.by, items: new Map() });
     const g = groups.get(key).items;
     /* the same episode linked twice (a strip of numbers and a list)

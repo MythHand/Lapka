@@ -18,14 +18,22 @@ import { textOf } from './text.mjs';
 
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
 const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-player', 'data-player-url', 'data-link', 'data-file', 'data-video'];
-/* data-src is how images load lazily too: on anything but a frame or a video it is a picture */
+/* data-src is how images load lazily too: on a picture element, or
+   one that calls itself a picture, or with a picture's address, it is
+   an image; on a frame, a video or a switch item it is a player */
 const LAZY_MEDIA = /^(iframe|video|audio|source|embed|object)$/i;
+const PICTURE_TAG = /^(img|picture|source|figure)$/i;
+const PICTURE_CLASS = /img|image|picture|poster|thumb|cover|lazy|avatar|photo/i;
+const PICTURE_URL = /\.(jpe?g|png|webp|gif|avif|svg)(\?|$)|[?&](?:fit|resize|w|h)=\d/i;
+const isPicture = (el, v) => PICTURE_TAG.test(el.tagName) || PICTURE_CLASS.test(String(el.getAttribute('class') || '')) || PICTURE_URL.test(v) || !!el.querySelector('img');
 /* a switch item may name its dub and its player in attributes rather than in its text */
 const DUB_ATTRS = ['data-translation-title', 'data-dubbing-title', 'data-dubbing', 'data-voice', 'data-studio', 'data-dub'];
 const PLAYER_ATTRS = ['data-provider-title', 'data-player-title', 'data-player-name'];
 const firstAttr = (el, names) => { for (const n of names) { const v = clean(el.getAttribute(n)); if (v) return v; } return null; };
 const STREAM_RE = /https?:\/\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?|(?<![\w/])\/[^\s"'<>\\]+?\.(?:m3u8|mp4|mpd)(?:\?[^\s"'<>\\]*)?/g;
-const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server)\b/i;
+/* words a switch of players uses: the word itself, a quality ("SD",
+   "HD", "720p"), a mirror, or a hoster's name */
+const PLAYER_WORDS = /\b(?:плеер|player|источник|source|сервер|server|mirror|option|sd|hd|fhd|uhd|4k|\d{3,4}p|blogger|mega\w*|vidstream|streamtape|dood\w*|mp4upload|filemoon|streamwish|sibnet|kodik|aniboom|alloha|cvh|vk|ok\.ru|youtube|rumble)\b/i;
 
 /* A player the page fetches after it loads: the element carries the
    parameters of a request instead of an address, and the site's
@@ -68,8 +76,8 @@ export function playerId(embedUrl, pageUrl) {
 
 function embedOf(el, url) {
   for (const a of EMBED_ATTRS) {
-    if (a === 'data-src' && !LAZY_MEDIA.test(el.tagName)) continue;
     const v = el.getAttribute(a);
+    if (a === 'data-src' && !LAZY_MEDIA.test(el.tagName) && isPicture(el, String(v || ''))) continue;
     if (v && /[/.]/.test(v) && !/^#/.test(v)) { try { return new URL(v, url).toString(); } catch { /* not an address */ } }
   }
   return null;

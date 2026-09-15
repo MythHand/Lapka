@@ -27,7 +27,9 @@ export function discover({ html, url, profile = null }) {
   const cover = findCover(doc, url);
   const episodes = findEpisodes(doc, url, { profile });
   const { players, switches } = findPlayers(doc, url, { profile });
-  const seriesUrl = findSeriesUrl(doc, url);
+  /* the series' own name, for a link that carries it: the heading without the episode and the tail */
+  const probableSeries = tidyTitle(titleFromText(title[0]?.value || '') || title[0]?.value || '').title;
+  const seriesUrl = findSeriesUrl(doc, url, probableSeries);
   const current = findCurrentEpisode(doc, url);
   const ownSeason = seasonFromText(title[0]?.value || '') ?? seasonFromUrl(url);
   /* season links first; without them, a block the site heads as the franchise */
