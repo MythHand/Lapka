@@ -2070,17 +2070,13 @@ function commitDrag() {
 queueList.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); commitDrag(); });
 queueList.addEventListener('dragend', commitDrag);
 
-$('#btnSort').onclick = () => { state.list.sort((a, b) => collator.compare(a.path, b.path)); render(); toast(t('queue.sorted')); };
-$('#btnReverse').onclick = () => { state.list.reverse(); render(); toast(t('queue.reversed')); };
-$('#btnShuffle').onclick = () => {
-  for (let i = state.list.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [state.list[i], state.list[j]] = [state.list[j], state.list[i]];
-  }
-  render(); toast(t('queue.shuffled'));
-};
+/* The order of the queue: from the first episode to the last, or
+   the other way round; the parts of a franchise go with it. */
+const seasonRank = it => { const s = seasonOf(it); return s ? s.ordinal || 0 : 0; };
+const byOrder = (a, b) => seasonRank(a) - seasonRank(b) || a.number - b.number;
+$('#btnSort').onclick = () => { state.list.sort(byOrder); render(); toast(t('queue.sorted')); };
+$('#btnReverse').onclick = () => { state.list.sort((a, b) => byOrder(b, a)); render(); toast(t('queue.reversed')); };
 $('#btnClear').onclick = () => {
-  state.list.forEach(i => i.url && URL.revokeObjectURL(i.url));
   state.list = []; state.current = null;
   video.pause(); video.removeAttribute('src'); video.load();
   endCard.classList.remove('show'); hideNotice(); hideProgress();

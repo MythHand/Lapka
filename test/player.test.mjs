@@ -145,15 +145,24 @@ describe('a series in seasons', { skip }, () => {
       const rows = $$('#queueList > li').map(li => li.classList.contains('queue__group')
         ? 'group: ' + li.querySelector('.queue__group-label').textContent + ' ' + li.querySelector('.queue__group-title').textContent
         : li.querySelector('.item__name').textContent + (li.classList.contains('active') ? ' *' : ''));
-      __report({ errors: window.__errors, rows, titlePath: $('#titlePath').textContent, grouped: $('#queue').classList.contains('queue--grouped'), sortHidden: getComputedStyle($('#btnSort')).display === 'none' });
+      $('#btnReverse').click(); await __settled();
+      const reversed = $$('#queueList > li').filter(li => !li.classList.contains('queue__group')).map(li => li.querySelector('.item__name').textContent);
+      const groupsReversed = $$('#queueList .queue__group-label').map(l => l.textContent);
+      $('#btnSort').click(); await __settled();
+      const again = $$('#queueList .queue__group-label').map(l => l.textContent);
+      __report({ errors: window.__errors, rows, reversed, groupsReversed, again, titlePath: $('#titlePath').textContent, grouped: $('#queue').classList.contains('queue--grouped'), shuffle: !!$('#btnShuffle') });
     `, { site: site.base, budget: 20000 });
   });
   test('both seasons are in the queue, each under its own line, the linked one current', () => {
     ok(r, 'seasons'); assert.deepEqual(r.errors, []);
     assert.deepEqual(r.rows, ['group: 1 Сериал Сезоны', 'Episode 1', 'Episode 2', 'group: 2 Сериал Сезоны 2 сезон', 'Episode 1', 'Episode 2 *']);
     assert.equal(r.grouped, true);
-    assert.equal(r.sortHidden, true);
     assert.match(r.titlePath, /^Сериал Сезоны 2 сезон/);
+    /* the order: last to first turns the parts and the episodes around, first to last puts them back; there is no shuffle */
+    assert.deepEqual(r.reversed, ['Episode 2', 'Episode 1', 'Episode 2', 'Episode 1']);
+    assert.deepEqual(r.groupsReversed, ['2', '1']);
+    assert.deepEqual(r.again, ['1', '2']);
+    assert.equal(r.shuffle, false);
   });
 });
 

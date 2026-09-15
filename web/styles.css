@@ -1472,7 +1472,6 @@ video::cue{
 .queue__group-year{ font-variant-numeric:tabular-nums; }
 .queue__group-kind{ padding:0 .45em; border:1px solid var(--line-2); border-radius:999px; font-size:calc(11px + var(--fs)); }
 .queue__group-kind:empty{ display:none; }
-.queue--grouped #btnSort, .queue--grouped #btnReverse, .queue--grouped #btnShuffle{ display:none; }
 .queue__list--grid .queue__group{ grid-column:1 / -1; }
 
 
