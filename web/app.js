@@ -2336,6 +2336,7 @@ function rowFor(it) {
     `<span class="item__grip">${phSvg(PH.grip)}</span>` +
     `<span class="item__thumb"><span class="item__eq"><i></i><i></i><i></i></span><span class="pos"><i></i></span></span>` +
     `<span class="item__body"><span class="item__name"></span><span class="item__meta"></span></span>` +
+    `<span class="item__unsave" title="${t('queue.cancelSave')}">${phSvg(PH.x)}</span>` +
     `<span class="item__save">${phSvg(PH.download)}</span>` +
     `<span class="item__x" title="${t('queue.remove')}">${phSvg(PH.x)}</span>`;
   li.querySelector('.item__name').textContent = it.name;
@@ -2418,6 +2419,7 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
+  if (e.target.closest('.item__unsave')) return cancelSaves([it]);
   if (e.target.closest('.item__save')) return saveMarkClick(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
@@ -2563,6 +2565,7 @@ function paintSaveButton(btn, it) {
   const saved = isSaved(it);
   if (saved && it.save && it.save.st !== 'queued') it.save = null;   // the file is in the library: the job's last word does not matter
   const sv = it.save;
+  const li = btn.closest('.item'); if (li) li.classList.toggle('has-save', !!sv);
   const saving = isSaving(it), paused = isPaused(it), failed = isFailed(it), queued = isQueued(it);
   btn.classList.toggle('is-saved', saved && !saving && !paused && !failed && !queued);
   btn.classList.toggle('is-saving', saving);
@@ -2676,6 +2679,18 @@ function buildSavePop() {
   go.onclick = ev => { ev.stopPropagation(); enqueueSaves(popItems()); };
   pause.onclick = ev => { ev.stopPropagation(); pauseItems(popItems(), popScope === null); };
   acts.append(go, pause); q.append(acts);
+  /* the destructive pair asks twice: the first click arms the button, the second within a few seconds acts */
+  const acts2 = el('div', 'savepop__acts savepop__acts--quiet');
+  const cancel = el('button', 'btn btn--quiet'), del = el('button', 'btn btn--quiet');
+  const armed = (b, run) => ev => {
+    ev.stopPropagation();
+    if (b.classList.contains('is-armed')) { b.classList.remove('is-armed'); run(); return; }
+    b.classList.add('is-armed'); paintSavePop();
+    clearTimeout(b._arm); b._arm = setTimeout(() => { b.classList.remove('is-armed'); paintSavePop(); }, 4000);
+  };
+  cancel.onclick = armed(cancel, () => cancelSaves(popItems()));
+  del.onclick = armed(del, () => deleteSaved(popItems()));
+  acts2.append(cancel, del); q.append(acts2);
   const frag = document.createDocumentFragment(); frag.append(q);
   const parts = [];
   if (popScope === null && state.seasons.length > 1) {
@@ -2691,7 +2706,7 @@ function buildSavePop() {
   const lib = popScope === null ? popSection(t('pop.library')) : null;
   if (lib) { lib.hidden = true; frag.append(lib); }
   savePop.replaceChildren(frag);
-  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, go, pause, parts, lib } };
+  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, go, pause, cancel, del, parts, lib } };
 }
 
 /* the words and the buttons, from the queue as it is now */
@@ -2729,6 +2744,11 @@ function paintSavePop() {
   r.go.textContent = (paused.length || failed.length ? t(popScope === null ? 'pop.resumeAll' : 'pop.resumePart') : t(popScope === null ? 'pop.download' : 'pop.downloadPart')) + ` · ${toGo.length}`;
   r.pause.hidden = !loading.length;
   r.pause.textContent = t(popScope === null ? 'pop.pauseAll' : 'pop.pausePart');
+  const withSave = items.filter(it => it.save && !isSaved(it));
+  r.cancel.hidden = !withSave.length;
+  r.cancel.textContent = r.cancel.classList.contains('is-armed') ? t('pop.cancelSure', { n: withSave.length }) : t('pop.cancel');
+  r.del.hidden = !saved.length;
+  r.del.textContent = r.del.classList.contains('is-armed') ? t('pop.deleteSure', { n: saved.length }) : t('pop.deleteFiles') + ` · ${saved.length}`;
   for (const part of r.parts) {
     const its = items.filter(it => it.seriesId === part.id), done = its.filter(isSaved);
     part.c.textContent = `${done.length}/${its.length}`;
@@ -2896,6 +2916,35 @@ async function promoteSave(it) {
   }
   paintSaved();
   clearTimeout(savesT); watchSaves();
+}
+
+/* ── cancelling and clearing ───────────────────────────────────
+   A save cancelled leaves nothing: the job, the half file, the cached
+   pieces and the record go, on the server and on this page. Saved files
+   deleted go with their sidecars; a series folder left empty goes too. */
+async function cancelSaves(items) {
+  const mine = items.filter(it => it.save && !isSaved(it));
+  dequeueSaves(mine);
+  for (const it of mine) { if (it.save && it.save.st === 'opening') it.pauseWanted = true; it.save = null; }
+  paintSaved();
+  const bySeries = new Map();
+  for (const it of mine) { if (!bySeries.has(it.seriesId)) bySeries.set(it.seriesId, []); bySeries.get(it.seriesId).push(it.number); }
+  try {
+    for (const [seriesId, eps] of bySeries) await post(`/api/saves/cancel?series=${encodeURIComponent(seriesId)}&episodes=${eps.join(',')}`);
+  } catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  if (mine.length) toast(t('toast.cancelled', { n: mine.length }));
+  clearTimeout(savesT); watchSaves();
+}
+async function deleteSaved(items) {
+  const saved = items.filter(isSaved);
+  const bySeries = new Map();
+  for (const it of saved) { if (!bySeries.has(it.seriesId)) bySeries.set(it.seriesId, []); bySeries.get(it.seriesId).push(it.number); }
+  let n = 0;
+  try {
+    for (const [seriesId, eps] of bySeries) n += (await post(`/api/library/delete?series=${encodeURIComponent(seriesId)}&episodes=${eps.join(',')}`)).removed || 0;
+  } catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  await loadLibrary();
+  toast(t('toast.deleted', { n }));
 }
 
 /* ── the pause, by scope ───────────────────────────────────────

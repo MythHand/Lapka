@@ -58,6 +58,24 @@ export function openLibrary(home) {
       await fsp.writeFile(sidecarPath, JSON.stringify({ v: SIDECAR_V, ...info }, null, 1));
     },
 
+    /* the given episodes of a series taken off the disk, file and sidecar;
+       the series folder goes with them when no episode is left in it */
+    async remove(seriesId, episodes) {
+      const eps = new Set(episodes.map(Number));
+      const s = (await this.list()).find(x => x.id === seriesId);
+      if (!s) return { removed: 0 };
+      let removed = 0;
+      for (const e of s.episodes) {
+        if (!eps.has(Number(e.episode))) continue;
+        await fsp.rm(e.path, { force: true }).catch(() => {});
+        await fsp.rm(e.path.replace(/\.[^.]+$/, '.json'), { force: true }).catch(() => {});
+        removed++;
+      }
+      const left = (await this.list()).find(x => x.id === seriesId);
+      if (!left || !left.episodes.length) await fsp.rm(s.dir, { recursive: true, force: true }).catch(() => {});
+      return { removed, dir: s.dir };
+    },
+
     /* every pinned episode on disk, by series */
     async list() {
       const out = new Map();

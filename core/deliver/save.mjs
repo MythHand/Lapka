@@ -109,10 +109,11 @@ export function createSaver({ delivery, cache, library, state = null }) {
          the origin serves ranges; otherwise it starts over. Progress is in bytes. */
       let have = 0;
       try { have = (await fsp.stat(part)).size; } catch { /* nothing yet */ }
-      let res = have ? await delivery.fetchOrigin(entry, stream.url, { range: `bytes=${have}-` }) : null;
+      const opts = signal ? { signal } : {};
+      let res = have ? await delivery.fetchOrigin(entry, stream.url, { range: `bytes=${have}-` }, opts) : null;
       if (res && res.status === 416) { have = 0; res = null; }              // the half file is not what the origin has now
       if (res && res.status !== 206) { have = 0; res.body && res.body.cancel && res.body.cancel().catch(() => {}); res = null; }
-      if (!res) res = await delivery.fetchOrigin(entry, stream.url);
+      if (!res) res = await delivery.fetchOrigin(entry, stream.url, {}, opts);
       if (!res.ok) throw new Error(`origin answered ${res.status}`);
       const total = have + (Number(res.headers.get('content-length')) || 0);
       let done = have;
@@ -227,9 +228,16 @@ export function createSaver({ delivery, cache, library, state = null }) {
     /* progress after a pause is not written down: the record must keep saying paused */
     const onProgress = p => { if (job.state !== 'working') return; Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); };
     save(job.streamId, { ...ctx, signal: ac.signal, onProgress })
-      .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(job.key); })
-      .catch(e => {
+      .then(async r => {
+        if (job.state === 'cancelled') {       // cancelled at the last moment: the file made is not wanted
+          await fsp.rm(r.file, { force: true }).catch(() => {}); await fsp.rm(r.sidecar, { force: true }).catch(() => {});
+          return dropTraces(job, ctx);
+        }
+        Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(job.key);
+      })
+      .catch(async e => {
         if (job.state === 'queued') { note(); return; }   // stepped back for another: waits in line with its progress
+        if (job.state === 'cancelled') { await dropTraces(job, ctx); return; }
         if (job.state === 'paused' || e.name === 'AbortError') {
           /* paused by hand: the record keeps where it got to, marked so that it
              is not taken up by itself; the half file and the cached pieces stay,
@@ -257,6 +265,49 @@ export function createSaver({ delivery, cache, library, state = null }) {
     }
     return job;
   }
+  /* the half file, the cached pieces and the record of a save: gone */
+  async function dropTraces(job, ctx) {
+    if (ctx) await fsp.rm(library.placeFor(ctx.series, ctx.episode, ctx.dub, 'mp4').file + '.part', { force: true }).catch(() => {});
+    await cache.drop(job.streamId).catch(() => {});
+    if (state) state.clearSave(job.key);
+  }
+
+  /* a save cancelled by hand: leaves the line or is cut off, and nothing of it stays */
+  async function cancel(id) {
+    const job = jobs.get(id);
+    if (!job) return null;
+    const ctx = ctxOf.get(id);
+    if (job.state === 'queued') {
+      const i = line.indexOf(id); if (i >= 0) line.splice(i, 1);
+      job.state = 'cancelled';
+      ctxOf.delete(id);
+      await dropTraces(job, ctx);
+      pump();
+    } else if (job.state === 'working') {
+      job.state = 'cancelled';
+      if (state) state.clearSave(job.key);              // the record goes now, before the resume tick can see it
+      const ac = stops.get(id); if (ac) ac.abort();     // the catch drops the rest of the traces
+    } else if (job.state === 'paused' || job.state === 'error') {
+      job.state = 'cancelled';
+      await dropTraces(job, ctx);
+    }
+    return job;
+  }
+
+  /* every save of the given episodes of a series, cancelled: jobs in any
+     state, records left by earlier runs, half files in the series folder */
+  async function cancelFor({ seriesId, episodes, dir = null }) {
+    const eps = new Set(episodes.map(Number));
+    let n = 0;
+    for (const job of [...jobs.values()]) if (job.seriesId === seriesId && eps.has(Number(job.episode)) && ['queued', 'working', 'paused', 'error'].includes(job.state)) { await cancel(job.id); n++; }
+    if (state) for (const [key, rec] of Object.entries(state.saves())) if (rec.seriesId === seriesId && eps.has(Number(rec.episode))) { state.clearSave(key); n++; }
+    if (dir) for (const f of await fsp.readdir(dir).catch(() => [])) {
+      const m = /^(\d+)\b.*\.part$/.exec(f);
+      if (m && eps.has(Number(m[1]))) await fsp.rm(path.join(dir, f), { force: true }).catch(() => {});
+    }
+    return n;
+  }
+
   function pauseAll() {
     held = true;
     const out = [];
@@ -296,5 +347,5 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return resuming;
   }
 
-  return { save, start, promote, pause, pauseAll, resume, job: id => jobs.get(id) || null, jobs, keyOf };
+  return { save, start, promote, pause, pauseAll, cancel, cancelFor, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }

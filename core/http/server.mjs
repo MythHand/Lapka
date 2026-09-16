@@ -144,6 +144,20 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return json(res, 202, saver.start(ctx.stream.id, ctx, { first: url.searchParams.get('first') === '1' }));
       }
       if (saver && mutating && p === '/api/saves/pause') return json(res, 200, { paused: saver.pauseAll().map(j => j.id) });
+      if (saver && mutating && p === '/api/save/cancel') {
+        const job = await saver.cancel(url.searchParams.get('id') || '');
+        return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });
+      }
+      if (saver && library && mutating && p === '/api/saves/cancel') {
+        const seriesId = url.searchParams.get('series') || '', episodes = (url.searchParams.get('episodes') || '').split(',').filter(Boolean);
+        const known = lapka.series(seriesId);
+        const dir = known ? library.seriesDir(known) : ((await library.list()).find(x => x.id === seriesId) || {}).dir || null;
+        return json(res, 200, { cancelled: await saver.cancelFor({ seriesId, episodes, dir }) });
+      }
+      if (library && mutating && p === '/api/library/delete') {
+        const seriesId = url.searchParams.get('series') || '', episodes = (url.searchParams.get('episodes') || '').split(',').filter(Boolean);
+        return json(res, 200, await library.remove(seriesId, episodes));
+      }
       if (saver && mutating && p === '/api/save/promote') {
         const job = saver.promote(url.searchParams.get('id') || '');
         return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });

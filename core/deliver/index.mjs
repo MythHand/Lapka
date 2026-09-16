@@ -58,9 +58,9 @@ export function createDelivery({ session, cache }) {
     return out.join('\n');
   }
 
-  async function fetchOrigin(entry, url, extra = {}) {
+  async function fetchOrigin(entry, url, extra = {}, { signal = undefined } = {}) {
     const headers = { ...(entry.stream.headers || {}), ...extra };
-    const res = await fetch(url, { headers: { 'user-agent': session.ua || 'Mozilla/5.0', ...headers }, redirect: 'follow' });
+    const res = await fetch(url, { headers: { 'user-agent': session.ua || 'Mozilla/5.0', ...headers }, redirect: 'follow', signal });
     return res;
   }
 
