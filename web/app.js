@@ -2158,6 +2158,7 @@ function render() {
   const grid = state.view === 'grid';
   queueList.classList.toggle('queue__list--grid', grid && state.list.length > 0);
   queueEl.classList.toggle('queue--empty', !state.list.length);
+  applyQueueWidth();
   btnLocate.hidden = !cur() || !state.list.length;
   syncQueueClose();
 
@@ -2282,20 +2283,22 @@ function revealCurrent() {
 }
 btnLocate.onclick = revealCurrent;
 
-/* the queue's width: wide is its job, as wide as the screen allows; narrow
-   is a passing choice for this page only, not kept, so a reload brings the
-   width back. The button shows the state and swaps its glyph. */
+/* the queue's width. With files in it, the panel is as wide as the screen
+   allows or one step narrower, by the last choice made, and the choice is
+   kept. With nothing open, the panel shows the description and is always
+   wide. The button shows the state and swaps its glyph. */
 const btnQueueWidth = $('#btnQueueWidth');
-try { localStorage.removeItem('lapka.queueNarrow'); } catch (_) {}   // a choice kept by an earlier build
-function applyQueueWidth(narrow) {
+function applyQueueWidth() {
+  const chosen = strFromStore('lapka.queueNarrow', '0') === '1';
+  const narrow = chosen && state.list.length > 0;
   workspace.classList.toggle('queue-narrow', narrow);
-  if (btnQueueWidth) btnQueueWidth.title = t(narrow ? 'queue.widen' : 'queue.narrow');
+  if (btnQueueWidth) btnQueueWidth.title = t(chosen ? 'queue.widen' : 'queue.narrow');
 }
 if (btnQueueWidth) btnQueueWidth.onclick = () => {
-  applyQueueWidth(!workspace.classList.contains('queue-narrow'));
+  saveStr('lapka.queueNarrow', strFromStore('lapka.queueNarrow', '0') === '1' ? '0' : '1');
+  applyQueueWidth();
   setTimeout(() => window.dispatchEvent(new Event('resize')), 450);   // the deck and the menus refit once the slide is over
 };
-applyQueueWidth(false);
 
 /* ── the project description in an empty queue ────────────────
    The order here carries meaning and is not accidental. At the top,

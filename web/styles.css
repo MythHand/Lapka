@@ -773,9 +773,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 /* A labelled group: without it two clusters of icons stand side by side
    and it is unclear where one ends and the next begins. */
 .toolgrp{ display:flex; align-items:center; gap:8px; }
-.toolgrp__cap{
-  font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); white-space:nowrap;
-}
 
 /* A segmented group: three separate pills with text read as three
    unrelated decisions and took up the whole row. Icons in one cluster
