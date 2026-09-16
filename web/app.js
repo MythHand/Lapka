@@ -2039,9 +2039,22 @@ function buildGearMenu() {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
   });
-  /* the way out: the server stops, the tab says so; the first click only arms the button */
+  /* the way out: a block like the others, with its heading, what it is and why, the
+     guide on GitHub in the reader's language, and the button; the first click only arms it */
   const quitRow = document.createElement('div');
   quitRow.className = 'menu__row menu__row--quit';
+  const quitHead = document.createElement('span');
+  quitHead.className = 'menu__rowlabel';
+  quitHead.textContent = t('set.quitHead');
+  const quitNote = document.createElement('div');
+  quitNote.className = 'cache__note quit__note';
+  quitNote.textContent = t('set.quitNote');
+  const quitGuide = document.createElement('a');
+  quitGuide.className = 'quit__guide';
+  quitGuide.target = '_blank'; quitGuide.rel = 'noopener';
+  quitGuide.href = lang === 'ru' ? 'https://github.com/MythHand/Lapka/blob/main/docs/INSTALL.ru.md#как-выключить' : 'https://github.com/MythHand/Lapka/blob/main/docs/INSTALL.md#how-to-stop';
+  quitGuide.textContent = t('set.quitGuide');
+  quitGuide.onclick = ev => ev.stopPropagation();
   const quit = document.createElement('button');
   quit.className = 'cache__clear quit';
   quit.textContent = t('set.quit');
@@ -2057,7 +2070,7 @@ function buildGearMenu() {
     video.pause();
     showNotice(t('notice.quit'), { mid: true });
   };
-  quitRow.append(quit);
+  quitRow.append(quitHead, quitNote, quitGuide, quit);
   place.append(quitRow);
 
   gearMenu.append(keys, opts, place);
