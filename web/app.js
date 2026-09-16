@@ -2039,6 +2039,26 @@ function buildGearMenu() {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
   });
+  /* the way out: the server stops, the tab says so; the first click only arms the button */
+  const quitRow = document.createElement('div');
+  quitRow.className = 'menu__row menu__row--quit';
+  const quit = document.createElement('button');
+  quit.className = 'cache__clear quit';
+  quit.textContent = t('set.quit');
+  quit.onclick = async ev => {
+    ev.stopPropagation();
+    if (!quit.classList.contains('is-armed')) {
+      quit.classList.add('is-armed'); quit.textContent = t('set.quitSure');
+      setTimeout(() => { quit.classList.remove('is-armed'); quit.textContent = t('set.quit'); }, 4000);
+      return;
+    }
+    try { await post('/api/quit'); } catch (_) {}
+    closeMenus();
+    video.pause();
+    showNotice(t('notice.quit'), { mid: true });
+  };
+  quitRow.append(quit);
+  place.append(quitRow);
 
   gearMenu.append(keys, opts, place);
 }

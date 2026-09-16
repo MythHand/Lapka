@@ -71,7 +71,8 @@ git clone https://github.com/MythHand/Lapka.git
 In the unpacked folder there are `start.command` (macOS), `start.bat`
 (Windows) and `start.sh` (Linux). A double click on the first two does steps
 3 and 4 for you: checks Node.js, installs what is missing the first time,
-starts Lapka and opens it in the browser. Closing that window stops Lapka.
+starts Lapka in the background and opens it in the browser. That window can be
+closed afterwards, Lapka keeps running until you stop it (see "How to stop").
 
 On macOS the first double click may be refused with "cannot be opened because
 it is from an unidentified developer": right-click the file → Open, once.
@@ -150,6 +151,22 @@ sudo apt install ffmpeg
 
 (or the package manager of your distribution). The check everywhere:
 `ffmpeg -version`.
+
+## How to stop
+
+Lapka runs as a small server on your machine; it does not stop by itself when
+the browser tab is closed. Three ways to stop it:
+
+- **The button.** In the player: the gear → the bottom of the "Where things are
+  kept" column → **Quit Lapka**, twice (the first click asks). The tab says
+  Lapka has quit and can be closed.
+- **The launcher's twin.** `stop.command` (macOS), `stop.bat` (Windows) or
+  `./stop.sh` (Linux) in the same folder.
+- **If you started it from a terminal** with `npm start`: Ctrl+C in that
+  terminal, or close the terminal window.
+
+Nothing is lost by stopping: positions, choices and half-saved episodes are on
+disk and come back at the next start.
 
 ## Updating
 

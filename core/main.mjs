@@ -90,6 +90,8 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     setTimeout(tick, 4000).unref();
   }
   const close = async () => { await server.close(); await ctx.state.close(); };
+  /* asked from the page: the state is written down, then the process ends; the answer goes out first */
+  ctx.quit = () => { setTimeout(async () => { try { await ctx.state.close(); } catch (_) {} process.exit(0); }, 150); };
   return { ctx, get lapka() { return ctx.lapka; }, get store() { return ctx.store; }, get state() { return ctx.state; }, get library() { return ctx.library; }, get delivery() { return ctx.delivery; }, get saver() { return ctx.saver; }, ...server, close };
 }
 
