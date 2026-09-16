@@ -2732,14 +2732,23 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned)
    The episode is opened if it was not, then its stream is handed to
    the server, which assembles the file; the row shows how far it is. */
 const isSaving = it => !!(it.save && !it.save.error && !it.save.paused);
+
+/* One save, start to end. The row is marked at once, before the episode is
+   even opened, so a pause asked for in that window is honoured too: the
+   flag is read after the episode opens and again as soon as the server
+   has given the job its id. */
 async function saveItem(it, stream = null) {
   if (isSaving(it) || isSaved(it)) return false;
+  it.pauseWanted = false;
   it.save = { phase: 'fetch', done: 0, total: 0, mine: true }; paintSaved();
+  const held = () => { it.save = { phase: 'fetch', done: 0, total: 0, paused: true }; paintSaved(); return false; };
   try {
     if (!it.stream) await resolveItem(it);
+    if (it.pauseWanted) return held();
     const st = stream || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
     let job = await post('/api/save?stream=' + st.id);
+    if (it.pauseWanted && job.state === 'working') job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     while (job.state === 'working') {
       it.save = { phase: job.phase, done: job.done, total: job.total, mine: true, jobId: job.id }; paintSaved();
       await sleep(500);
@@ -2757,18 +2766,28 @@ async function saveItem(it, stream = null) {
   }
 }
 
-/* a save in progress, paused by hand: it keeps where it got to and waits */
+/* A pause holds the loading, whatever asked for it: the row's ring or the
+   button in a popover. The job running is paused on the server, keeping
+   where it got to; a run over many episodes ends here, with the rest left
+   as they are; a save still opening its episode is held as soon as it can
+   be. Nothing continues until a hand asks. */
+let savingAll = false, pauseAll = false;
 async function pauseSave(it) {
+  if (savingAll) pauseAll = true;
+  it.pauseWanted = true;
   const id = it.save && it.save.jobId;
-  if (!id) return;
+  if (!id) return;                          // not yet started on the server: saveItem holds it itself
   let job = null;
   try { job = await post('/api/save/pause?id=' + encodeURIComponent(id)); } catch (_) {}
   it.save = { phase: (job || it.save).phase, done: (job || it.save).done || 0, total: (job || it.save).total || 0, paused: true }; paintSaved();
 }
+function pauseMany() {
+  pauseAll = true;
+  const running = state.list.find(it => isSaving(it) && it.save.mine);
+  if (running) pauseSave(running);
+}
 
-/* several episodes, one after another: the server assembles one file at a
-   time anyway; a pause holds the one running and ends the run */
-let savingAll = false, pauseAll = false;
+/* several episodes, one after another: the server assembles one file at a time anyway */
 async function saveMany(items) {
   if (savingAll) return;
   savingAll = true; pauseAll = false; paintSaved();
@@ -2776,11 +2795,6 @@ async function saveMany(items) {
   try { for (const it of items) { if (pauseAll) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
   finally { savingAll = false; pauseAll = false; paintSaved(); }
   if (n) toast(t('toast.savedMany', { n }));
-}
-function pauseMany() {
-  pauseAll = true;
-  const running = state.list.find(it => isSaving(it) && it.save.mine);
-  if (running) pauseSave(running);
 }
 /* the header's button opens its popover; the saving starts from the button inside */
 btnSaveAll.onclick = () => { if (popPinned && popScope === null) return unpinSavePop(); pinSavePop(null); };
