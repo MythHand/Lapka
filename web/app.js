@@ -954,7 +954,13 @@ async function sourceFor(it) {
   }
   clearTimeout(slow); hideProgress();
   if (it !== cur()) return null;
-  if (!r.stream) { it.err = true; render(); toast(t('toast.noStream', { name: it.name })); return null; }
+  if (!r.stream) {
+    /* no live source: the reason stands on the stage, a closed player named as such */
+    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : `${d.player}: ${d.error}`).join('; ');
+    it.err = true; it.why = why; render();
+    showNotice(t('notice.noOpen', { name: it.name, why }), { mid: true });
+    return null;
+  }
   it.err = false;
   /* the dub the server settled on is the one carried on */
   if (state.dubKey && r.dub && r.dub.key !== state.dubKey) toast(t('toast.carried', { name: r.dub.name }));
@@ -2405,7 +2411,7 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
-  if (e.target.closest('.item__save')) return offerSave(it, e.target.closest('.item__save'));
+  if (e.target.closest('.item__save')) return (it.save && !it.save.error) ? stopSave(it) : offerSave(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
 
@@ -2491,7 +2497,7 @@ async function watchSaves() {
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { phase: job.phase, done: job.done, total: job.total }; active = true; }
+    if (job) { it.save = { phase: job.phase, done: job.done, total: job.total, jobId: job.id }; active = true; }
     else if (rec && rec.error) it.save = { error: rec.error, done: rec.done || 0, total: rec.total || 0, phase: rec.phase };
     else if (it.save && !it.save.mine) it.save = null;
   }
@@ -2513,6 +2519,7 @@ function paintSaved() {
   saveCount.textContent = all ? `${done}/${all}` : '';
   btnSaveAll.classList.toggle('is-done', all > 0 && done === all);
   btnSaveAll.classList.toggle('is-busy', savingAll);
+  btnSaveAll.title = t(savingAll ? 'queue.stopAll' : 'queue.saveAll');
   btnSaveAll.hidden = !all;
 }
 /* The button of one row. The ring is drawn once and then only moved:
@@ -2539,8 +2546,8 @@ function paintSaveButton(btn, it) {
     ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
     ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
     if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct }) : ''; }
-    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct: 100 }) : ''; }
-    else tip = t('queue.saving', { done: sv.done, total: sv.total, pct });
+    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.stopHint'); }
+    else { tip = t('queue.saving', { done: sv.done, total: sv.total, pct }); sub = t('queue.stopHint'); }
   } else {
     const want = saved ? PH.check : PH.download;
     if (btn.dataset.icon !== (saved ? 'check' : 'download')) { btn.innerHTML = phSvg(want); btn.dataset.icon = saved ? 'check' : 'download'; }
@@ -2686,10 +2693,11 @@ async function saveItem(it, stream = null) {
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
     let job = await post('/api/save?stream=' + st.id);
     while (job.state === 'working') {
-      it.save = { phase: job.phase, done: job.done, total: job.total, mine: true }; paintSaved();
+      it.save = { phase: job.phase, done: job.done, total: job.total, mine: true, jobId: job.id }; paintSaved();
       await sleep(500);
       job = await api('/api/save/' + job.id);
     }
+    if (job.state === 'stopped') { it.save = null; paintSaved(); return false; }
     if (job.state !== 'done') throw new Error(job.error || '?');
     it.save = null;
     await loadLibrary();
@@ -2701,17 +2709,32 @@ async function saveItem(it, stream = null) {
   }
 }
 
-/* several episodes, one after another: the server assembles one file at a time anyway */
-let savingAll = false;
+/* a save in progress, stopped by hand: the server drops the half file */
+async function stopSave(it) {
+  const id = it.save && it.save.jobId;
+  if (!id) return;
+  try { await post('/api/save/stop?id=' + encodeURIComponent(id)); } catch (_) {}
+  it.save = null; paintSaved();
+  toast(t('toast.saveStopped', { name: it.name }));
+}
+
+/* several episodes, one after another: the server assembles one file at a
+   time anyway; the header's button, busy, stops the run */
+let savingAll = false, stopAll = false;
 async function saveMany(items) {
   if (savingAll) return;
-  savingAll = true; paintSaved();
+  savingAll = true; stopAll = false; paintSaved();
   let n = 0;
-  try { for (const it of items) if (!isSaved(it)) { if (await saveItem(it)) n++; } }
-  finally { savingAll = false; paintSaved(); }
+  try { for (const it of items) { if (stopAll) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
+  finally { savingAll = false; stopAll = false; paintSaved(); }
   if (n) toast(t('toast.savedMany', { n }));
 }
-btnSaveAll.onclick = () => saveMany(state.list);
+btnSaveAll.onclick = () => {
+  if (!savingAll) return saveMany(state.list);
+  stopAll = true;
+  const running = state.list.find(it => it.save && !it.save.error && it.save.mine);
+  if (running) stopSave(running);
+};
 
 function removeItem(it) {
   const i = idxOf(it), wasCurrent = it === cur();

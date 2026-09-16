@@ -245,6 +245,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       dubs: ep.dubs.map(d => ({ key: d.key, name: d.name, alive: d.sources.filter(x => x.health.ok !== false).length, sources: d.sources.length })),
       dub: dub ? { key: dub.key, name: dub.name } : null,
       source: source ? { id: source.id, player: source.player, extractor: source.extractor } : null,
+      /* the sources that refused, each with its reason: a door that is closed is said so, not left to a spinner */
+      dead: dub ? dub.sources.filter(x => x.health.ok === false).map(x => ({ player: x.player, error: x.health.error || '' })) : [],
       stream: stream ? { id: stream.id, kind: stream.kind, quality: stream.quality, play: stream.play, audio: stream.audio || null } : null,
       /* every stream of every live source of the dub: the player offers the qualities across them and may switch the source by picking one */
       streams: dub ? dub.sources.filter(x => x.health.ok !== false).flatMap(x => x.streams.filter(st => st.id).map(st => ({ id: st.id, kind: st.kind, quality: st.quality, play: st.play, player: x.player, sourceId: x.id, audio: st.audio || null }))) : [],

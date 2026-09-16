@@ -1475,7 +1475,8 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .queue__group-year{ font-variant-numeric:tabular-nums; }
 .queue__group-kind{ padding:1px .45em; border:1px solid var(--line-2); border-radius:6px; font-size:calc(11px + var(--fs)); }
 .queue__group-kind:empty{ display:none; }
-.queue__list--grid .queue__group{ grid-column:1 / -1; }
+/* the group row runs the whole width of the list, the grid's padding notwithstanding */
+.queue__list--grid .queue__group{ grid-column:1 / -1; margin:0 -12px; }
 
 
 /* ── saving from the row ────────────────────────────────────── */

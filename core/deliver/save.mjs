@@ -18,8 +18,9 @@ import { execFile } from 'node:child_process';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-const run = (cmd, args) => new Promise((ok, bad) =>
-  execFile(cmd, args, { maxBuffer: 16 * 1024 * 1024, timeout: 30 * 60 * 1000 }, (e, out, err) => e ? bad(new Error(String(err || e.message).slice(-600))) : ok(out)));
+const run = (cmd, args, { signal } = {}) => new Promise((ok, bad) =>
+  execFile(cmd, args, { maxBuffer: 16 * 1024 * 1024, timeout: 30 * 60 * 1000, signal }, (e, out, err) => e ? bad(e.name === 'AbortError' ? e : new Error(String(err || e.message).slice(-600))) : ok(out)));
+const stopped = () => Object.assign(new Error('stopped'), { name: 'AbortError' });
 
 export async function haveFfmpeg() { try { await run('ffmpeg', ['-version']); return true; } catch { return false; } }
 
@@ -96,7 +97,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
   const jobs = new Map();
   const keyOf = ctx => `${ctx.series.id}/${ctx.episode.number}/${ctx.dub.key}`;
 
-  async function save(streamId, { series, episode, dub, source, stream, onProgress = () => {} }) {
+  async function save(streamId, { series, episode, dub, source, stream, onProgress = () => {}, signal = null }) {
     const entry = delivery.get(streamId);
     if (!entry) throw new Error('unknown stream');
     const place = library.placeFor(series, episode, dub, 'mp4');
@@ -109,13 +110,14 @@ export function createSaver({ delivery, cache, library, state = null }) {
       const total = Number(res.headers.get('content-length')) || 0;
       let done = 0;
       const counter = new Transform({ transform(chunk, _, cb) { done += chunk.length; onProgress({ phase: 'fetch', done, total }); cb(null, chunk); } });
-      await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(part));
+      await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(part), signal ? { signal } : {});
     } else {
       const { segments, keys, localPlaylist, audio } = await segmentsOf(delivery, entry, stream.url);
       let done = 0;
       const pieces = [...keys, ...segments, ...(audio ? [...audio.keys, ...audio.segments] : [])];
       const total = pieces.length;
       for (const u of pieces) {
+        if (signal && signal.aborted) throw stopped();
         await delivery.piece(entry, u);
         onProgress({ phase: 'fetch', done: ++done, total });
       }
@@ -134,7 +136,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
       onProgress({ phase: 'assemble', done, total });
       await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
         '-allowed_extensions', 'ALL', '-protocol_whitelist', 'file,crypto,data',
-        ...inputs, ...maps, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', part]);
+        ...inputs, ...maps, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', part], { signal });
     }
 
     await fsp.rename(part, place.file);
@@ -162,11 +164,33 @@ export function createSaver({ delivery, cache, library, state = null }) {
     const id = `${streamId}-${Date.now().toString(36)}`;
     const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, quality: ctx.stream.quality || 'auto', state: 'working', phase: 'fetch', done: 0, total: 0, file: null, error: null, started: Date.now() };
     jobs.set(id, job);
+    const ac = new AbortController();
+    stops.set(id, ac);
     const note = () => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, error: job.error });
     note();
-    save(streamId, { ...ctx, onProgress: p => { Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); } })
+    save(streamId, { ...ctx, signal: ac.signal, onProgress: p => { Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); } })
       .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(key); })
-      .catch(e => { Object.assign(job, { state: 'error', error: e.message }); note(); });
+      .catch(async e => {
+        if (job.state === 'stopped' || e.name === 'AbortError') {
+          /* stopped by hand: the half file goes, and the save is not taken up again by itself */
+          job.state = 'stopped';
+          const part = library.placeFor(ctx.series, ctx.episode, ctx.dub, 'mp4').file + '.part';
+          await fsp.rm(part, { force: true }).catch(() => {});
+          if (state) state.clearSave(key);
+        } else { Object.assign(job, { state: 'error', error: e.message }); note(); }
+      })
+      .finally(() => stops.delete(id));
+    return job;
+  }
+
+  /* a save stopped by hand, while it fetches or while ffmpeg assembles */
+  const stops = new Map();
+  function stop(id) {
+    const job = jobs.get(id);
+    if (!job || job.state !== 'working') return job || null;
+    job.state = 'stopped';
+    const ac = stops.get(id);
+    if (ac) ac.abort();
     return job;
   }
 
@@ -199,5 +223,5 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return resuming;
   }
 
-  return { save, start, resume, job: id => jobs.get(id) || null, jobs, keyOf };
+  return { save, start, stop, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }
