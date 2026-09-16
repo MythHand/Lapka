@@ -1,0 +1,55 @@
+# Runs the checks on every push to main, on every pull request, and by
+# hand from the Actions tab. The runner needs ffmpeg for the test media
+# and Chrome for the interface tests; the Ubuntu image carries Chrome.
+# The tests of real sites read snapshots that are kept outside the
+# repository, so here they report themselves as skipped: what runs is
+# the core, the delivery, the saving and the player on the synthetic site.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run still going.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends ffmpeg
+
+      # Ubuntu 24.04 restricts the user namespaces that Chrome's sandbox
+      # is built on, and headless Chrome then exits before loading a page.
+      - name: Let Chrome start its sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Install
+        run: npm ci
+
+      - name: Check the front end
+        run: npm run check
+
+      - name: Test
+        run: npm test
+        env:
+          CHROME: /usr/bin/google-chrome
