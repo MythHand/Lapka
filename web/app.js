@@ -2442,7 +2442,7 @@ function saveMarkClick(it, btn) {
   const sv = it.save;
   if (isSaved(it)) return;
   if (isSaving(it)) return pauseItems([it]);
-  if (isQueued(it)) return dequeueSaves([it]);
+  if (isQueued(it)) return promoteSave(it);
   if (sv && (sv.st === 'paused' || sv.st === 'failed')) return enqueueSaves([it]);
   return offerSave(it, btn);
 }
@@ -2521,20 +2521,19 @@ async function watchSaves() {
   clearTimeout(savesT);
   let d = null;
   try { d = await api('/api/saves'); } catch (_) { return; }
-  let active = false;
+  let active = false, finished = false;
   for (const it of state.list) {
-    if (it.save && (it.save.mine || saveQueue.includes(it))) continue;   // this page is running it, or holds it in its own line, and knows better
+    if (saveQueue.includes(it) || (it.save && it.save.st === 'opening')) continue;   // still on this page: waiting to be opened, or being opened
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
     if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job) }; active = true; }
     else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
     else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
-    else if (it.save && !it.save.mine) it.save = null;
+    else if (it.save) { if (it.save.jobId) finished = true; it.save = null; }   // its job is gone without a record: the file is in the library
   }
-  paintSaved();
-  if (active) savesT = setTimeout(watchSaves, 1500);
-  else if (d.active.length) savesT = setTimeout(watchSaves, 3000);
+  if (finished) await loadLibrary(); else paintSaved();
+  if (active || d.active.length) savesT = setTimeout(watchSaves, 700);
 }
 
 /* every row's mark, every part's count, the header's count, the popover */
@@ -2561,7 +2560,9 @@ function paintSaved() {
    on the button, and the tooltip shown now follows it. */
 const RING = 2 * Math.PI * 9;
 function paintSaveButton(btn, it) {
-  const saved = isSaved(it), sv = it.save;
+  const saved = isSaved(it);
+  if (saved && it.save && it.save.st !== 'queued') it.save = null;   // the file is in the library: the job's last word does not matter
+  const sv = it.save;
   const saving = isSaving(it), paused = isPaused(it), failed = isFailed(it), queued = isQueued(it);
   btn.classList.toggle('is-saved', saved && !saving && !paused && !failed && !queued);
   btn.classList.toggle('is-saving', saving);
@@ -2581,7 +2582,7 @@ function paintSaveButton(btn, it) {
     const got = t('queue.got', { got: progressWords(sv), pct });
     if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = (sv.total ? got + ' · ' : '') + t('queue.retryHint'); }
     else if (paused) { tip = t('queue.savePaused', { got }); sub = t('queue.resumeHint'); }
-    else if (queued) { tip = t('queue.queued'); sub = t('queue.unqueueHint'); }
+    else if (queued) { tip = t('queue.queued'); sub = t('queue.promoteHint'); }
     else if (sv.st === 'opening') { tip = t('queue.opening'); sub = t('queue.pauseHint'); }
     else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.pauseHint'); }
     else { tip = t('queue.saving', { got }); sub = t('queue.pauseHint'); }
@@ -2777,7 +2778,9 @@ function pinSavePop(scope, anchor = null) {
   savePop.classList.add('is-pinned');
   showSavePop(scope);
 }
+let popClosedScope = null;
 function unpinSavePop() {
+  popClosedAt = Date.now(); popClosedScope = popScope;
   popPinned = false; popAnchor = null; pop = null;
   savePop.classList.remove('is-pinned');
   savePop.hidden = true;
@@ -2787,86 +2790,89 @@ btnSaveAll.addEventListener('pointerleave', hideSavePop);
 savePop.addEventListener('pointerenter', () => clearTimeout(popT));
 savePop.addEventListener('pointerleave', hideSavePop);
 savePop.addEventListener('click', e => e.stopPropagation());
-document.addEventListener('click', e => { if (popPinned && !e.target.closest('#btnSaveAll') && !e.target.closest('.queue__group-save')) unpinSavePop(); });
+document.addEventListener('click', e => {
+  if (!popPinned || e.target.closest('#savePop')) return;
+  /* the click closes the popover and does nothing else: the anchors toggle it themselves */
+  const anchor = e.target.closest('#btnSaveAll, .queue__group-save');
+  if (!anchor) { e.stopPropagation(); e.preventDefault(); }
+  unpinSavePop();
+}, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned) unpinSavePop(); });
 /* the header's button and a group's mark open their popovers; nothing starts from the click itself */
-btnSaveAll.onclick = () => { if (popPinned && popScope === null) return unpinSavePop(); pinSavePop(null); };
+let popClosedAt = 0;
+btnSaveAll.onclick = () => { if (Date.now() - popClosedAt < 50 && popClosedScope === null) return; pinSavePop(null); };
 queueList.addEventListener('click', e => {
   const g = e.target.closest('.queue__group-save');
   if (!g) return;
   e.stopPropagation();
   const li = g.closest('.queue__group');
-  if (popPinned && popScope === li.dataset.group) return unpinSavePop();
+  if (Date.now() - popClosedAt < 50 && popClosedScope === li.dataset.group) return;   // the click that just closed it
   pinSavePop(li.dataset.group, g);
 });
 
-/* ── one save, start to end ────────────────────────────────────
-   The row is marked at once, before the episode is even opened, so a
-   pause asked for in that window is honoured too: the wish is read after
-   the episode opens and again as soon as the server has named the job. */
-async function saveItem(it, stream = null) {
-  if (isSaving(it) || isSaved(it)) return false;
-  it.pauseWanted = false;
-  const before = it.save || {};
-  const quality = stream ? (stream.quality || null) : before.quality || null;
-  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, mine: true, quality }; paintSaved();
-  const held = (job) => { const j = job || before; it.save = { st: 'paused', phase: j.phase || 'fetch', done: j.done || 0, total: j.total || 0, unit: j.unit, quality: jobQuality(job) || quality }; paintSaved(); return false; };
-  try {
-    if (!it.stream) await resolveItem(it);
-    if (it.pauseWanted) return held(null);
-    const st = stream || streamOfQuality(it, quality) || streamToSave(it);
-    if (!st) throw new Error(t('toast.noStream', { name: it.name }));
-    let job = await post('/api/save?stream=' + st.id);
-    if (it.pauseWanted && (job.state === 'working' || job.state === 'queued')) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
-    while (job.state === 'working' || job.state === 'queued') {
-      it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, mine: true, jobId: job.id, quality: jobQuality(job) || quality }; paintSaved();
-      await sleep(500);
-      job = await api('/api/save/' + job.id);
-    }
-    if (job.state === 'paused') return held(job);
-    if (job.state !== 'done') throw new Error(job.error || '?');
-    it.save = null;
-    await loadLibrary();
-    return true;
-  } catch (e) {
-    it.save = { st: 'failed', error: e.message, phase: (it.save || {}).phase, done: (it.save || {}).done || 0, total: (it.save || {}).total || 0, unit: (it.save || {}).unit, quality }; paintSaved();
-    toast(t('toast.saveFail', { why: e.message }));
-    return false;
-  }
-}
-
-/* ── one queue of saves, one worker ────────────────────────────
+/* ── saving: this page opens, the server keeps the line ────────
    Whatever asks for a save, a row's mark, a part's button, the queue's
-   button, puts rows into the one queue; one worker takes them in order,
-   so there is always one save running and the rest wait their turn with
-   the dashed ring. A row asked for with a quality of its own keeps that
-   stream for its turn. */
+   button, puts rows into this page's short line to be opened; one at a
+   time each is opened (its stream found) and handed to the server, which
+   keeps the one real line: one job works, the rest wait. From then on the
+   row's state comes from the server's poll. A row asked for with a quality
+   of its own keeps that stream for its turn. */
 const saveQueue = [];
-let saveWorker = null;
-function enqueueSaves(items, stream = null) {
+let opener = null;
+function enqueueSaves(items, stream = null, { first = false } = {}) {
   for (const it of items) {
     if (isSaved(it) || isSaving(it) || isQueued(it)) continue;
     const before = it.save || {};
     it.saveStream = stream || null;
     it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
-    saveQueue.push(it);
+    if (first) saveQueue.unshift(it); else saveQueue.push(it);
   }
   paintSaved();
-  if (!saveWorker) saveWorker = drainSaves().finally(() => { saveWorker = null; paintSaved(); });
+  if (!opener) opener = openSaves().finally(() => { opener = null; paintSaved(); });
 }
-async function drainSaves() {
-  let n = 0;
+async function openSaves() {
   while (saveQueue.length) {
     const it = saveQueue.shift();
-    if (!isQueued(it)) continue;             // left the queue while it waited
+    if (!isQueued(it)) continue;             // left the line while it waited
     const st = it.saveStream || null; it.saveStream = null;
-    if (await saveItem(it, st)) n++;
+    await submitSave(it, st);
   }
-  if (n > 1) toast(t('toast.savedMany', { n }));
+  clearTimeout(savesT); watchSaves();
 }
-/* rows taken out of the queue: they go back to what they were before they were asked */
+
+/* one row handed to the server: opened if it was not, its stream named, the job asked for */
+async function submitSave(it, stream = null) {
+  const before = it.save || {};
+  const quality = stream ? (stream.quality || null) : before.quality || null;
+  const first = !!before.first;
+  it.pauseWanted = false;
+  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality }; paintSaved();
+  try {
+    if (!it.stream) await resolveItem(it);
+    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality }; paintSaved(); return; }
+    const st = stream || streamOfQuality(it, quality) || streamToSave(it);
+    if (!st) throw new Error(t('toast.noStream', { name: it.name }));
+    let job = await post('/api/save?stream=' + st.id + (first ? '&first=1' : ''));
+    if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
+    it.save = jobState(job, quality); paintSaved();
+  } catch (e) {
+    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality }; paintSaved();
+    toast(t('toast.saveFail', { why: e.message }));
+  }
+}
+/* a server job as the row's state */
+function jobState(job, quality = null) {
+  const q = jobQuality(job) || quality;
+  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q };
+  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q };
+  if (job.state === 'done') return null;
+  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q };
+}
+
+/* rows taken out of this page's line go back to what they were before they were asked */
 function dequeueSaves(items) {
-  for (const it of items) if (isQueued(it)) {
+  for (const it of items) if (isQueued(it) && !it.save.jobId) {
+    const i = saveQueue.indexOf(it); if (i >= 0) saveQueue.splice(i, 1);
     const sv = it.save;
     it.save = sv.total || sv.phase ? { st: 'paused', phase: sv.phase || 'fetch', done: sv.done || 0, total: sv.total || 0, unit: sv.unit, quality: sv.quality } : null;
     it.saveStream = null;
@@ -2874,22 +2880,40 @@ function dequeueSaves(items) {
   paintSaved();
 }
 
+/* a waiting row made the current one: it heads the line, and the one
+   working steps back behind it with its progress kept */
+async function promoteSave(it) {
+  const sv = it.save;
+  if (!sv || sv.st !== 'queued') return;
+  if (sv.jobId) {
+    try { const job = await post('/api/save/promote?id=' + encodeURIComponent(sv.jobId)); it.save = jobState(job, sv.quality); }
+    catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  } else {
+    const i = saveQueue.indexOf(it); if (i >= 0) saveQueue.splice(i, 1);
+    sv.first = true;
+    saveQueue.unshift(it);
+    if (!opener) opener = openSaves().finally(() => { opener = null; paintSaved(); });
+  }
+  paintSaved();
+  clearTimeout(savesT); watchSaves();
+}
+
 /* ── the pause, by scope ───────────────────────────────────────
    A row's ring pauses that row. A part's button pauses the rows of that
-   part: the one loading is paused on the server, the ones waiting leave
-   the queue, and the worker goes on with the rest. The queue's button
-   pauses everything, the server's own jobs and its resume loop included.
-   Each paused row keeps where it got to and the quality it had, and
-   waits for a hand. */
+   part: the one loading is cut off on the server, the ones waiting leave
+   the line, and the line goes on with the rest. The queue's button pauses
+   everything, the server's own jobs and its resume loop included. Each
+   paused row keeps where it got to and the quality it had, and waits for
+   a hand. */
 async function pauseItems(items, whole = false) {
-  dequeueSaves(items.filter(it => !(it.save && it.save.jobId)));   // the ones in this page's own line
-  for (const it of items) if (isSaving(it) || isQueued(it)) it.pauseWanted = true;
+  dequeueSaves(items);
+  for (const it of items) if (it.save && it.save.st === 'opening') it.pauseWanted = true;
   const jobs = items.filter(it => (isSaving(it) || isQueued(it)) && it.save.jobId);
   try {
     if (whole) await post('/api/saves/pause');
     else await Promise.all(jobs.map(it => post('/api/save/pause?id=' + encodeURIComponent(it.save.jobId))));
   } catch (e) { toast(t('toast.pauseFail', { why: e.message })); return; }
-  for (const it of items) if (isSaving(it) || isQueued(it)) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
+  for (const it of jobs) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
   paintSaved();
   clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }

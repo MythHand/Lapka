@@ -141,9 +141,13 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (saver && mutating && p === '/api/save') {
         const ctx = lapka.context(url.searchParams.get('stream') || '');
         if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first' });
-        return json(res, 202, saver.start(ctx.stream.id, ctx));
+        return json(res, 202, saver.start(ctx.stream.id, ctx, { first: url.searchParams.get('first') === '1' }));
       }
       if (saver && mutating && p === '/api/saves/pause') return json(res, 200, { paused: saver.pauseAll().map(j => j.id) });
+      if (saver && mutating && p === '/api/save/promote') {
+        const job = saver.promote(url.searchParams.get('id') || '');
+        return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });
+      }
       if (saver && mutating && p === '/api/save/pause') {
         const job = saver.pause(url.searchParams.get('id') || '');
         return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });

@@ -176,17 +176,35 @@ export function createSaver({ delivery, cache, library, state = null }) {
   let held = false;                // the loading as a whole is on hold: the resume loop stops at the next record
   const noteFor = (job, ctx, extra = {}) => state && state.setSave(job.key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, unit: job.unit || null, error: job.error, paused: false, ...extra });
 
-  function start(streamId, ctx) {
+  function start(streamId, ctx, { first = false } = {}) {
     const key = keyOf(ctx);
     const same = [...jobs.values()].find(j => j.key === key && (j.state === 'working' || j.state === 'queued'));
-    if (same) return same;
+    if (same) { if (first) promote(same.id); return same; }
     const id = `${streamId}-${Date.now().toString(36)}`;
     const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, quality: ctx.stream.quality || 'auto', state: 'queued', phase: 'fetch', done: 0, total: 0, unit: null, file: null, error: null, started: Date.now() };
     jobs.set(id, job);
     ctxOf.set(id, ctx);
     noteFor(job, ctx);
+    if (first) return promote(id, job);
     line.push(id);
     pump();
+    return job;
+  }
+
+  /* A job put first: it heads the line, and the one working, if any, steps
+     back to the second place, cut off where it is, keeping its progress and
+     the pieces it has; the line moves on with the promoted one. */
+  function promote(id, job = jobs.get(id)) {
+    if (!job || (job.state !== 'queued' && job.state !== 'working')) return job || null;
+    if (job.state === 'working') return job;
+    const i = line.indexOf(id); if (i >= 0) line.splice(i, 1);
+    line.unshift(id);
+    const working = [...jobs.values()].find(j => j.state === 'working');
+    if (working) {
+      working.state = 'queued';               // steps back; the catch below sees the state and keeps it
+      line.splice(1, 0, working.id);
+      const ac = stops.get(working.id); if (ac) ac.abort();
+    } else pump();
     return job;
   }
 
@@ -211,6 +229,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
     save(job.streamId, { ...ctx, signal: ac.signal, onProgress })
       .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(job.key); })
       .catch(e => {
+        if (job.state === 'queued') { note(); return; }   // stepped back for another: waits in line with its progress
         if (job.state === 'paused' || e.name === 'AbortError') {
           /* paused by hand: the record keeps where it got to, marked so that it
              is not taken up by itself; the half file and the cached pieces stay,
@@ -219,7 +238,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
           note({ paused: true });
         } else { Object.assign(job, { state: 'error', error: e.message }); note(); }
       })
-      .finally(() => { stops.delete(job.id); ctxOf.delete(job.id); pump(); });
+      .finally(() => { stops.delete(job.id); if (job.state !== 'queued') ctxOf.delete(job.id); pump(); });
   }
 
   /* a save paused by hand: one waiting leaves the line, one working is cut off */
@@ -277,5 +296,5 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return resuming;
   }
 
-  return { save, start, pause, pauseAll, resume, job: id => jobs.get(id) || null, jobs, keyOf };
+  return { save, start, promote, pause, pauseAll, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }
