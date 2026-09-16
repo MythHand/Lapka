@@ -186,6 +186,13 @@ export function createSaver({ delivery, cache, library, state = null }) {
 
   /* a save paused by hand, while it fetches or while ffmpeg assembles */
   const stops = new Map();
+  let held = false;      // the loading as a whole is on hold: the resume loop stops at the next record
+  function pauseAll() {
+    held = true;
+    const out = [];
+    for (const job of jobs.values()) if (job.state === 'working') out.push(pause(job.id));
+    return out;
+  }
   function pause(id) {
     const job = jobs.get(id);
     if (!job || job.state !== 'working') return job || null;
@@ -202,9 +209,11 @@ export function createSaver({ delivery, cache, library, state = null }) {
   let resuming = null;
   function resume(lapka) {
     if (!state || resuming) return resuming || Promise.resolve([]);
+    held = false;
     resuming = (async () => {
       const out = [];
       for (const [key, rec] of Object.entries(state.saves())) {
+        if (held) break;            // a pause came while the loop ran: the rest stays as it is
         if (rec.paused) continue;   // paused by hand: waits for the hand
         if ([...jobs.values()].some(j => j.key === key && j.state === 'working')) continue;
         try {
@@ -225,5 +234,5 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return resuming;
   }
 
-  return { save, start, pause, resume, job: id => jobs.get(id) || null, jobs, keyOf };
+  return { save, start, pause, pauseAll, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }

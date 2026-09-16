@@ -1682,7 +1682,13 @@ function switchRow(menu, label, on, pick) {
   sw.setAttribute('role', 'switch');
   sw.setAttribute('aria-checked', String(!!on));
   sw.innerHTML = '<i></i>';
-  sw.onclick = ev => { ev.stopPropagation(); pick(!on); };
+  sw.onclick = ev => {
+    ev.stopPropagation();
+    on = !on;
+    sw.classList.toggle('on', on);
+    sw.setAttribute('aria-checked', String(on));
+    pick(on);
+  };
   line.append(lab, sw);
   menu.append(line);
 }
@@ -1701,7 +1707,11 @@ function segRow(menu, label, current, opts, pick) {
     const b = document.createElement('button');
     b.textContent = text;
     b.className = current === val ? 'sel' : '';
-    b.onclick = ev => { ev.stopPropagation(); pick(val); };
+    b.onclick = ev => {
+      ev.stopPropagation();
+      for (const x of group.children) x.classList.toggle('sel', x === b);
+      pick(val);
+    };
     group.append(b);
   }
   line.append(lab, group);
@@ -2002,7 +2012,6 @@ function buildGearMenu() {
       state.set[row.key] = val;
       try { localStorage.setItem('pip.' + row.key, val); } catch (_) {}
       applySettings();
-      buildGearMenu();
     });
   }
   const place = document.createElement('div');
@@ -2015,12 +2024,10 @@ function buildGearMenu() {
   segRow(place, t('set.saveQuality'), saveQ, [['auto', t('quality.auto')], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], val => {
     state.remote.settings = { ...(state.remote.settings || {}), saveQuality: val };
     post('/api/state/setting?k=saveQuality&v=' + val).catch(() => {});
-    buildGearMenu();
   });
   switchRow(place, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
-    buildGearMenu();
   });
 
   gearMenu.append(keys, opts, place);
@@ -2411,7 +2418,7 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
-  if (e.target.closest('.item__save')) return isSaving(it) ? pauseSave(it) : offerSave(it, e.target.closest('.item__save'));
+  if (e.target.closest('.item__save')) return isSaving(it) ? pauseLoading() : offerSave(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
 
@@ -2521,7 +2528,7 @@ function paintSaved() {
   saveCount.textContent = all ? `${done}/${all}` : '';
   btnSaveAll.classList.toggle('is-done', all > 0 && done === all);
   btnSaveAll.classList.toggle('is-busy', savingAll);
-  if (!savePop.hidden) showSavePop(popScope);   // the popover's numbers and its button follow
+  paintSavePop();   // the popover, if up, follows in place: its nodes stay, only their words change
   btnSaveAll.hidden = !all;
 }
 /* The button of one row. The ring is drawn once and then only moved:
@@ -2613,9 +2620,11 @@ function popRow(grid, k, v, small) {
 /* The popover: over the header's button for the whole queue, over a
    group's mark for that part. Hovering previews it, a click pins it, and
    the saving is started, or paused, by the button inside it, never by the
-   click that opened it. Under the anchor, on the body, so the queue panel
-   cannot clip it. */
-let popScope = null, popAnchor = null, popPinned = false;
+   click that opened it. It is built once when it opens and then painted
+   in place: the nodes stay where they are, so the button under the
+   pointer is the same button a moment later. Under the anchor, on the
+   body, so the queue panel cannot clip it. */
+let popScope = null, popAnchor = null, popPinned = false, pop = null;
 function placeSavePop() {
   if (savePop.parentNode !== document.body) document.body.append(savePop);
   const anchor = popAnchor || btnSaveAll;
@@ -2623,100 +2632,121 @@ function placeSavePop() {
   savePop.style.top = Math.min(r.bottom + 8, window.innerHeight - savePop.offsetHeight - 12) + 'px';
   savePop.style.left = Math.max(12, Math.min(r.left, window.innerWidth - savePop.offsetWidth - 12)) + 'px';
 }
-function popActions(items, runningHere) {
+const popItems = () => popScope === null ? state.list : state.list.filter(it => it.group === popScope);
+
+/* the skeleton: every node that will change is kept by name */
+function buildSavePop() {
+  const items = popItems();
+  const season = popScope === null ? null : state.seasons.find(x => x.series.id === popScope);
+  const q = popSection(popScope === null ? t('pop.queue') : (season ? `${season.ordinal} · ${season.series.title}` : t('pop.part')));
+  const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill); q.append(bar);
+  const g = el('div', 'savepop__grid');
+  const saved = el('span', 'savepop__v'), rest = el('span', 'savepop__v'), dur = el('span', 'savepop__v');
+  const kSaved = el('span', 'savepop__k', t('pop.saved')), kRest = el('span', 'savepop__k', t('pop.rest')), kDur = el('span', 'savepop__k', t('pop.duration'));
+  g.append(kSaved, saved, kRest, rest, kDur, dur);
+  q.append(g);
   const acts = el('div', 'savepop__acts');
-  const left = items.filter(it => !isSaved(it));
-  const b = el('button', 'btn' + (runningHere ? '' : ' btn--solid'));
-  if (runningHere) { b.textContent = t('pop.pause'); b.onclick = ev => { ev.stopPropagation(); pauseMany(); }; }
-  else {
-    const resuming = left.some(it => it.save && it.save.paused);
-    b.textContent = resuming ? t('pop.resume') : (popScope === null ? t('pop.download') : t('pop.downloadPart'));
-    b.disabled = !left.length || savingAll;
-    b.onclick = ev => { ev.stopPropagation(); saveMany(items); };
+  const btn = el('button', 'btn'), left = el('span', 'savepop__left');
+  btn.onclick = ev => { ev.stopPropagation(); if (pop.running) pauseLoading(); else saveMany(popItems()); };
+  acts.append(btn, left); q.append(acts);
+  const frag = document.createDocumentFragment(); frag.append(q);
+  const parts = [];
+  if (popScope === null && state.seasons.length > 1) {
+    const p = popSection(t('pop.parts'));
+    const grid = el('div', 'savepop__parts');
+    for (const s of state.seasons) {
+      const c = el('span', 'c'), sz = el('span', 's');
+      grid.append(el('span', 'n', String(s.ordinal)), el('span', 't', s.series.title), c, sz);
+      parts.push({ id: s.series.id, c, sz });
+    }
+    p.append(grid); frag.append(p);
   }
-  acts.append(b);
-  if (left.length && !runningHere) acts.append(el('span', 'savepop__left', t('pop.left', { n: left.length })));
-  return acts;
+  const lib = popScope === null ? popSection(t('pop.library')) : null;
+  if (lib) { lib.hidden = true; frag.append(lib); }
+  savePop.replaceChildren(frag);
+  pop = { refs: { fill, saved, rest, dur, kRest, kDur, btn, left, parts, lib }, running: false };
 }
-async function showSavePop(scope = null) {
-  clearTimeout(popT);
-  popScope = scope;
-  savePop.hidden = false;
-  if (!savePop.children.length) savePop.textContent = '…';
-  placeSavePop();
-  const items = scope === null ? state.list : state.list.filter(it => it.group === scope);
-  const runningHere = savingAll && items.some(it => isSaving(it) && it.save.mine);
-  const saved = items.filter(isSaved);
+
+/* the numbers and the button, from the queue as it is now */
+function paintSavePop() {
+  if (savePop.hidden || !pop) return;
+  const r = pop.refs, items = popItems(), saved = items.filter(isSaved), leftOver = items.filter(it => !isSaved(it));
   const savedBytes = saved.reduce((a, it) => a + sizeOf(it), 0);
   const known = items.filter(it => it.dur), dur = known.reduce((a, it) => a + it.dur, 0);
   /* what the rest would take, judged by what is saved already: by the
      minute where an episode's length is known, by the episode where not */
-  const rest = items.filter(it => !isSaved(it));
   const savedDur = saved.reduce((a, it) => a + (it.dur || 0), 0);
   const perSec = savedBytes && savedDur ? savedBytes / savedDur : 0;
   const perEp = saved.length ? savedBytes / saved.length : 0;
-  const estimate = rest.reduce((a, it) => a + (it.dur && perSec ? it.dur * perSec : perEp), 0);
-
-  const frag = document.createDocumentFragment();
-  const season = scope === null ? null : state.seasons.find(x => x.series.id === scope);
-  const q = popSection(scope === null ? t('pop.queue') : (season ? `${season.ordinal} · ${season.series.title}` : t('pop.part')));
-  const bar = el('div', 'savepop__bar'); const fill = el('i'); fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%'; bar.append(fill); q.append(bar);
-  const g = el('div', 'savepop__grid');
-  popRow(g, t('pop.saved'), `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
-  if (estimate) popRow(g, t('pop.rest'), `${items.length - saved.length}`, t('pop.about', { size: fmtSize(estimate) }));
-  if (dur) popRow(g, t('pop.duration'), fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '');
-  q.append(g);
-  q.append(popActions(items, runningHere));
-  frag.append(q);
-
-  if (scope === null && state.seasons.length > 1) {
-    const p = popSection(t('pop.parts'));
-    const grid = el('div', 'savepop__parts');
-    for (const s of state.seasons) {
-      const its = items.filter(it => it.seriesId === s.series.id), done = its.filter(isSaved);
-      grid.append(el('span', 'n', String(s.ordinal)), el('span', 't', s.series.title));
-      grid.append(el('span', 'c' + (its.length && done.length === its.length ? ' is-done' : ''), `${done.length}/${its.length}`));
-      grid.append(el('span', 's', done.length ? fmtSize(done.reduce((a, it) => a + sizeOf(it), 0)) : ''));
-    }
-    p.append(grid); frag.append(p);
+  const estimate = leftOver.reduce((a, it) => a + (it.dur && perSec ? it.dur * perSec : perEp), 0);
+  const small = (node, main, note) => { node.textContent = main; if (note) { const sm = document.createElement('small'); sm.textContent = note; node.append(' ', sm); } };
+  r.fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%';
+  small(r.saved, `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
+  r.kRest.hidden = r.rest.hidden = !estimate;
+  if (estimate) small(r.rest, `${leftOver.length}`, t('pop.about', { size: fmtSize(estimate) }));
+  r.kDur.hidden = r.dur.hidden = !dur;
+  if (dur) small(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '');
+  /* the button: a pause while anything here is loading, otherwise the start */
+  const running = items.some(isSaving);
+  pop.running = running;
+  r.btn.classList.toggle('btn--solid', !running);
+  if (running) { r.btn.textContent = t('pop.pause'); r.btn.disabled = false; }
+  else {
+    r.btn.textContent = leftOver.some(it => it.save && it.save.paused) ? t('pop.resume') : (popScope === null ? t('pop.download') : t('pop.downloadPart'));
+    r.btn.disabled = !leftOver.length || savingAll;
   }
-
-  if (scope === null) {
-    let d = null, lib = null;
-    try { [d, lib] = await Promise.all([api('/api/home'), api('/api/library')]); } catch (_) { /* then the local numbers alone */ }
-    if (popScope !== scope || savePop.hidden) return;
-    if (lib) {
-      const l = popSection(t('pop.library'));
-      const grid = el('div', 'savepop__grid');
-      const all = lib.series.flatMap(x => x.episodes);
-      popRow(grid, t('pop.onDisk'), t('pop.series', { n: lib.series.length }), t('pop.episodes', { n: all.length }) + ' · ' + fmtSize(all.reduce((a, e) => a + (e.size || 0), 0)));
-      if (d) {
-        popRow(grid, t('pop.cache'), fmtSize(d.cache.bytes), t('pop.ofLimit', { limit: fmtSize(d.cache.limit) }));
-        if (d.cache.free != null) popRow(grid, t('pop.free'), fmtSize(d.cache.free), d.cache.total ? t('pop.ofDisk', { total: fmtSize(d.cache.total) }) : '');
-      }
-      l.append(grid);
-      if (d) {
-        const b = el('button', 'savepop__path');
-        b.innerHTML = phSvg(PH.folder) + '<span></span>';
-        b.querySelector('span').textContent = d.home;
-        b.title = t('set.homeOpen');
-        b.onclick = ev => { ev.stopPropagation(); post('/api/home/open').catch(e => toast(t('toast.homeFail', { why: e.message }))); };
-        l.append(b);
-      }
-      frag.append(l);
-    }
+  r.left.textContent = leftOver.length && !running ? t('pop.left', { n: leftOver.length }) : '';
+  for (const part of r.parts) {
+    const its = items.filter(it => it.seriesId === part.id), done = its.filter(isSaved);
+    part.c.textContent = `${done.length}/${its.length}`;
+    part.c.classList.toggle('is-done', its.length > 0 && done.length === its.length);
+    part.sz.textContent = done.length ? fmtSize(done.reduce((a, it) => a + sizeOf(it), 0)) : '';
   }
-  savePop.replaceChildren(frag);
   placeSavePop();
 }
-function hideSavePop() { if (popPinned) return; popT = setTimeout(() => { savePop.hidden = true; }, 120); }
+
+/* the library section is read once per opening, not on every paint */
+async function fillSavePopLibrary(scope) {
+  let d = null, lib = null;
+  try { [d, lib] = await Promise.all([api('/api/home'), api('/api/library')]); } catch (_) { return; }
+  if (!pop || !pop.refs.lib || popScope !== scope || savePop.hidden) return;
+  const l = pop.refs.lib;
+  const grid = el('div', 'savepop__grid');
+  const all = lib.series.flatMap(x => x.episodes);
+  popRow(grid, t('pop.onDisk'), t('pop.series', { n: lib.series.length }), t('pop.episodes', { n: all.length }) + ' · ' + fmtSize(all.reduce((a, e) => a + (e.size || 0), 0)));
+  if (d) {
+    popRow(grid, t('pop.cache'), fmtSize(d.cache.bytes), t('pop.ofLimit', { limit: fmtSize(d.cache.limit) }));
+    if (d.cache.free != null) popRow(grid, t('pop.free'), fmtSize(d.cache.free), d.cache.total ? t('pop.ofDisk', { total: fmtSize(d.cache.total) }) : '');
+  }
+  l.append(grid);
+  if (d) {
+    const b = el('button', 'savepop__path');
+    b.innerHTML = phSvg(PH.folder) + '<span></span>';
+    b.querySelector('span').textContent = d.home;
+    b.title = t('set.homeOpen');
+    b.onclick = ev => { ev.stopPropagation(); post('/api/home/open').catch(e => toast(t('toast.homeFail', { why: e.message }))); };
+    l.append(b);
+  }
+  l.hidden = false;
+  placeSavePop();
+}
+
+function showSavePop(scope = null) {
+  clearTimeout(popT);
+  const fresh = savePop.hidden || popScope !== scope || !pop;
+  popScope = scope;
+  savePop.hidden = false;
+  if (fresh) { buildSavePop(); fillSavePopLibrary(scope); }
+  paintSavePop();
+}
+function hideSavePop() { if (popPinned) return; popT = setTimeout(() => { savePop.hidden = true; pop = null; }, 120); }
 function pinSavePop(scope, anchor = null) {
   popPinned = true; popAnchor = anchor;
   savePop.classList.add('is-pinned');
   showSavePop(scope);
 }
 function unpinSavePop() {
-  popPinned = false; popAnchor = null;
+  popPinned = false; popAnchor = null; pop = null;
   savePop.classList.remove('is-pinned');
   savePop.hidden = true;
 }
@@ -2728,9 +2758,6 @@ savePop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => { if (popPinned && !e.target.closest('#btnSaveAll')) unpinSavePop(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned) unpinSavePop(); });
 
-/* ── saving an episode into the library ────────────────────────
-   The episode is opened if it was not, then its stream is handed to
-   the server, which assembles the file; the row shows how far it is. */
 const isSaving = it => !!(it.save && !it.save.error && !it.save.paused);
 
 /* One save, start to end. The row is marked at once, before the episode is
@@ -2766,34 +2793,28 @@ async function saveItem(it, stream = null) {
   }
 }
 
-/* A pause holds the loading, whatever asked for it: the row's ring or the
-   button in a popover. The job running is paused on the server, keeping
-   where it got to; a run over many episodes ends here, with the rest left
-   as they are; a save still opening its episode is held as soon as it can
-   be. Nothing continues until a hand asks. */
-let savingAll = false, pauseAll = false;
-async function pauseSave(it) {
-  if (savingAll) pauseAll = true;
-  it.pauseWanted = true;
-  const id = it.save && it.save.jobId;
-  if (!id) return;                          // not yet started on the server: saveItem holds it itself
-  let job = null;
-  try { job = await post('/api/save/pause?id=' + encodeURIComponent(id)); } catch (_) {}
-  it.save = { phase: (job || it.save).phase, done: (job || it.save).done || 0, total: (job || it.save).total || 0, paused: true }; paintSaved();
-}
-function pauseMany() {
-  pauseAll = true;
-  const running = state.list.find(it => isSaving(it) && it.save.mine);
-  if (running) pauseSave(running);
+/* A pause holds the whole loading, whatever asked for it: the row's ring
+   or the button in a popover. The server pauses every job it runs, its own
+   resume loop included, and each record keeps where it got to; the run over
+   many episodes on this page ends here; a save still opening its episode is
+   held as soon as it can be. Nothing continues until a hand asks. */
+let savingAll = false, runHeld = false;
+async function pauseLoading() {
+  runHeld = true;
+  for (const it of state.list) if (isSaving(it)) it.pauseWanted = true;
+  try { await post('/api/saves/pause'); } catch (_) {}
+  for (const it of state.list) if (isSaving(it)) it.save = { phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, paused: true };
+  paintSaved();
+  clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }
 
 /* several episodes, one after another: the server assembles one file at a time anyway */
 async function saveMany(items) {
   if (savingAll) return;
-  savingAll = true; pauseAll = false; paintSaved();
+  savingAll = true; runHeld = false; paintSaved();
   let n = 0;
-  try { for (const it of items) { if (pauseAll) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
-  finally { savingAll = false; pauseAll = false; paintSaved(); }
+  try { for (const it of items) { if (runHeld) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
+  finally { savingAll = false; runHeld = false; paintSaved(); }
   if (n) toast(t('toast.savedMany', { n }));
 }
 /* the header's button opens its popover; the saving starts from the button inside */
