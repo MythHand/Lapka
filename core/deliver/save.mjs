@@ -166,29 +166,30 @@ export function createSaver({ delivery, cache, library, state = null }) {
     jobs.set(id, job);
     const ac = new AbortController();
     stops.set(id, ac);
-    const note = () => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, error: job.error });
+    const note = (extra = {}) => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, error: job.error, paused: false, ...extra });
     note();
     save(streamId, { ...ctx, signal: ac.signal, onProgress: p => { Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); } })
       .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(key); })
       .catch(async e => {
-        if (job.state === 'stopped' || e.name === 'AbortError') {
-          /* stopped by hand: the half file goes, and the save is not taken up again by itself */
-          job.state = 'stopped';
+        if (job.state === 'paused' || e.name === 'AbortError') {
+          /* paused by hand: the record keeps where it got to, marked so that it
+             is not taken up by itself; the half file goes, the cache keeps the pieces */
+          job.state = 'paused';
           const part = library.placeFor(ctx.series, ctx.episode, ctx.dub, 'mp4').file + '.part';
           await fsp.rm(part, { force: true }).catch(() => {});
-          if (state) state.clearSave(key);
+          note({ paused: true });
         } else { Object.assign(job, { state: 'error', error: e.message }); note(); }
       })
       .finally(() => stops.delete(id));
     return job;
   }
 
-  /* a save stopped by hand, while it fetches or while ffmpeg assembles */
+  /* a save paused by hand, while it fetches or while ffmpeg assembles */
   const stops = new Map();
-  function stop(id) {
+  function pause(id) {
     const job = jobs.get(id);
     if (!job || job.state !== 'working') return job || null;
-    job.state = 'stopped';
+    job.state = 'paused';
     const ac = stops.get(id);
     if (ac) ac.abort();
     return job;
@@ -204,6 +205,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
     resuming = (async () => {
       const out = [];
       for (const [key, rec] of Object.entries(state.saves())) {
+        if (rec.paused) continue;   // paused by hand: waits for the hand
         if ([...jobs.values()].some(j => j.key === key && j.state === 'working')) continue;
         try {
           const already = (await library.list()).some(s => s.episodes.some(e => e.seriesId === rec.seriesId && e.episode === rec.episode && e.dubKey === rec.dubKey));
@@ -223,5 +225,5 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return resuming;
   }
 
-  return { save, start, stop, resume, job: id => jobs.get(id) || null, jobs, keyOf };
+  return { save, start, pause, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }

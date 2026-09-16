@@ -2411,7 +2411,7 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
-  if (e.target.closest('.item__save')) return (it.save && !it.save.error) ? stopSave(it) : offerSave(it, e.target.closest('.item__save'));
+  if (e.target.closest('.item__save')) return isSaving(it) ? pauseSave(it) : offerSave(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
 
@@ -2428,7 +2428,7 @@ const saveQualities = it => {
 };
 const saveMenu = $('#saveMenu');
 async function offerSave(it, btn) {
-  if (isSaved(it) || (it.save && !it.save.error)) return;
+  if (isSaved(it) || isSaving(it)) return;
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
   const opts = saveQualities(it);
   if (opts.length < 2) return saveItem(it, opts[0] && opts[0].stream);
@@ -2460,8 +2460,10 @@ const streamToSave = it => {
 queueList.addEventListener('click', e => {
   const g = e.target.closest('.queue__group-save');
   if (!g) return;
+  e.stopPropagation();
   const li = g.closest('.queue__group');
-  saveMany(state.list.filter(it => it.group === li.dataset.group));
+  if (popPinned && popScope === li.dataset.group) return unpinSavePop();
+  pinSavePop(li.dataset.group, g);
 });
 
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2498,7 +2500,7 @@ async function watchSaves() {
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
     if (job) { it.save = { phase: job.phase, done: job.done, total: job.total, jobId: job.id }; active = true; }
-    else if (rec && rec.error) it.save = { error: rec.error, done: rec.done || 0, total: rec.total || 0, phase: rec.phase };
+    else if (rec && (rec.error || rec.paused)) it.save = { error: rec.error || null, paused: !!rec.paused, done: rec.done || 0, total: rec.total || 0, phase: rec.phase };
     else if (it.save && !it.save.mine) it.save = null;
   }
   paintSaved();
@@ -2519,7 +2521,7 @@ function paintSaved() {
   saveCount.textContent = all ? `${done}/${all}` : '';
   btnSaveAll.classList.toggle('is-done', all > 0 && done === all);
   btnSaveAll.classList.toggle('is-busy', savingAll);
-  btnSaveAll.title = t(savingAll ? 'queue.stopAll' : 'queue.saveAll');
+  if (!savePop.hidden) showSavePop(popScope);   // the popover's numbers and its button follow
   btnSaveAll.hidden = !all;
 }
 /* The button of one row. The ring is drawn once and then only moved:
@@ -2530,12 +2532,13 @@ function paintSaved() {
 const RING = 2 * Math.PI * 9;
 function paintSaveButton(btn, it) {
   const saved = isSaved(it), sv = it.save;
-  const saving = !!(sv && !sv.error), failed = !!(sv && sv.error);
-  btn.classList.toggle('is-saved', saved && !saving && !failed);
+  const saving = isSaving(it), failed = !!(sv && sv.error), paused = !!(sv && sv.paused && !sv.error);
+  btn.classList.toggle('is-saved', saved && !saving && !failed && !paused);
   btn.classList.toggle('is-saving', saving);
   btn.classList.toggle('is-failed', failed);
+  btn.classList.toggle('is-paused', paused);
   let tip, sub = '';
-  if (saving || failed) {
+  if (saving || failed || paused) {
     const p = sv.phase === 'assemble' ? 1 : sv.total ? sv.done / sv.total : 0;
     const pct = Math.round(p * 100);
     let ring = btn.querySelector('.ring');
@@ -2546,14 +2549,15 @@ function paintSaveButton(btn, it) {
     ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
     ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
     if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct }) : ''; }
-    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.stopHint'); }
-    else { tip = t('queue.saving', { done: sv.done, total: sv.total, pct }); sub = t('queue.stopHint'); }
+    else if (paused) { tip = t('queue.savePaused', { done: sv.done, total: sv.total, pct }); sub = t('queue.resumeHint'); }
+    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.pauseHint'); }
+    else { tip = t('queue.saving', { done: sv.done, total: sv.total, pct }); sub = t('queue.pauseHint'); }
   } else {
     const want = saved ? PH.check : PH.download;
     if (btn.dataset.icon !== (saved ? 'check' : 'download')) { btn.innerHTML = phSvg(want); btn.dataset.icon = saved ? 'check' : 'download'; }
     tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
   }
-  if (saving || failed) delete btn.dataset.icon;
+  if (saving || failed || paused) delete btn.dataset.icon;
   btn.dataset.tip = tip; btn.dataset.tipSub = sub;
   if (tipFor === btn) paintTip(btn);
 }
@@ -2606,21 +2610,43 @@ function popRow(grid, k, v, small) {
   if (small) { val.append(' '); val.append(el('small', '', small)); }
   grid.append(val);
 }
-/* under the button, on the body, so the queue panel cannot clip it */
+/* The popover: over the header's button for the whole queue, over a
+   group's mark for that part. Hovering previews it, a click pins it, and
+   the saving is started, or paused, by the button inside it, never by the
+   click that opened it. Under the anchor, on the body, so the queue panel
+   cannot clip it. */
+let popScope = null, popAnchor = null, popPinned = false;
 function placeSavePop() {
   if (savePop.parentNode !== document.body) document.body.append(savePop);
-  const r = btnSaveAll.getBoundingClientRect();
-  savePop.style.top = (r.bottom + 8) + 'px';
+  const anchor = popAnchor || btnSaveAll;
+  const r = anchor.getBoundingClientRect();
+  savePop.style.top = Math.min(r.bottom + 8, window.innerHeight - savePop.offsetHeight - 12) + 'px';
   savePop.style.left = Math.max(12, Math.min(r.left, window.innerWidth - savePop.offsetWidth - 12)) + 'px';
 }
-async function showSavePop() {
+function popActions(items, runningHere) {
+  const acts = el('div', 'savepop__acts');
+  const left = items.filter(it => !isSaved(it));
+  const b = el('button', 'btn' + (runningHere ? '' : ' btn--solid'));
+  if (runningHere) { b.textContent = t('pop.pause'); b.onclick = ev => { ev.stopPropagation(); pauseMany(); }; }
+  else {
+    const resuming = left.some(it => it.save && it.save.paused);
+    b.textContent = resuming ? t('pop.resume') : (popScope === null ? t('pop.download') : t('pop.downloadPart'));
+    b.disabled = !left.length || savingAll;
+    b.onclick = ev => { ev.stopPropagation(); saveMany(items); };
+  }
+  acts.append(b);
+  if (left.length && !runningHere) acts.append(el('span', 'savepop__left', t('pop.left', { n: left.length })));
+  return acts;
+}
+async function showSavePop(scope = null) {
   clearTimeout(popT);
+  popScope = scope;
   savePop.hidden = false;
   if (!savePop.children.length) savePop.textContent = '…';
   placeSavePop();
-  let d = null, lib = null;
-  try { [d, lib] = await Promise.all([api('/api/home'), api('/api/library')]); } catch (_) { /* then the local numbers alone */ }
-  const items = state.list, saved = items.filter(isSaved);
+  const items = scope === null ? state.list : state.list.filter(it => it.group === scope);
+  const runningHere = savingAll && items.some(it => isSaving(it) && it.save.mine);
+  const saved = items.filter(isSaved);
   const savedBytes = saved.reduce((a, it) => a + sizeOf(it), 0);
   const known = items.filter(it => it.dur), dur = known.reduce((a, it) => a + it.dur, 0);
   /* what the rest would take, judged by what is saved already: by the
@@ -2632,15 +2658,18 @@ async function showSavePop() {
   const estimate = rest.reduce((a, it) => a + (it.dur && perSec ? it.dur * perSec : perEp), 0);
 
   const frag = document.createDocumentFragment();
-  const q = popSection(t('pop.queue'));
+  const season = scope === null ? null : state.seasons.find(x => x.series.id === scope);
+  const q = popSection(scope === null ? t('pop.queue') : (season ? `${season.ordinal} · ${season.series.title}` : t('pop.part')));
   const bar = el('div', 'savepop__bar'); const fill = el('i'); fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%'; bar.append(fill); q.append(bar);
   const g = el('div', 'savepop__grid');
   popRow(g, t('pop.saved'), `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
   if (estimate) popRow(g, t('pop.rest'), `${items.length - saved.length}`, t('pop.about', { size: fmtSize(estimate) }));
   if (dur) popRow(g, t('pop.duration'), fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '');
-  q.append(g); frag.append(q);
+  q.append(g);
+  q.append(popActions(items, runningHere));
+  frag.append(q);
 
-  if (state.seasons.length > 1) {
+  if (scope === null && state.seasons.length > 1) {
     const p = popSection(t('pop.parts'));
     const grid = el('div', 'savepop__parts');
     for (const s of state.seasons) {
@@ -2652,40 +2681,59 @@ async function showSavePop() {
     p.append(grid); frag.append(p);
   }
 
-  if (lib) {
-    const l = popSection(t('pop.library'));
-    const grid = el('div', 'savepop__grid');
-    const all = lib.series.flatMap(x => x.episodes);
-    popRow(grid, t('pop.onDisk'), t('pop.series', { n: lib.series.length }), t('pop.episodes', { n: all.length }) + ' · ' + fmtSize(all.reduce((a, e) => a + (e.size || 0), 0)));
-    if (d) {
-      popRow(grid, t('pop.cache'), fmtSize(d.cache.bytes), t('pop.ofLimit', { limit: fmtSize(d.cache.limit) }));
-      if (d.cache.free != null) popRow(grid, t('pop.free'), fmtSize(d.cache.free), d.cache.total ? t('pop.ofDisk', { total: fmtSize(d.cache.total) }) : '');
+  if (scope === null) {
+    let d = null, lib = null;
+    try { [d, lib] = await Promise.all([api('/api/home'), api('/api/library')]); } catch (_) { /* then the local numbers alone */ }
+    if (popScope !== scope || savePop.hidden) return;
+    if (lib) {
+      const l = popSection(t('pop.library'));
+      const grid = el('div', 'savepop__grid');
+      const all = lib.series.flatMap(x => x.episodes);
+      popRow(grid, t('pop.onDisk'), t('pop.series', { n: lib.series.length }), t('pop.episodes', { n: all.length }) + ' · ' + fmtSize(all.reduce((a, e) => a + (e.size || 0), 0)));
+      if (d) {
+        popRow(grid, t('pop.cache'), fmtSize(d.cache.bytes), t('pop.ofLimit', { limit: fmtSize(d.cache.limit) }));
+        if (d.cache.free != null) popRow(grid, t('pop.free'), fmtSize(d.cache.free), d.cache.total ? t('pop.ofDisk', { total: fmtSize(d.cache.total) }) : '');
+      }
+      l.append(grid);
+      if (d) {
+        const b = el('button', 'savepop__path');
+        b.innerHTML = phSvg(PH.folder) + '<span></span>';
+        b.querySelector('span').textContent = d.home;
+        b.title = t('set.homeOpen');
+        b.onclick = ev => { ev.stopPropagation(); post('/api/home/open').catch(e => toast(t('toast.homeFail', { why: e.message }))); };
+        l.append(b);
+      }
+      frag.append(l);
     }
-    l.append(grid);
-    if (d) {
-      const b = el('button', 'savepop__path');
-      b.innerHTML = phSvg(PH.folder) + '<span></span>';
-      b.querySelector('span').textContent = d.home;
-      b.title = t('set.homeOpen');
-      b.onclick = ev => { ev.stopPropagation(); post('/api/home/open').catch(e => toast(t('toast.homeFail', { why: e.message }))); };
-      l.append(b);
-    }
-    frag.append(l);
   }
   savePop.replaceChildren(frag);
   placeSavePop();
 }
-function hideSavePop() { popT = setTimeout(() => { savePop.hidden = true; }, 120); }
-btnSaveAll.addEventListener('pointerenter', showSavePop);
+function hideSavePop() { if (popPinned) return; popT = setTimeout(() => { savePop.hidden = true; }, 120); }
+function pinSavePop(scope, anchor = null) {
+  popPinned = true; popAnchor = anchor;
+  savePop.classList.add('is-pinned');
+  showSavePop(scope);
+}
+function unpinSavePop() {
+  popPinned = false; popAnchor = null;
+  savePop.classList.remove('is-pinned');
+  savePop.hidden = true;
+}
+btnSaveAll.addEventListener('pointerenter', () => { if (!popPinned) { popAnchor = null; showSavePop(null); } });
 btnSaveAll.addEventListener('pointerleave', hideSavePop);
 savePop.addEventListener('pointerenter', () => clearTimeout(popT));
 savePop.addEventListener('pointerleave', hideSavePop);
+savePop.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', e => { if (popPinned && !e.target.closest('#btnSaveAll')) unpinSavePop(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned) unpinSavePop(); });
 
 /* ── saving an episode into the library ────────────────────────
    The episode is opened if it was not, then its stream is handed to
    the server, which assembles the file; the row shows how far it is. */
+const isSaving = it => !!(it.save && !it.save.error && !it.save.paused);
 async function saveItem(it, stream = null) {
-  if ((it.save && !it.save.error) || isSaved(it)) return false;
+  if (isSaving(it) || isSaved(it)) return false;
   it.save = { phase: 'fetch', done: 0, total: 0, mine: true }; paintSaved();
   try {
     if (!it.stream) await resolveItem(it);
@@ -2697,7 +2745,7 @@ async function saveItem(it, stream = null) {
       await sleep(500);
       job = await api('/api/save/' + job.id);
     }
-    if (job.state === 'stopped') { it.save = null; paintSaved(); return false; }
+    if (job.state === 'paused') { it.save = { phase: job.phase, done: job.done, total: job.total, paused: true }; paintSaved(); return false; }
     if (job.state !== 'done') throw new Error(job.error || '?');
     it.save = null;
     await loadLibrary();
@@ -2709,32 +2757,33 @@ async function saveItem(it, stream = null) {
   }
 }
 
-/* a save in progress, stopped by hand: the server drops the half file */
-async function stopSave(it) {
+/* a save in progress, paused by hand: it keeps where it got to and waits */
+async function pauseSave(it) {
   const id = it.save && it.save.jobId;
   if (!id) return;
-  try { await post('/api/save/stop?id=' + encodeURIComponent(id)); } catch (_) {}
-  it.save = null; paintSaved();
-  toast(t('toast.saveStopped', { name: it.name }));
+  let job = null;
+  try { job = await post('/api/save/pause?id=' + encodeURIComponent(id)); } catch (_) {}
+  it.save = { phase: (job || it.save).phase, done: (job || it.save).done || 0, total: (job || it.save).total || 0, paused: true }; paintSaved();
 }
 
 /* several episodes, one after another: the server assembles one file at a
-   time anyway; the header's button, busy, stops the run */
-let savingAll = false, stopAll = false;
+   time anyway; a pause holds the one running and ends the run */
+let savingAll = false, pauseAll = false;
 async function saveMany(items) {
   if (savingAll) return;
-  savingAll = true; stopAll = false; paintSaved();
+  savingAll = true; pauseAll = false; paintSaved();
   let n = 0;
-  try { for (const it of items) { if (stopAll) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
-  finally { savingAll = false; stopAll = false; paintSaved(); }
+  try { for (const it of items) { if (pauseAll) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
+  finally { savingAll = false; pauseAll = false; paintSaved(); }
   if (n) toast(t('toast.savedMany', { n }));
 }
-btnSaveAll.onclick = () => {
-  if (!savingAll) return saveMany(state.list);
-  stopAll = true;
-  const running = state.list.find(it => it.save && !it.save.error && it.save.mine);
-  if (running) stopSave(running);
-};
+function pauseMany() {
+  pauseAll = true;
+  const running = state.list.find(it => isSaving(it) && it.save.mine);
+  if (running) pauseSave(running);
+}
+/* the header's button opens its popover; the saving starts from the button inside */
+btnSaveAll.onclick = () => { if (popPinned && popScope === null) return unpinSavePop(); pinSavePop(null); };
 
 function removeItem(it) {
   const i = idxOf(it), wasCurrent = it === cur();

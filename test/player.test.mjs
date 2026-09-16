@@ -208,7 +208,10 @@ describe('saving from the queue', { skip }, () => {
       await until('source', () => $('#video').getAttribute('src'));
       await until('count', () => $('#saveCount').textContent === '0/3');
       const marksBefore = $$('#queueList .item__save').map(b => b.className);
+      /* the header's button opens its popover; the run starts from the button inside it */
       $('#btnSaveAll').click();
+      await until('popover', () => !$('#savePop').hidden && $('#savePop .savepop__acts .btn'), 40);
+      $('#savePop').querySelector('.savepop__acts .btn').click();
       await until('saving', () => $$('#queueList .item__save.is-saving').length > 0, 40);
       const spinner = !!$('#queueList .item__save.is-saving .ring');
       await until('saved', () => $('#saveCount').textContent === '3/3', 300);
