@@ -1,0 +1,37 @@
+# A site that Lapka does not open, or opens only in part. The general
+# mechanism is meant to read pages by the way they are built, so a page
+# it misses is worth a look; a site that deliberately locks its players
+# is not forced, and the answer may be "a closed door".
+name: A site does not open
+description: A link Lapka could not read, or read only in part. По-русски тоже можно.
+labels: [site]
+body:
+  - type: input
+    id: link
+    attributes:
+      label: The link
+      description: The page of the series or the episode, as you pasted it.
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: What Lapka did
+      options:
+        - Found nothing on the page
+        - Found the episodes, but no player opens
+        - Found only some episodes, seasons or dubs
+        - Plays, but a dub, a quality or the subtitles are missing
+        - Something else (say below)
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: Details
+      description: What Lapka said on the screen; what the site shows in a browser for comparison (which players, which dubs).
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: The output of `node -v`.

@@ -1,0 +1,17 @@
+# A proposal: a feature, a change in how something works or looks.
+name: Idea
+description: A proposal for Lapka. По-русски тоже можно.
+labels: [idea]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: The idea
+      description: What should be different, and what for. A scene from use helps more than a list of settings.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How you see it
+      description: Where in the player it would live and how it would behave. Optional.

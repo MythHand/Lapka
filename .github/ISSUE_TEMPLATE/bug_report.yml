@@ -1,0 +1,54 @@
+# The form behind "New issue → Bug". Most troubles depend on the link, the
+# system, the browser and the Node version, so the form asks for them up
+# front instead of in the comments afterwards. Russian is fine too.
+name: Bug
+description: Something breaks, looks wrong or does not do what it says. По-русски тоже можно.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What was done, what was expected, what happened instead. What Lapka said on the screen, if anything.
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: The link
+      description: The page you pasted into Lapka, if the trouble is about a series or an episode.
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: The first line of chrome://version, or the About window of the browser.
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      description: The output of `node -v`.
+    validations:
+      required: true
+  - type: input
+    id: ffmpeg
+    attributes:
+      label: ffmpeg version
+      description: The first line of `ffmpeg -version`. Only if the trouble is about saving.
+  - type: textarea
+    id: terminal
+    attributes:
+      label: The terminal
+      description: What the terminal with `npm start` printed around that moment, if anything.
+      render: text

@@ -1,0 +1,6 @@
+# The "New issue" page: three forms, and a free-form issue is still allowed.
+blank_issues_enabled: true
+contact_links:
+  - name: How to install and run
+    url: https://github.com/MythHand/Lapka/blob/main/docs/INSTALL.md
+    about: Step by step for macOS, Windows and Linux, ffmpeg and the usual troubles included.
