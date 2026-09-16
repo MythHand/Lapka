@@ -20,6 +20,11 @@ import kodik, { readSerial, readEmbed } from '../core/extract/players/kodik.mjs'
 import { loadExtractors } from '../core/extract/index.mjs';
 import { createLapka } from '../core/lapka.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('deferred players and the Kodik serial', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAPS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
 const snap = (...p) => fs.readFileSync(path.join(SNAPS, ...p), 'utf8');
 const PAGE = 'https://jut-su.net/31-klinok-rassekajuschij-demonov-o2.html';
@@ -156,3 +161,5 @@ describe('through look() and resolve()', () => {
     assert.ok(!r.series.franchise.some(f => f.year === 2019));
   });
 });
+
+}

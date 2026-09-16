@@ -16,6 +16,12 @@ import { loadSites, siteFor } from '../core/sites/index.mjs';
 import { loadProfiles, profileFor } from '../core/knowledge/index.mjs';
 import { createLapka } from '../core/lapka.mjs';
 import aniliberty from '../core/sites/aniliberty.mjs';
+import yummyani, { dubOf, playerOf } from '../core/sites/yummyani.mjs';
+
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('the site adapters', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
 
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'aniliberty');
 const snap = f => fs.readFileSync(path.join(SNAP, f), 'utf8');
@@ -168,7 +174,6 @@ describe('look() on aniliberty, page and adapter together', () => {
 });
 
 /* ── yummyani: a catalog whose player is a script; the API says it all ── */
-import yummyani, { dubOf, playerOf } from '../core/sites/yummyani.mjs';
 
 const YSNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'yummyani');
 const ysnap = f => fs.readFileSync(path.join(YSNAP, f), 'utf8');
@@ -233,3 +238,5 @@ describe('the yummyani adapter', () => {
     assert.equal(ep.dubs.find(d => d.key === 'anilibria').sources.length, 3);
   });
 });
+
+}

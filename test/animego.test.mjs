@@ -19,6 +19,11 @@ import { loadSites } from '../core/sites/index.mjs';
 import { loadExtractors } from '../core/extract/index.mjs';
 import { createLapka } from '../core/lapka.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('animego.me', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAPS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
 const snap = (...p) => fs.readFileSync(path.join(SNAPS, ...p), 'utf8');
 const SITE = 'https://animego.me';
@@ -132,3 +137,5 @@ describe('through look() and resolve()', () => {
     assert.equal(nine.dubs.length, 0);
   });
 });
+
+}

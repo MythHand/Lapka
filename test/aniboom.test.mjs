@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url';
 import aniboom, { readEmbed } from '../core/extract/players/aniboom.mjs';
 import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('AniBoom', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const page = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'aniboom', 'embed.html'), 'utf8');
 const EMBED = 'https://aniboom.one/embed/9ZLq9oYXN5G?episode=1&translation=18';
 
@@ -30,3 +35,5 @@ describe('AniBoom', () => {
     assert.equal(extractorFor(await loadExtractors(), EMBED).name, 'aniboom');
   });
 });
+
+}

@@ -15,6 +15,11 @@ import { discover } from '../core/discover/index.mjs';
 import { loadExtractors } from '../core/extract/index.mjs';
 import { createLapka } from '../core/lapka.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('jkanime.net and animeflv', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAPS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
 const snap = (...p) => fs.readFileSync(path.join(SNAPS, ...p), 'utf8');
 const JK_EP = 'https://jkanime.net/grand-blue-season-3/11/', JK_SERIES = 'https://jkanime.net/grand-blue-season-3/';
@@ -106,3 +111,5 @@ describe('animeflv', () => {
     assert.deepEqual([...new Set(res.streams.map(s => s.kind))].sort(), ['hls', 'mp4']);
   });
 });
+
+}

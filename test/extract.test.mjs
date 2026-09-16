@@ -11,6 +11,7 @@
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import os from 'node:os';
 import fsp from 'node:fs/promises';
 import { build, haveFfmpeg } from './fixtures.mjs';
@@ -117,7 +118,7 @@ describe('from an address to streams', { skip: !ffmpeg && 'ffmpeg not installed'
 });
 
 /* ── Sibnet: no extractor of its own, the generic one reads it ── */
-describe('the generic extractor on a Sibnet embed', () => {
+describe('the generic extractor on a Sibnet embed', { skip: !existsSync(new URL('./snapshots/sibnet/embed.html', import.meta.url)) && 'the snapshots of real pages are kept outside the repository' }, () => {
   test('finds the mp4 in the script and keeps the embed as the referer', async () => {
     const fs = await import('node:fs');
     const html = fs.readFileSync(new URL('./snapshots/sibnet/embed.html', import.meta.url), 'utf8');

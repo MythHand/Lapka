@@ -26,6 +26,11 @@ import { build, haveFfmpeg } from './fixtures.mjs';
 import { startSite } from './site/serve.mjs';
 import { start } from '../core/main.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('VenomPlayer', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAPS = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
 const snap = (...p) => fs.readFileSync(path.join(SNAPS, ...p), 'utf8');
 const PAGE = 'https://15sep.newdeaf.co/multfilm/5120-arkejn-1-sezon.html';
@@ -161,3 +166,5 @@ describe('saving with the sound of its own', { skip: !(await haveFfmpeg()) && 'f
     assert.ok(streams.some(l => /^audio,eng/.test(l)), 'the second rendition, English, is the sound: ' + streams.join(' | '));
   });
 });
+
+}

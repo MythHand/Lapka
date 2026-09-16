@@ -15,6 +15,11 @@ import streamtape, { readLink } from '../core/extract/players/streamtape.mjs';
 import { unpacked, urlFromBase64 } from '../core/discover/objects.mjs';
 import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('the hosters', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'hosters');
 const snap = f => fs.readFileSync(path.join(SNAP, f), 'utf8');
 const serving = (file, url) => ({ fetch: async u => ({ status: 200, url: url || u, body: snap(file), headers: {}, cookies: [] }) });
@@ -65,3 +70,5 @@ describe('streamtape', () => {
     assert.equal(extractorFor(await loadExtractors(), 'https://streamtape.com/e/abc').name, 'streamtape');
   });
 });
+
+}

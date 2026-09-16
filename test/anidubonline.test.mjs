@@ -12,6 +12,11 @@ import { fileURLToPath } from 'node:url';
 import { discover } from '../core/discover/index.mjs';
 import { seasonFromText, seasonFromUrl, tidyTitle } from '../core/discover/series.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('anidubonline.ru', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const page = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'anidubonline', 'page.html'), 'utf8');
 const URL_ = 'https://anidubonline.ru/neobjatnyj-okean-sezon-3';
 
@@ -47,3 +52,5 @@ describe('the page', () => {
     ]);
   });
 });
+
+}

@@ -228,6 +228,9 @@ describe('a profile as a hint', () => {
    spans); the episode page names its number in the title, not in the
    uuid of its address; the page data holds the streams of every
    episode, and only this episode's are taken. */
+/* the snapshots of real pages are kept outside the repository: without them this block is skipped */
+if (!fs.existsSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'aniliberty'))) describe('aniliberty.top, read generally', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'aniliberty');
 const snap = f => fs.readFileSync(path.join(SNAP, f), 'utf8');
 const REL = 'https://aniliberty.top/anime/releases/release/re-creators/episodes';
@@ -276,3 +279,4 @@ describe('aniliberty.top, read generally', () => {
     assert.equal(qualityOf('https://x/v/index.m3u8'), null);
   });
 });
+}

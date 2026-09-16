@@ -19,6 +19,11 @@ import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
 import { createLapka } from '../core/lapka.mjs';
 import { createSeries, merge } from '../core/catalog/index.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('Kodik', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'kodik');
 const page = fs.readFileSync(path.join(SNAP, 'embed.html'), 'utf8');
 const script = fs.readFileSync(path.join(SNAP, 'app.player_single.js'), 'utf8');
@@ -148,3 +153,5 @@ describe('through resolve()', () => {
     assert.equal(r.dubs[0].alive, 0);
   });
 });
+
+}

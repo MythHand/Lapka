@@ -16,6 +16,11 @@ import { fileURLToPath } from 'node:url';
 import cvh, { readEmbed, readModule, readWrapper } from '../core/extract/players/cvh.mjs';
 import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('CVH', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'cvh');
 const snap = f => fs.readFileSync(path.join(SNAP, f), 'utf8');
 const EMBED = 'https://ru.yummyani.me/iframeCVH.html?dubbing_code=AnilibriaTV&anime_id=30831&episode=2&dubbing=%D0%9E%D0%B7%D0%B2%D1%83%D1%87%D0%BA%D0%B0+AniLibria';
@@ -80,3 +85,5 @@ describe('extracting from CVH', () => {
     await assert.rejects(cvh.extract(EMBED.replace('episode=2', 'episode=99'), {}, fakeSession()), /no such episode/);
   });
 });
+
+}

@@ -17,6 +17,11 @@ import generic from '../core/extract/players/generic.mjs';
 import { loadExtractors } from '../core/extract/index.mjs';
 import { createLapka } from '../core/lapka.mjs';
 
+/* the snapshots of real pages are kept outside the repository: without them this file is skipped as a whole */
+const SNAPSHOTS_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots');
+if (!fs.existsSync(SNAPSHOTS_ROOT)) describe('gogoanime.by', { skip: 'the snapshots of real pages are kept outside the repository' }, () => {});
+else {
+
 const SNAP = path.join(path.dirname(fileURLToPath(import.meta.url)), 'snapshots', 'gogoanime');
 const snap = f => fs.readFileSync(path.join(SNAP, f), 'utf8');
 const EP = 'https://gogoanime.by/dr-stone-science-future-part-3-episode-13-english-subbed/';
@@ -90,3 +95,5 @@ describe('through look() and resolve()', () => {
     assert.equal(res.stream.quality, '360p');
   });
 });
+
+}

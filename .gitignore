@@ -21,3 +21,6 @@ web/seal.html
 # only the fonts live in web/assets: brand marks and screenshots are not part of the code
 web/assets/*.png
 web/assets/*.svg
+
+# snapshots of real pages: kept in .internal, never public; the site tests skip without them
+test/snapshots
