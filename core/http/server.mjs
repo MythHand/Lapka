@@ -149,7 +149,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });
       }
       if (saver && req.method === 'GET' && p === '/api/saves') {
-        const active = [...saver.jobs.values()].filter(j => j.state === 'working').map(j => ({ id: j.id, key: j.key, seriesId: j.seriesId, episode: j.episode, dub: j.dub, quality: j.quality, phase: j.phase, done: j.done, total: j.total, unit: j.unit || null }));
+        const active = [...saver.jobs.values()].filter(j => j.state === 'working' || j.state === 'queued').map(j => ({ id: j.id, state: j.state, key: j.key, seriesId: j.seriesId, episode: j.episode, dub: j.dub, quality: j.quality, phase: j.phase, done: j.done, total: j.total, unit: j.unit || null }));
         return json(res, 200, { pending: state ? state.saves() : {}, active });
       }
       if (saver && mutating && p === '/api/saves/resume') {

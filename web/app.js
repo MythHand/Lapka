@@ -2523,11 +2523,11 @@ async function watchSaves() {
   try { d = await api('/api/saves'); } catch (_) { return; }
   let active = false;
   for (const it of state.list) {
-    if (it.save && it.save.mine) continue;   // this page is running it and knows better
+    if (it.save && (it.save.mine || saveQueue.includes(it))) continue;   // this page is running it, or holds it in its own line, and knows better
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job) }; active = true; }
+    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job) }; active = true; }
     else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
     else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
     else if (it.save && !it.save.mine) it.save = null;
@@ -2817,9 +2817,9 @@ async function saveItem(it, stream = null) {
     const st = stream || streamOfQuality(it, quality) || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
     let job = await post('/api/save?stream=' + st.id);
-    if (it.pauseWanted && job.state === 'working') job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
-    while (job.state === 'working') {
-      it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, mine: true, jobId: job.id, quality: jobQuality(job) || quality }; paintSaved();
+    if (it.pauseWanted && (job.state === 'working' || job.state === 'queued')) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
+    while (job.state === 'working' || job.state === 'queued') {
+      it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, mine: true, jobId: job.id, quality: jobQuality(job) || quality }; paintSaved();
       await sleep(500);
       job = await api('/api/save/' + job.id);
     }
@@ -2882,14 +2882,14 @@ function dequeueSaves(items) {
    Each paused row keeps where it got to and the quality it had, and
    waits for a hand. */
 async function pauseItems(items, whole = false) {
-  dequeueSaves(items);
-  for (const it of items) if (isSaving(it)) it.pauseWanted = true;
-  const jobs = items.filter(it => isSaving(it) && it.save.jobId);
+  dequeueSaves(items.filter(it => !(it.save && it.save.jobId)));   // the ones in this page's own line
+  for (const it of items) if (isSaving(it) || isQueued(it)) it.pauseWanted = true;
+  const jobs = items.filter(it => (isSaving(it) || isQueued(it)) && it.save.jobId);
   try {
     if (whole) await post('/api/saves/pause');
     else await Promise.all(jobs.map(it => post('/api/save/pause?id=' + encodeURIComponent(it.save.jobId))));
   } catch (e) { toast(t('toast.pauseFail', { why: e.message })); return; }
-  for (const it of items) if (isSaving(it)) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
+  for (const it of items) if (isSaving(it) || isQueued(it)) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
   paintSaved();
   clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }

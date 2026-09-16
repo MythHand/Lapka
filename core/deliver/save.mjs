@@ -164,23 +164,53 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return { file: place.file, sidecar: place.sidecar, size: st.size };
   }
 
-  /* A job the UI can poll. It is also written down by identity, with
-     its progress, so that a save cut short is known and taken up
-     again; done, the record goes. */
+  /* ── the jobs: one at a time ──────────────────────────────────
+     Every save asked for becomes a job the UI can poll, and stands in
+     line: one job works, the rest wait as 'queued', whoever asked, this
+     page, the resume loop after a start, another tab. A job is also
+     written down by identity with its progress, so that a save cut
+     short is known and taken up again; done, the record goes. */
+  const line = [];                 // ids of the jobs waiting, in order
+  const ctxOf = new Map();         // what each job saves, kept out of the job (the job is sent as JSON)
+  const stops = new Map();         // the abort of each job working
+  let held = false;                // the loading as a whole is on hold: the resume loop stops at the next record
+  const noteFor = (job, ctx, extra = {}) => state && state.setSave(job.key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, unit: job.unit || null, error: job.error, paused: false, ...extra });
+
   function start(streamId, ctx) {
     const key = keyOf(ctx);
-    const running = [...jobs.values()].find(j => j.key === key && j.state === 'working');
-    if (running) return running;
+    const same = [...jobs.values()].find(j => j.key === key && (j.state === 'working' || j.state === 'queued'));
+    if (same) return same;
     const id = `${streamId}-${Date.now().toString(36)}`;
-    const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, quality: ctx.stream.quality || 'auto', state: 'working', phase: 'fetch', done: 0, total: 0, file: null, error: null, started: Date.now() };
+    const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, quality: ctx.stream.quality || 'auto', state: 'queued', phase: 'fetch', done: 0, total: 0, unit: null, file: null, error: null, started: Date.now() };
     jobs.set(id, job);
+    ctxOf.set(id, ctx);
+    noteFor(job, ctx);
+    line.push(id);
+    pump();
+    return job;
+  }
+
+  /* the next job in line goes to work when none is working */
+  function pump() {
+    if ([...jobs.values()].some(j => j.state === 'working')) return;
+    while (line.length) {
+      const job = jobs.get(line.shift());
+      if (job && job.state === 'queued') return work(job);
+    }
+  }
+
+  function work(job) {
+    const ctx = ctxOf.get(job.id);
+    job.state = 'working';
     const ac = new AbortController();
-    stops.set(id, ac);
-    const note = (extra = {}) => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, unit: job.unit || null, error: job.error, paused: false, ...extra });
+    stops.set(job.id, ac);
+    const note = (extra) => noteFor(job, ctx, extra);
     note();
-    save(streamId, { ...ctx, signal: ac.signal, onProgress: p => { Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); } })
-      .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(key); })
-      .catch(async e => {
+    /* progress after a pause is not written down: the record must keep saying paused */
+    const onProgress = p => { if (job.state !== 'working') return; Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); };
+    save(job.streamId, { ...ctx, signal: ac.signal, onProgress })
+      .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(job.key); })
+      .catch(e => {
         if (job.state === 'paused' || e.name === 'AbortError') {
           /* paused by hand: the record keeps where it got to, marked so that it
              is not taken up by itself; the half file and the cached pieces stay,
@@ -189,26 +219,30 @@ export function createSaver({ delivery, cache, library, state = null }) {
           note({ paused: true });
         } else { Object.assign(job, { state: 'error', error: e.message }); note(); }
       })
-      .finally(() => stops.delete(id));
-    return job;
+      .finally(() => { stops.delete(job.id); ctxOf.delete(job.id); pump(); });
   }
 
-  /* a save paused by hand, while it fetches or while ffmpeg assembles */
-  const stops = new Map();
-  let held = false;      // the loading as a whole is on hold: the resume loop stops at the next record
+  /* a save paused by hand: one waiting leaves the line, one working is cut off */
+  function pause(id) {
+    const job = jobs.get(id);
+    if (!job) return null;
+    if (job.state === 'queued') {
+      job.state = 'paused';
+      const ctx = ctxOf.get(id); if (ctx) noteFor(job, ctx, { paused: true });
+      ctxOf.delete(id);
+      pump();
+    } else if (job.state === 'working') {
+      job.state = 'paused';
+      const ac = stops.get(id);
+      if (ac) ac.abort();
+    }
+    return job;
+  }
   function pauseAll() {
     held = true;
     const out = [];
-    for (const job of jobs.values()) if (job.state === 'working') out.push(pause(job.id));
+    for (const job of jobs.values()) if (job.state === 'working' || job.state === 'queued') out.push(pause(job.id));
     return out;
-  }
-  function pause(id) {
-    const job = jobs.get(id);
-    if (!job || job.state !== 'working') return job || null;
-    job.state = 'paused';
-    const ac = stops.get(id);
-    if (ac) ac.abort();
-    return job;
   }
 
   /* Every save that was asked for and is not done, taken up again:
@@ -224,7 +258,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
       for (const [key, rec] of Object.entries(state.saves())) {
         if (held) break;            // a pause came while the loop ran: the rest stays as it is
         if (rec.paused) continue;   // paused by hand: waits for the hand
-        if ([...jobs.values()].some(j => j.key === key && j.state === 'working')) continue;
+        if ([...jobs.values()].some(j => j.key === key && (j.state === 'working' || j.state === 'queued'))) continue;
         try {
           const already = (await library.list()).some(s => s.episodes.some(e => e.seriesId === rec.seriesId && e.episode === rec.episode && e.dubKey === rec.dubKey));
           if (already) { state.clearSave(key); continue; }
@@ -234,7 +268,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
           const ctx = st && lapka.context(st.id);
           if (!ctx) { state.setSave(key, { error: 'no stream' }); continue; }
           const job = start(st.id, ctx);
-          await new Promise(res => { const t = setInterval(() => { if (job.state !== 'working') { clearInterval(t); res(); } }, 500); });
+          await new Promise(res => { const t = setInterval(() => { if (job.state !== 'working' && job.state !== 'queued') { clearInterval(t); res(); } }, 500); });
           out.push({ key, state: job.state, error: job.error });
         } catch (e) { state.setSave(key, { error: e.message }); out.push({ key, state: 'error', error: e.message }); }
       }

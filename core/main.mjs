@@ -80,7 +80,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     let wait = 30 * 1000;
     const tick = async () => {
       const pending = Object.values(ctx.state.saves());
-      const active = [...ctx.saver.jobs.values()].some(j => j.state === 'working');
+      const active = [...ctx.saver.jobs.values()].some(j => j.state === 'working' || j.state === 'queued');
       if (pending.length && !active) {
         const out = await ctx.resumeSaves().catch(() => []);
         wait = out.some(r => r.state === 'done') ? 30 * 1000 : Math.min(wait * 2, 10 * 60 * 1000);
