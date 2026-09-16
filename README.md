@@ -69,8 +69,9 @@ Ctrl+C в терминале.
 
 - `npm run dev` — Lapka на 8800 и синтетический сайт для тестов на 8801.
 - `npm test` — все тесты. `npm run check` — статическая проверка фронта.
-- Архитектура: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); карта ядра:
-  [core/README.md](core/README.md).
+- Карта ядра и контракты блоков: [core/README.md](core/README.md).
+
+![npm test: 165 тестов проходят](docs/media/tests.png)
 
 ## Границы
 

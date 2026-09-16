@@ -11,3 +11,9 @@ test/site/The Legend of Vox Machina*/
 
 # what Dima drops in by hand for me to place: never part of the repo
 user_input/
+
+# the project's own notes: kept in their own repository in .internal/, never public
+.internal/
+CLAUDE.md
+# the page for recording the seal, a tool, not the product
+web/seal.html
