@@ -148,6 +148,11 @@ svg.ph{ fill:currentColor; stroke:none; }
 .rb.on:hover{ background:var(--glass-hi); color:#fff; }
 .rb--sm{ width:32px; height:32px; }
 .rb--sm svg{ width:17px; height:17px; }
+/* the width switch shows the state, wide or narrow, one glyph at a time */
+#btnQueueWidth .ph{ display:none; }
+#btnQueueWidth .ph--wide{ display:block; }
+.workspace.queue-narrow #btnQueueWidth .ph--wide{ display:none; }
+.workspace.queue-narrow #btnQueueWidth .ph--narrow{ display:block; }
 .rb--wide{ width:auto; min-width:40px; padding:0 14px; font-size:calc(13px + var(--fs)); }
 .rb--main{
   width:52px; height:52px;
@@ -1311,9 +1316,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   min-width:min(1058px, calc(100vw - 60px));
   max-width:min(1058px, calc(100vw - 60px));
   /* the menu starts 72px from the top, so the window leaves it all but
-     72px and a 16px margin at the bottom; the old 120px reserve cut the
-     settings short in a window of ordinary height */
-  max-height:min(632px, calc(100vh - 88px));
+     72px and a 16px margin at the bottom; tall enough for the three columns
+     to stand without a scroll on an ordinary screen, never the whole window */
+  max-height:min(780px, calc(100vh - 88px));
 }
 /* Opening: the menu comes from the gear's side, sliding 60px left into
    place, fast at first and with no long crawl at the end, and the fade
@@ -1403,8 +1408,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ───────────── narrow window ─────────────
    The media queries come last, otherwise they could not override the
    rules declared further down the file. */
-@media (max-width:1500px){ :root{ --queue-w:504px; } }
-@media (max-width:1100px){ :root{ --queue-w:360px; } }
+/* narrowed by hand: the queue takes the width the next smaller screen would give it */
+.workspace.queue-narrow{ --queue-w:504px; }
+@media (max-width:1500px){ :root{ --queue-w:504px; } .workspace.queue-narrow{ --queue-w:360px; } }
+@media (max-width:1100px){ :root{ --queue-w:360px; } #btnQueueWidth{ display:none; } }
 @media (max-width:820px){
   :root{ --queue-w:100vw; }
   /* The shift centres captions in what the queue leaves visible. Here it

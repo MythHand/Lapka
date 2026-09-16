@@ -2282,6 +2282,21 @@ function revealCurrent() {
 }
 btnLocate.onclick = revealCurrent;
 
+/* the queue's width: as wide as the screen allows, or one step narrower by
+   hand; the button shows the state and swaps its glyph, the choice is kept */
+const btnQueueWidth = $('#btnQueueWidth');
+function applyQueueWidth() {
+  const narrow = strFromStore('lapka.queueNarrow', '0') === '1';
+  workspace.classList.toggle('queue-narrow', narrow);
+  if (btnQueueWidth) btnQueueWidth.title = t(narrow ? 'queue.widen' : 'queue.narrow');
+}
+if (btnQueueWidth) btnQueueWidth.onclick = () => {
+  saveStr('lapka.queueNarrow', workspace.classList.contains('queue-narrow') ? '0' : '1');
+  applyQueueWidth();
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 450);   // the deck and the menus refit once the slide is over
+};
+applyQueueWidth();
+
 /* ── the project description in an empty queue ────────────────
    The order here carries meaning and is not accidental. At the top,
    what the person needs right now: the queue is empty, drop files in.
