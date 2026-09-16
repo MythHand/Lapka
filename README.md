@@ -81,7 +81,10 @@ open by a double click, `./start.sh` on Linux. Each checks Node.js, installs
 what is missing the first time, starts Lapka in the background and opens it
 in the browser; that window can then be closed, Lapka keeps running. To stop
 it: `stop.command`, `stop.bat` or `./stop.sh`, or the "Quit Lapka" button at
-the foot of the settings (the gear).
+the foot of the settings (the gear). To update: `update.command`, `update.bat`
+or `./update.sh` pulls the newest version into the same folder (not a second
+`git clone`: git refuses to write into a folder that exists) and starts Lapka
+again if it was running.
 
 ![Settings: shortcuts, language and player, the Lapka folder, cache, the quality to save in](docs/media/setting.png)
 

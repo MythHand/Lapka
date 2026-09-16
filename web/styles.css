@@ -1586,7 +1586,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .quit__note{ margin:0; }
 .quit__guide{ display:inline-block; align-self:flex-start; font-size:calc(12px + var(--fs)); color:var(--tx-3); text-decoration:underline; padding:2px 2px 4px; }
 .quit__guide:hover{ color:var(--tx-1); }
-.quit{ color:var(--tx-3); }
+.quit{ color:var(--tx-3); height:auto; min-height:var(--ctl-h); white-space:normal; line-height:1.3; padding:6px 12px; }
 .quit.is-armed{ color:#e0a24a; border-color:rgba(224,162,74,.5); background:rgba(224,162,74,.08); }
 .savepop__acts .btn{ height:var(--ctl-h); }
 .savepop.is-pinned{ box-shadow:var(--shadow), 0 0 0 1px var(--line-3); }
