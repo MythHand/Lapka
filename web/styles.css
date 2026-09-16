@@ -1501,6 +1501,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .item__save.is-paused .ring__fill{ stroke:var(--tx-3); }
 .ring__pause{ display:none; position:absolute; left:50%; top:50%; width:2px; height:7px; margin:-3.5px 0 0 -3px; background:var(--tx-2); box-shadow:4px 0 0 var(--tx-2); }
 .item__save.is-paused .ring__pause{ display:block; }
+/* queued: an empty dashed ring, waiting its turn */
+.item__save.is-queued{ opacity:1; }
+.item__save.is-queued .ring__track{ stroke:var(--tx-3); stroke-dasharray:2.2 3.4; }
+.item__save.is-queued .ring__fill{ stroke:transparent; }
 .item__save.is-paused:hover .ring__pause{ background:var(--tx-1); box-shadow:4px 0 0 var(--tx-1); }
 .item__save:hover{ color:var(--tx-1); background:var(--glass-hi); }
 .item__save .ph{ width:16px; height:16px; fill:currentColor; }

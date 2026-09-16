@@ -105,21 +105,31 @@ export function createSaver({ delivery, cache, library, state = null }) {
     const part = place.file + '.part';
 
     if (stream.kind === 'mp4') {
-      const res = await delivery.fetchOrigin(entry, stream.url);
+      /* a half file left by a pause or a cut is taken up from its end, when
+         the origin serves ranges; otherwise it starts over. Progress is in bytes. */
+      let have = 0;
+      try { have = (await fsp.stat(part)).size; } catch { /* nothing yet */ }
+      let res = have ? await delivery.fetchOrigin(entry, stream.url, { range: `bytes=${have}-` }) : null;
+      if (res && res.status === 416) { have = 0; res = null; }              // the half file is not what the origin has now
+      if (res && res.status !== 206) { have = 0; res.body && res.body.cancel && res.body.cancel().catch(() => {}); res = null; }
+      if (!res) res = await delivery.fetchOrigin(entry, stream.url);
       if (!res.ok) throw new Error(`origin answered ${res.status}`);
-      const total = Number(res.headers.get('content-length')) || 0;
-      let done = 0;
-      const counter = new Transform({ transform(chunk, _, cb) { done += chunk.length; onProgress({ phase: 'fetch', done, total }); cb(null, chunk); } });
-      await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(part), signal ? { signal } : {});
+      const total = have + (Number(res.headers.get('content-length')) || 0);
+      let done = have;
+      onProgress({ phase: 'fetch', done, total, unit: 'bytes' });
+      const counter = new Transform({ transform(chunk, _, cb) { done += chunk.length; onProgress({ phase: 'fetch', done, total, unit: 'bytes' }); cb(null, chunk); } });
+      await pipeline(Readable.fromWeb(res.body), counter, fs.createWriteStream(part, { flags: have ? 'a' : 'w' }), signal ? { signal } : {});
     } else {
       const { segments, keys, localPlaylist, audio } = await segmentsOf(delivery, entry, stream.url);
       let done = 0;
       const pieces = [...keys, ...segments, ...(audio ? [...audio.keys, ...audio.segments] : [])];
       const total = pieces.length;
+      /* progress is in pieces; the ones already in the cache come back at once, so a save taken up runs to where it was */
+      onProgress({ phase: 'fetch', done, total, unit: 'pieces' });
       for (const u of pieces) {
         if (signal && signal.aborted) throw stopped();
         await delivery.piece(entry, u);
-        onProgress({ phase: 'fetch', done: ++done, total });
+        onProgress({ phase: 'fetch', done: ++done, total, unit: 'pieces' });
       }
       const listFile = cache.fileFor(entry.id, 'local.m3u8');
       await fsp.writeFile(listFile, localPlaylist);
@@ -133,7 +143,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
         if (audio.lang) maps.push('-metadata:s:a:0', `language=${audio.lang}`);
         if (audio.name) maps.push('-metadata:s:a:0', `title=${audio.name}`);
       }
-      onProgress({ phase: 'assemble', done, total });
+      onProgress({ phase: 'assemble', done, total, unit: 'pieces' });
       await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y',
         '-allowed_extensions', 'ALL', '-protocol_whitelist', 'file,crypto,data',
         ...inputs, ...maps, '-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', '-f', 'mp4', part], { signal });
@@ -166,17 +176,16 @@ export function createSaver({ delivery, cache, library, state = null }) {
     jobs.set(id, job);
     const ac = new AbortController();
     stops.set(id, ac);
-    const note = (extra = {}) => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, error: job.error, paused: false, ...extra });
+    const note = (extra = {}) => state && state.setSave(key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, unit: job.unit || null, error: job.error, paused: false, ...extra });
     note();
     save(streamId, { ...ctx, signal: ac.signal, onProgress: p => { Object.assign(job, p); if (job.done % 10 === 0 || p.phase === 'assemble') note(); } })
       .then(r => { Object.assign(job, { state: 'done', file: r.file, size: r.size }); if (state) state.clearSave(key); })
       .catch(async e => {
         if (job.state === 'paused' || e.name === 'AbortError') {
           /* paused by hand: the record keeps where it got to, marked so that it
-             is not taken up by itself; the half file goes, the cache keeps the pieces */
+             is not taken up by itself; the half file and the cached pieces stay,
+             so taking it up continues from there */
           job.state = 'paused';
-          const part = library.placeFor(ctx.series, ctx.episode, ctx.dub, 'mp4').file + '.part';
-          await fsp.rm(part, { force: true }).catch(() => {});
           note({ paused: true });
         } else { Object.assign(job, { state: 'error', error: e.message }); note(); }
       })

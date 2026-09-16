@@ -2442,6 +2442,7 @@ function saveMarkClick(it, btn) {
   const sv = it.save;
   if (isSaved(it)) return;
   if (isSaving(it)) return pauseItems([it]);
+  if (isQueued(it)) { it.held = true; it.save = null; paintSaved(); return; }
   if (sv && (sv.st === 'paused' || sv.st === 'failed')) return saveItem(it, streamOfQuality(it, sv.quality));
   return offerSave(it, btn);
 }
@@ -2475,15 +2476,6 @@ const streamToSave = it => {
   const same = want !== 'auto' && opts.find(o => o.label === want);
   return (same || opts[0] || {}).stream || it.stream;
 };
-queueList.addEventListener('click', e => {
-  const g = e.target.closest('.queue__group-save');
-  if (!g) return;
-  e.stopPropagation();
-  const li = g.closest('.queue__group');
-  if (popPinned && popScope === li.dataset.group) return unpinSavePop();
-  pinSavePop(li.dataset.group, g);
-});
-
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ── the library, as the queue sees it ─────────────────────────
@@ -2507,6 +2499,7 @@ async function loadLibrary() {
 /* ═══════════════ saving: state, poll, painters, popover, run ═══════════════
    One state per row, in it.save:
      null                      nothing asked, or done (saved is read from the library)
+     { st:'queued' }           waits its turn in a run over many rows
      { st:'opening' }          the episode is being opened for the stream to save
      { st:'saving', jobId }    the server assembles the file; done/total/phase from the job
      { st:'paused' }           held by hand, keeps done/total and the quality it had
@@ -2514,7 +2507,11 @@ async function loadLibrary() {
    mine: this page runs the job and paints it every half second; a job the
    server runs by itself (taken up after a start) is read by the poll. */
 const isSaving = it => !!(it.save && (it.save.st === 'saving' || it.save.st === 'opening'));
+const isQueued = it => !!(it.save && it.save.st === 'queued');
 const isPaused = it => !!(it.save && it.save.st === 'paused');
+/* how far a save got, in its own units: sizes for a file fetched whole, a count for pieces */
+const progressWords = sv => sv.unit === 'bytes' ? `${fmtSize(sv.done || 0)} / ${fmtSize(sv.total || 0)}` : `${sv.done || 0} / ${sv.total || 0}`;
+const progressPct = sv => sv.phase === 'assemble' ? 100 : sv.total ? Math.round(sv.done / sv.total * 100) : 0;
 const isFailed = it => !!(it.save && it.save.st === 'failed');
 const jobQuality = job => (job && job.quality) || null;
 
@@ -2530,9 +2527,9 @@ async function watchSaves() {
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, jobId: job.id, quality: jobQuality(job) }; active = true; }
-    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, phase: rec.phase, quality: rec.quality || null };
-    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, phase: rec.phase, quality: rec.quality || null };
+    if (job) { it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job) }; active = true; }
+    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
+    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
     else if (it.save && !it.save.mine) it.save = null;
   }
   paintSaved();
@@ -2565,15 +2562,15 @@ function paintSaved() {
 const RING = 2 * Math.PI * 9;
 function paintSaveButton(btn, it) {
   const saved = isSaved(it), sv = it.save;
-  const saving = isSaving(it), paused = isPaused(it), failed = isFailed(it);
-  btn.classList.toggle('is-saved', saved && !saving && !paused && !failed);
+  const saving = isSaving(it), paused = isPaused(it), failed = isFailed(it), queued = isQueued(it);
+  btn.classList.toggle('is-saved', saved && !saving && !paused && !failed && !queued);
   btn.classList.toggle('is-saving', saving);
   btn.classList.toggle('is-paused', paused);
   btn.classList.toggle('is-failed', failed);
+  btn.classList.toggle('is-queued', queued);
   let tip, sub = '';
-  if (saving || paused || failed) {
-    const p = sv.phase === 'assemble' ? 1 : sv.total ? sv.done / sv.total : 0;
-    const pct = Math.round(p * 100);
+  if (saving || paused || failed || queued) {
+    const pct = progressPct(sv), p = pct / 100;
     let ring = btn.querySelector('.ring');
     if (!ring) {
       btn.innerHTML = `<svg class="ring" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(2)}"/></svg><i class="ring__pause"></i>`;
@@ -2581,11 +2578,13 @@ function paintSaveButton(btn, it) {
     }
     ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
     ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
-    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = (sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct }) + ' · ' : '') + t('queue.retryHint'); }
-    else if (paused) { tip = t('queue.savePaused', { done: sv.done, total: sv.total, pct }); sub = t('queue.resumeHint'); }
+    const got = t('queue.got', { got: progressWords(sv), pct });
+    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = (sv.total ? got + ' · ' : '') + t('queue.retryHint'); }
+    else if (paused) { tip = t('queue.savePaused', { got }); sub = t('queue.resumeHint'); }
+    else if (queued) { tip = t('queue.queued'); sub = t('queue.unqueueHint'); }
     else if (sv.st === 'opening') { tip = t('queue.opening'); sub = t('queue.pauseHint'); }
     else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.pauseHint'); }
-    else { tip = t('queue.saving', { done: sv.done, total: sv.total, pct }); sub = t('queue.pauseHint'); }
+    else { tip = t('queue.saving', { got }); sub = t('queue.pauseHint'); }
     delete btn.dataset.icon;
   } else {
     const want = saved ? PH.check : PH.download;
@@ -2669,7 +2668,7 @@ function buildSavePop() {
   const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill); q.append(bar);
   const g = el('div', 'savepop__grid');
   const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); g.append(k, v); return { k, v }; };
-  const saved = row('pop.saved'), loading = row('pop.loading'), paused = row('pop.paused'), failed = row('pop.failed'), rest = row('pop.rest'), dur = row('pop.duration');
+  const saved = row('pop.saved'), now = row('pop.now'), queued = row('pop.queued'), paused = row('pop.paused'), failed = row('pop.failed'), rest = row('pop.rest'), dur = row('pop.duration');
   q.append(g);
   const acts = el('div', 'savepop__acts');
   const go = el('button', 'btn btn--solid'), pause = el('button', 'btn');
@@ -2691,14 +2690,14 @@ function buildSavePop() {
   const lib = popScope === null ? popSection(t('pop.library')) : null;
   if (lib) { lib.hidden = true; frag.append(lib); }
   savePop.replaceChildren(frag);
-  pop = { refs: { fill, saved, loading, paused, failed, rest, dur, go, pause, parts, lib } };
+  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, go, pause, parts, lib } };
 }
 
 /* the words and the buttons, from the queue as it is now */
 function paintSavePop() {
   if (savePop.hidden || !pop) return;
   const r = pop.refs, items = popItems();
-  const saved = items.filter(isSaved), loading = items.filter(isSaving), paused = items.filter(isPaused), failed = items.filter(isFailed);
+  const saved = items.filter(isSaved), loading = items.filter(isSaving), queued = items.filter(isQueued), paused = items.filter(isPaused), failed = items.filter(isFailed);
   const left = items.filter(it => !isSaved(it));
   const savedBytes = saved.reduce((a, it) => a + sizeOf(it), 0);
   const known = items.filter(it => it.dur), dur = known.reduce((a, it) => a + it.dur, 0);
@@ -2716,7 +2715,9 @@ function paintSavePop() {
   };
   r.fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%';
   put(r.saved, `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
-  put(r.loading, String(loading.length), loading[0] && loading[0].save.total ? `${loading[0].save.done} / ${loading[0].save.total}` : '', loading.length > 0);
+  const cur1 = loading[0];
+  put(r.now, cur1 ? cur1.name : '', cur1 && cur1.save.st === 'saving' ? (cur1.save.total ? `${progressWords(cur1.save)} · ${progressPct(cur1.save)}%` : t('queue.assembling')) : (cur1 ? t('queue.opening') : ''), loading.length > 0);
+  put(r.queued, String(queued.length), '', queued.length > 0);
   put(r.paused, String(paused.length), '', paused.length > 0);
   put(r.failed, String(failed.length), failed[0] ? failed[0].save.error : '', failed.length > 0);
   put(r.rest, String(left.length), t('pop.about', { size: fmtSize(estimate) }), estimate > 0 && left.length > 0);
@@ -2807,9 +2808,10 @@ queueList.addEventListener('click', e => {
 async function saveItem(it, stream = null) {
   if (isSaving(it) || isSaved(it)) return false;
   it.pauseWanted = false; it.held = false;
-  const quality = stream ? (stream.quality || null) : (it.save && it.save.quality) || null;
-  it.save = { st: 'opening', phase: 'fetch', done: 0, total: 0, mine: true, quality }; paintSaved();
-  const held = (job) => { it.save = { st: 'paused', phase: (job || {}).phase || 'fetch', done: (job || {}).done || 0, total: (job || {}).total || 0, quality: jobQuality(job) || quality }; paintSaved(); return false; };
+  const before = it.save || {};
+  const quality = stream ? (stream.quality || null) : before.quality || null;
+  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, mine: true, quality }; paintSaved();
+  const held = (job) => { const j = job || before; it.save = { st: 'paused', phase: j.phase || 'fetch', done: j.done || 0, total: j.total || 0, unit: j.unit, quality: jobQuality(job) || quality }; paintSaved(); return false; };
   try {
     if (!it.stream) await resolveItem(it);
     if (it.pauseWanted) return held(null);
@@ -2818,7 +2820,7 @@ async function saveItem(it, stream = null) {
     let job = await post('/api/save?stream=' + st.id);
     if (it.pauseWanted && job.state === 'working') job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     while (job.state === 'working') {
-      it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, mine: true, jobId: job.id, quality: jobQuality(job) || quality }; paintSaved();
+      it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, mine: true, jobId: job.id, quality: jobQuality(job) || quality }; paintSaved();
       await sleep(500);
       job = await api('/api/save/' + job.id);
     }
@@ -2828,7 +2830,7 @@ async function saveItem(it, stream = null) {
     await loadLibrary();
     return true;
   } catch (e) {
-    it.save = { st: 'failed', error: e.message, phase: (it.save || {}).phase, done: (it.save || {}).done || 0, total: (it.save || {}).total || 0, quality }; paintSaved();
+    it.save = { st: 'failed', error: e.message, phase: (it.save || {}).phase, done: (it.save || {}).done || 0, total: (it.save || {}).total || 0, unit: (it.save || {}).unit, quality }; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
     return false;
   }
@@ -2850,7 +2852,8 @@ async function pauseItems(items, whole = false) {
     if (whole) await post('/api/saves/pause');
     else await Promise.all(jobs.map(it => post('/api/save/pause?id=' + encodeURIComponent(it.save.jobId))));
   } catch (e) { toast(t('toast.pauseFail', { why: e.message })); return; }
-  for (const it of items) if (isSaving(it)) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, quality: it.save.quality || null };
+  for (const it of items) if (isSaving(it)) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
+  for (const it of items) if (isQueued(it)) it.save = null;   // held: leaves the run
   paintSaved();
   clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }
@@ -2861,11 +2864,20 @@ async function pauseItems(items, whole = false) {
 async function saveMany(items) {
   if (savingAll) return;
   savingAll = true; runHeld = false;
-  for (const it of items) it.held = false;
+  const todo = items.filter(it => !isSaved(it) && !isSaving(it));
+  for (const it of todo) { it.held = false; it.save = { st: 'queued', quality: (it.save && it.save.quality) || null, done: (it.save && it.save.done) || 0, total: (it.save && it.save.total) || 0, unit: it.save && it.save.unit }; }
   paintSaved();
   let n = 0;
-  try { for (const it of items) { if (runHeld) break; if (it.held || isSaved(it) || isSaving(it)) continue; if (await saveItem(it)) n++; } }
-  finally { savingAll = false; runHeld = false; paintSaved(); }
+  try {
+    for (const it of todo) {
+      if (runHeld) break;
+      if (it.held || isSaved(it) || isSaving(it) || !isQueued(it)) continue;
+      if (await saveItem(it)) n++;
+    }
+  } finally {
+    for (const it of todo) if (isQueued(it)) it.save = null;   // a run ended by a pause leaves the rest as they were
+    savingAll = false; runHeld = false; paintSaved();
+  }
   if (n) toast(t('toast.savedMany', { n }));
 }
 
