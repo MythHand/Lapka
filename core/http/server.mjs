@@ -114,6 +114,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         try { await openFolder(store.home); return json(res, 200, { ok: true }); }
         catch (e) { return json(res, 500, { error: e.message }); }
       }
+      if (ctx.quit && mutating && p === '/api/quit') { ctx.quit(); return json(res, 200, { ok: true }); }
       if (ctx.switchHome && mutating && p === '/api/home/pick') {
         try {
           const chosen = await pickFolder({ prompt: 'Папка Lapka', start: store.home });

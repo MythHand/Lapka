@@ -2039,6 +2039,39 @@ function buildGearMenu() {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
   });
+  /* the way out: a block like the others, with its heading, what it is and why, the
+     guide on GitHub in the reader's language, and the button; the first click only arms it */
+  const quitRow = document.createElement('div');
+  quitRow.className = 'menu__row menu__row--quit';
+  const quitHead = document.createElement('span');
+  quitHead.className = 'menu__rowlabel';
+  quitHead.textContent = t('set.quitHead');
+  const quitNote = document.createElement('div');
+  quitNote.className = 'cache__note quit__note';
+  quitNote.textContent = t('set.quitNote');
+  const quitGuide = document.createElement('a');
+  quitGuide.className = 'quit__guide';
+  quitGuide.target = '_blank'; quitGuide.rel = 'noopener';
+  quitGuide.href = lang === 'ru' ? 'https://github.com/MythHand/Lapka/blob/main/docs/INSTALL.ru.md#как-выключить' : 'https://github.com/MythHand/Lapka/blob/main/docs/INSTALL.md#how-to-stop';
+  quitGuide.textContent = t('set.quitGuide');
+  quitGuide.onclick = ev => ev.stopPropagation();
+  const quit = document.createElement('button');
+  quit.className = 'cache__clear quit';
+  quit.textContent = t('set.quit');
+  quit.onclick = async ev => {
+    ev.stopPropagation();
+    if (!quit.classList.contains('is-armed')) {
+      quit.classList.add('is-armed'); quit.textContent = t('set.quitSure');
+      setTimeout(() => { quit.classList.remove('is-armed'); quit.textContent = t('set.quit'); }, 4000);
+      return;
+    }
+    try { await post('/api/quit'); } catch (_) {}
+    closeMenus();
+    video.pause();
+    showNotice(t('notice.quit'), { mid: true });
+  };
+  quitRow.append(quitHead, quitNote, quitGuide, quit);
+  place.append(quitRow);
 
   gearMenu.append(keys, opts, place);
 }
@@ -2125,6 +2158,7 @@ function render() {
   const grid = state.view === 'grid';
   queueList.classList.toggle('queue__list--grid', grid && state.list.length > 0);
   queueEl.classList.toggle('queue--empty', !state.list.length);
+  applyQueueWidth();
   btnLocate.hidden = !cur() || !state.list.length;
   syncQueueClose();
 
@@ -2248,6 +2282,23 @@ function revealCurrent() {
   glideTo(queueList.scrollTop + r.top - box.top - box.height * 0.23);
 }
 btnLocate.onclick = revealCurrent;
+
+/* the queue's width. With files in it, the panel is as wide as the screen
+   allows or one step narrower, by the last choice made, and the choice is
+   kept. With nothing open, the panel shows the description and is always
+   wide. The button shows the state and swaps its glyph. */
+const btnQueueWidth = $('#btnQueueWidth');
+function applyQueueWidth() {
+  const chosen = strFromStore('lapka.queueNarrow', '0') === '1';
+  const narrow = chosen && state.list.length > 0;
+  workspace.classList.toggle('queue-narrow', narrow);
+  if (btnQueueWidth) btnQueueWidth.title = t(chosen ? 'queue.widen' : 'queue.narrow');
+}
+if (btnQueueWidth) btnQueueWidth.onclick = () => {
+  saveStr('lapka.queueNarrow', strFromStore('lapka.queueNarrow', '0') === '1' ? '0' : '1');
+  applyQueueWidth();
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 450);   // the deck and the menus refit once the slide is over
+};
 
 /* ── the project description in an empty queue ────────────────
    The order here carries meaning and is not accidental. At the top,
@@ -3630,14 +3681,15 @@ function syncStatus() {
    the favicon shows it, the same dark coin as before with a different
    mark inside. */
 const FAV = {
-  idle:  `<g transform="translate(4.369 5.500) scale(1.2158)"><path d="M10.4377 5.18182H12.1798V6.90909H13.9218V8.63636H17.4059V10.3636H13.9218V12.0909H12.1798V13.8182H10.4377V17.2727H8.69568V13.8182H6.95365V12.0909H5.21161V10.3636H1.72754V8.63636H5.21161V6.90909H6.95365V5.18182H8.69568V1.72727H10.4377V5.18182ZM17.4059 15.5455H15.6638V13.8182H17.4059V15.5455ZM4.34059 6.04545H2.59856V4.31818H4.34059V6.04545ZM14.7928 3.45455H13.0508V1.72727H14.7928V3.45455ZM12.1798 1.72727H10.4377V0H12.1798V1.72727Z" fill="#fff"/></g>`,
+  /* the paw of the seal, the first frame, drawn as rectangles: white on the black plate */
+  idle:  '<path d="M11.84 7.68h1.39v1.39h-1.39z M13.23 7.68h1.39v1.39h-1.39z M17.39 7.68h1.39v1.39h-1.39z M18.77 7.68h1.39v1.39h-1.39z M9.07 9.07h1.39v2.77h-1.39z M10.45 9.07h1.39v2.77h-1.39z M11.84 9.07h1.39v2.77h-1.39z M13.23 9.07h1.39v2.77h-1.39z M17.39 9.07h1.39v2.77h-1.39z M18.77 9.07h1.39v2.77h-1.39z M20.16 9.07h1.39v2.77h-1.39z M21.55 9.07h1.39v2.77h-1.39z M4.91 13.23h1.39v1.39h-1.39z M6.29 13.23h1.39v1.39h-1.39z M11.84 11.84h1.39v1.39h-1.39z M13.23 11.84h1.39v1.39h-1.39z M17.39 11.84h1.39v1.39h-1.39z M18.77 11.84h1.39v1.39h-1.39z M24.32 13.23h1.39v1.39h-1.39z M25.71 13.23h1.39v1.39h-1.39z M3.52 14.61h1.39v2.77h-1.39z M4.91 14.61h1.39v2.77h-1.39z M6.29 14.61h1.39v2.77h-1.39z M7.68 14.61h1.39v2.77h-1.39z M22.93 14.61h1.39v2.77h-1.39z M24.32 14.61h1.39v2.77h-1.39z M25.71 14.61h1.39v2.77h-1.39z M27.09 14.61h1.39v2.77h-1.39z M4.91 17.39h1.39v1.39h-1.39z M6.29 17.39h1.39v1.39h-1.39z M11.84 18.77h1.39v1.39h-1.39z M13.23 17.39h1.39v2.77h-1.39z M14.61 17.39h1.39v2.77h-1.39z M16 17.39h1.39v2.77h-1.39z M17.39 17.39h1.39v2.77h-1.39z M18.77 18.77h1.39v1.39h-1.39z M24.32 17.39h1.39v1.39h-1.39z M25.71 17.39h1.39v1.39h-1.39z M10.45 20.16h1.39v2.77h-1.39z M11.84 20.16h1.39v2.77h-1.39z M13.23 20.16h1.39v2.77h-1.39z M14.61 20.16h1.39v2.77h-1.39z M16 20.16h1.39v2.77h-1.39z M17.39 20.16h1.39v2.77h-1.39z M18.77 20.16h1.39v2.77h-1.39z M20.16 20.16h1.39v2.77h-1.39z M11.84 22.93h1.39v1.39h-1.39z M13.23 22.93h1.39v2.77h-1.39z M14.61 22.93h1.39v2.77h-1.39z M16 22.93h1.39v2.77h-1.39z M17.39 22.93h1.39v2.77h-1.39z M18.77 22.93h1.39v1.39h-1.39z" fill="#fff" shape-rendering="crispEdges"/>',
   play:  `<path d="M12.8 9.3 23 16l-10.2 6.7z" fill="#fff"/>`,
   pause: `<path d="M11.6 9.4h3.3v13.2h-3.3zM17.1 9.4h3.3v13.2h-3.3z" fill="#fff"/>`,
   busy:  `<path d="M10.3 8.8h11.4v2.3l-4.6 4.9 4.6 4.9v2.3H10.3v-2.3l4.6-4.9-4.6-4.9z" fill="#fff"/>`,
 };
 const favUrl = mark => 'data:image/svg+xml,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">' +
-  '<circle cx="16" cy="16" r="15" fill="#0b0b0c"/>' + mark + '</svg>');
+  '<rect width="32" height="32" rx="7" fill="#0b0b0c"/>' + mark + '</svg>');
 
 let favNow = '';
 function paintFavicon() {
