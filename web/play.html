@@ -39,7 +39,7 @@ v.addEventListener('error', () => say('видео не пошло: ' + (v.error 
    page, for the headless browser in the tests to read. */
 const probe = Number(q.get('probe'));
 if (probe) setTimeout(() => {
-  const pre = document.createElement('pre'); pre.id = 'pip-test-out';
+  const pre = document.createElement('pre'); pre.id = 'lapka-test-out';
   pre.textContent = JSON.stringify({ status: status.textContent, currentTime: v.currentTime, readyState: v.readyState,
     buffered: v.buffered.length ? v.buffered.end(v.buffered.length - 1) : 0, duration: v.duration, paused: v.paused, error: v.error && v.error.message });
   document.body.appendChild(pre);

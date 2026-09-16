@@ -1,14 +1,6 @@
 # Text files are stored with LF and checked out in the local style.
 * text=auto
 
-# The launchers keep the line endings of the system that runs them,
-# whatever the system that cloned the repository: a shell script with
-# CRLF will not start on macOS or Linux, and cmd.exe misreads a batch
-# file with bare LF.
-*.sh      text eol=lf
-*.command text eol=lf
-*.bat     text eol=crlf
-
 # Fonts and images are never diffed or converted.
 *.woff2 binary
 *.ttf   binary

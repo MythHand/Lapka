@@ -21,7 +21,7 @@ const LANG_DICT = (window.I18N && window.I18N.dict) || { en: {} };
 
 function pickLang() {
   let saved = null;
-  try { saved = localStorage.getItem('pip.lang'); } catch (_) {}
+  try { saved = localStorage.getItem('lapka.lang'); } catch (_) {}
   if (saved && LANG_DICT[saved]) return saved;
   const want = navigator.languages && navigator.languages.length
     ? navigator.languages : [navigator.language || 'en'];
@@ -97,7 +97,7 @@ function setLang(code) {
   lang = code;
   pluralRules = new Intl.PluralRules(lang);
   langNames = new Intl.DisplayNames([lang], { type: 'language' });
-  try { localStorage.setItem('pip.lang', code); } catch (_) {}
+  try { localStorage.setItem('lapka.lang', code); } catch (_) {}
   document.documentElement.lang = code;
   if (state.pipWin) state.pipWin.document.documentElement.lang = code;
   repaintUi();
@@ -323,19 +323,18 @@ const SETTINGS_V = '6';   // the defaults changed, so what was saved is dropped
 
 function loadSettings() {
   try {
-    if (localStorage.getItem('pip.set.v') !== SETTINGS_V) {
-      for (const s of SETTINGS) localStorage.removeItem('pip.' + s.key);
-      localStorage.removeItem('pip.autoUi');          // keys from earlier versions
-      localStorage.removeItem('pip.pipMode');
-      localStorage.removeItem('nocturne.pipMode');
-      localStorage.setItem('pip.set.v', SETTINGS_V);
+    if (localStorage.getItem('lapka.set.v') !== SETTINGS_V) {
+      for (const s of SETTINGS) localStorage.removeItem('lapka.' + s.key);
+      localStorage.removeItem('lapka.autoUi');          // keys from earlier versions
+      localStorage.removeItem('lapka.pipMode');
+      localStorage.setItem('lapka.set.v', SETTINGS_V);
     }
   } catch (_) { /* private mode, so just take the defaults */ }
 
   const out = {};
   for (const s of SETTINGS) {
     let v = null;
-    try { v = localStorage.getItem('pip.' + s.key); } catch (_) {}
+    try { v = localStorage.getItem('lapka.' + s.key); } catch (_) {}
     out[s.key] = s.opts.some(([val]) => val === v) ? v : s.def;
   }
   return out;
@@ -354,6 +353,17 @@ function loadSettings() {
    Local files are not restored: a File has no path on disk and a blob:
    URL dies with the tab. Only what the server can open again by path
    comes back. */
+/* what the browser kept under the old prefix is carried over once, then the old keys go */
+try {
+  for (const k of Object.keys(localStorage)) {
+    if (!k.startsWith('pip.')) continue;
+    const nk = 'lapka.' + k.slice(4);
+    if (localStorage.getItem(nk) == null) localStorage.setItem(nk, localStorage.getItem(k));
+    localStorage.removeItem(k);
+  }
+  localStorage.removeItem('nocturne.pipMode');
+} catch (_) { /* private mode */ }
+
 function numFromStore(key, def, lo, hi) {
   let v;
   try { v = Number(localStorage.getItem(key)); } catch (_) { return def; }
@@ -455,21 +465,21 @@ const state = {
   positions: {},     // series/episode/dub → seconds, mirrored from the server
   remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,
-  autoplay: strFromStore('pip.autoplay', '1') !== '0',
+  autoplay: strFromStore('lapka.autoplay', '1') !== '0',
   subPref: null,     // the subtitle track chosen by hand; null means off
   set: loadSettings(),   // the player settings, see SETTINGS
   cue: {             // subtitle styling, all within what ::cue can do
-    size: strFromStore('pip.cue.size', 'm'),
-    bg:   ['none', 'std'].includes(strFromStore('pip.cue.bg', 'shadow')) ? 'browser' : strFromStore('pip.cue.bg', 'shadow'),   // 'none' of old is the browser's look now
-    pos:  strFromStore('pip.cue.pos', 'auto'),
+    size: strFromStore('lapka.cue.size', 'm'),
+    bg:   ['none', 'std'].includes(strFromStore('lapka.cue.bg', 'shadow')) ? 'browser' : strFromStore('lapka.cue.bg', 'shadow'),   // 'none' of old is the browser's look now
+    pos:  strFromStore('lapka.cue.pos', 'auto'),
   },
   pipWin: null, errStreak: 0, seq: 0,
-  vol: numFromStore('pip.vol', 1, 0, 1),   // volume survives a reload
+  vol: numFromStore('lapka.vol', 1, 0, 1),   // volume survives a reload
   busy: false,             // a page is being read, the favicon shows it
   seekPreview: null,       // the position shown while seeking
-  view: strFromStore('pip.view', 'rows') === 'grid' ? 'grid' : 'rows',
+  view: strFromStore('lapka.view', 'rows') === 'grid' ? 'grid' : 'rows',
   /* the browser one by default: it has no address bar on top */
-  pipMode: strFromStore('pip.pipMode', 'native'),
+  pipMode: strFromStore('lapka.pipMode', 'native'),
 };
 
 /* A link to the source in the empty queue. An empty string hides it,
@@ -1662,7 +1672,7 @@ function applyCueLine() {
 
 function setCue(key, val) {
   state.cue[key] = val;
-  saveStr('pip.cue.' + key, val);
+  saveStr('lapka.cue.' + key, val);
   applyCueStyle();
   buildSubsMenu();
 }
@@ -2010,7 +2020,7 @@ function buildGearMenu() {
     segRow(opts, t(row.label), state.set[row.key],
            row.opts.map(([val, key]) => [val, t(key)]), val => {
       state.set[row.key] = val;
-      try { localStorage.setItem('pip.' + row.key, val); } catch (_) {}
+      try { localStorage.setItem('lapka.' + row.key, val); } catch (_) {}
       applySettings();
     });
   }
@@ -3099,7 +3109,7 @@ $('#btnClear').onclick = () => {
    middle of things. */
 function setView(v) {
   state.view = v;
-  try { localStorage.setItem('pip.view', v); } catch (_) {}
+  try { localStorage.setItem('lapka.view', v); } catch (_) {}
   paintView();
   render();
 }
@@ -3215,7 +3225,7 @@ function buildPipMenu() {
     b.onclick = () => {
       if (disabled) return;
       state.pipMode = m.id;
-      saveStr('pip.pipMode', m.id);
+      saveStr('lapka.pipMode', m.id);
       markPicked(b);
       toast(t('pip.switched', { name: t(m.main) }));
       if (state.pipWin) state.pipWin.close();
@@ -3350,7 +3360,7 @@ async function openDocPip() {
     win.document.head.append(c);
   });
 
-  win.document.title = cur() ? cur().name : 'PIP Player';
+  win.document.title = cur() ? cur().name : 'Lapka';
   /* The window has a root element of its own, and the chosen font and
      the language live on the root. Without them the floating window
      showed Fixel while the main one was set to Inter. */
@@ -3526,7 +3536,7 @@ video.addEventListener('volumechange', () => {
   /* not written on every step: a held arrow key produces dozens */
   state.vol = video.volume;
   clearTimeout(volT);
-  volT = setTimeout(() => { try { localStorage.setItem('pip.vol', String(state.vol)); } catch (_) {} }, 400);
+  volT = setTimeout(() => { try { localStorage.setItem('lapka.vol', String(state.vol)); } catch (_) {} }, 400);
 });
 video.addEventListener('ratechange', () => {
   btnRate.textContent = (video.playbackRate % 1 ? video.playbackRate : video.playbackRate.toFixed(0)) + '×';
@@ -3687,7 +3697,7 @@ function paintAuto() {
 }
 btnAuto.onclick = () => {
   state.autoplay = !state.autoplay;
-  saveStr('pip.autoplay', state.autoplay ? '1' : '0');
+  saveStr('lapka.autoplay', state.autoplay ? '1' : '0');
   paintAuto();
   toast(t(state.autoplay ? 'auto.toastOn' : 'auto.off'));
 };

@@ -88,7 +88,7 @@ const report = (budget, hold) => `
 <script>
 window.__report = obj => {
   const pre = document.createElement('pre');
-  pre.id = 'pip-test-out';
+  pre.id = 'lapka-test-out';
   pre.textContent = JSON.stringify(obj);
   document.body.append(pre);
 };
@@ -115,7 +115,7 @@ window.__tick = async () => {
 window.__step = name => { window.__at = name; };
 window.__at = 'start';
 setTimeout(() => {
-  if (document.getElementById('pip-test-out')) return;
+  if (document.getElementById('lapka-test-out')) return;
   let state = null;
   try { state = window.__state ? window.__state() : null; } catch (e) { state = String(e); }
   window.__report({ stalled: window.__at, state, errors: window.__errors });
@@ -190,7 +190,7 @@ export async function visit(url, { width = 1280, height = 800, budget = 5000 } =
       await new Promise(r => setTimeout(r, 100));
     }
     const html = await fsp.readFile(dump, 'utf8');
-    const m = /<pre id="pip-test-out">([\s\S]*?)<\/pre>/.exec(html);
+    const m = /<pre id="lapka-test-out">([\s\S]*?)<\/pre>/.exec(html);
     if (!m) throw new Error('the page reported nothing; it probably threw before the test ran');
     const unescape = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
