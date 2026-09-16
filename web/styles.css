@@ -1315,10 +1315,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   /* the keys as they were, the other two columns a quarter wider than the keys */
   min-width:min(1058px, calc(100vw - 60px));
   max-width:min(1058px, calc(100vw - 60px));
-  /* the menu starts 72px from the top, so the window leaves it all but
-     72px and a 16px margin at the bottom; tall enough for the three columns
-     to stand without a scroll on an ordinary screen, never the whole window */
-  max-height:min(780px, calc(100vh - 88px));
+  /* the height is the columns' own; the window alone caps it: the menu starts
+     72px from the top and keeps a 16px margin at the bottom, so a column
+     scrolls only when the window is too low for it */
+  max-height:calc(100vh - 88px);
 }
 /* Opening: the menu comes from the gear's side, sliding 60px left into
    place, fast at first and with no long crawl at the end, and the fade
