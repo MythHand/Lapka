@@ -173,9 +173,18 @@ disk and come back at the next start.
 
 ## Updating
 
-Download a fresh ZIP and unpack it over the old folder, or run `git pull` in
-the `Lapka` folder if you installed with git. Then `npm install` and
-`npm start` again. The settings and the chosen folder stay.
+The short way: double-click `update.command` (macOS) or `update.bat`
+(Windows), or run `./update.sh` on Linux. If the folder came by `git clone`,
+it pulls the newest version, installs what changed and starts Lapka again if
+it was running. If the folder came as a ZIP, it says where the new ZIP is.
+
+By hand: in the `Lapka` folder run `git pull`, then `npm install`, then start
+as usual. Not a second `git clone`: git refuses to write into a folder that
+already exists. Without git: download the new ZIP and unpack it over the old
+folder, replacing the files.
+
+Either way the settings and the chosen Lapka folder stay: they live outside
+the program's files.
 
 ## If something is off
 
