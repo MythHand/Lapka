@@ -1183,11 +1183,28 @@ body.pip-body::before{ display:none; }
    interface the plate goes and legibility comes from an outline */
 .ico-gear{ fill:currentColor; stroke:none; }
 
-video::cue{ color:#fff; font-family:var(--font); font-size:100%; background:transparent; text-shadow:0 1px 3px #000, 0 0 6px rgba(0,0,0,.95), 0 0 1px #000; }
-/* the choice is a class on the video: ::cue does not read variables reliably */
+/* the standard look is the browser's own, only its size is ours */
 video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; }  video.cue-size-xl::cue{ font-size:160%; }
-video.cue-bg-none::cue{ background:transparent; text-shadow:none; }
-video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
+
+/* Lapka's own subtitle layer. It lies over the video and under the rest of
+   the stage, takes no clicks, and is a size container: the cue is measured
+   in its height, the way the browser measures its own, so the text keeps its
+   proportion in the tab, in a narrow stage and in the floating window alike. */
+.cues{
+  position:absolute; inset:0; pointer-events:none; container-type:size;
+  display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:.2em;
+  padding:0 6% var(--cue-bottom, 9%);
+}
+.cues:empty{ display:none; }
+.cues.cue-pos-low{ --cue-bottom:3.5%; }
+.cues.cue-pos-high{ --cue-bottom:18%; }
+.cues.cue-size-s{ --cue-scale:.8; }  .cues.cue-size-l{ --cue-scale:1.28; }  .cues.cue-size-xl{ --cue-scale:1.6; }
+.cue{
+  max-width:100%; font-family:var(--font); font-size:calc(5cqh * var(--cue-scale, 1)); line-height:1.25;
+  color:#fff; text-align:center; white-space:pre-line; text-wrap:balance;
+}
+.cues.cue-bg-shadow .cue{ text-shadow:0 1px 3px #000, 0 0 6px rgba(0,0,0,.95), 0 0 1px #000; }
+.cues.cue-bg-plate .cue{ background:rgba(0,0,0,.72); padding:.08em .4em; border-radius:.18em; }
 
 /* setting switches inside the menu */
 /* the label above the options: they did not fit on one line */

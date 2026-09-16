@@ -17,6 +17,9 @@
     <section class="stage-host" id="stageHost">
       <div class="stage" id="stage" tabindex="0">
         <video id="video" playsinline></video>
+        <!-- Lapka's own subtitle layer: the browser draws the cues in its
+             standard look, in every other look they are drawn here -->
+        <div class="cues" id="cues"></div>
 
         <!-- While the picture plays in a PiP window, this stands in its place
              here, over the video area and under the rest of the player,

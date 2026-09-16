@@ -460,7 +460,7 @@ const state = {
   set: loadSettings(),   // the player settings, see SETTINGS
   cue: {             // subtitle styling, all within what ::cue can do
     size: strFromStore('pip.cue.size', 'm'),
-    bg:   strFromStore('pip.cue.bg', 'shadow'),
+    bg:   strFromStore('pip.cue.bg', 'shadow') === 'none' ? 'std' : strFromStore('pip.cue.bg', 'shadow'),   // 'none' of old is the standard look now
     pos:  strFromStore('pip.cue.pos', 'auto'),
   },
   pipWin: null, errStreak: 0, seq: 0,
@@ -1557,22 +1557,33 @@ function preferredSub(it) {
    simply removed leaves its last cue painted on the stage, so a track is
    switched off before it goes. Calls overlap (a source starts, the dub
    changes, a choice is made), so only the latest one attaches, and a track
-   already up for the same file is left alone. */
+   already up for the same file is left alone.
+
+   Two ways of drawing. In the standard look the track is showing and the
+   browser draws the cues itself, with the plate the system gives them (on a
+   Mac the system caption style is applied with !important and cannot be
+   restyled). In every other look the track is hidden, it still runs its
+   cues, and the active ones are drawn on Lapka's own layer over the video. */
+const cues = $('#cues');
 let subEl = null, subTicket = 0;
 const sameUrl = (a, b) => new URL(a, location.href).href === new URL(b, location.href).href;
+const ownCueLook = () => state.cue.bg !== 'std';
 
 function dropSubTrack() {
   for (const el of video.querySelectorAll('track')) {
-    try { if (el.track) el.track.mode = 'disabled'; } catch (_) {}
+    try { if (el.track) { el.track.oncuechange = null; el.track.mode = 'disabled'; } } catch (_) {}
     el.remove();
   }
   subEl = null;
+  renderCues();
 }
 
 function showSubTrack(el) {
   if (el !== subEl || !el.track) return;
-  el.track.mode = 'showing';
+  el.track.oncuechange = renderCues;
+  el.track.mode = ownCueLook() ? 'hidden' : 'showing';
   applyCueLine();
+  renderCues();
 }
 
 async function applySubs(it) {
@@ -1599,30 +1610,44 @@ async function applySubs(it) {
   setTimeout(() => showSubTrack(el), 200);
 }
 
-/* What can actually be controlled in WebVTT: size, backdrop and line
-   height. Everything else, the cue font, the horizontal position, ASS
-   styling, is set by the file itself and the browser does not expose
-   it. Size and backdrop are classes on the video element: ::cue reads
-   a class of its video, and the video is what moves into the extended
-   PiP window, so the look goes with it. */
+/* the active cues, drawn on the layer; the cue's own markup (italics,
+   voices) comes as the browser parsed it, nothing of the file is trusted raw */
+function renderCues() {
+  const tr = subEl && subEl.track;
+  if (!ownCueLook() || !tr || tr.mode === 'disabled') { cues.replaceChildren(); return; }
+  const out = [];
+  for (const cue of tr.activeCues || []) {
+    const d = document.createElement('div');
+    d.className = 'cue';
+    d.append(cue.getCueAsHTML ? cue.getCueAsHTML() : document.createTextNode(cue.text || ''));
+    out.push(d);
+  }
+  cues.replaceChildren(...out);
+}
+video.addEventListener('emptied', renderCues);
+
+/* What is controlled: size, backing and line height. In the standard look
+   only the size reaches the browser's cues; the backing and the position
+   are the browser's. In Lapka's looks all three are classes on the layer. */
 const CUE_SIZE = ['s', 'm', 'l', 'xl'];
-const CUE_BG = ['none', 'shadow', 'plate'];
+const CUE_BG = ['std', 'shadow', 'plate'];
 const CUE_POS = { low: -1, auto: 'auto', high: -4 };
 
 const CUE_UI = [
   /* S/M/L/XL are not translated: the letters read the same everywhere */
   { key: 'size', label: 'cue.size', opts: [['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']] },
-  { key: 'bg',   label: 'cue.bg',   opts: [['none', 'cue.bg.none'], ['shadow', 'cue.bg.shadow'], ['plate', 'cue.bg.plate']] },
+  { key: 'bg',   label: 'cue.bg',   opts: [['std', 'cue.bg.std'], ['shadow', 'cue.bg.shadow'], ['plate', 'cue.bg.plate']] },
   { key: 'pos',  label: 'cue.pos',  opts: [['low', 'cue.pos.low'], ['auto', 'cue.pos.auto'], ['high', 'cue.pos.high']] },
 ];
 
 function applyCueStyle() {
   const c = state.cue;
   for (const k of CUE_SIZE) video.classList.toggle('cue-size-' + k, c.size === k);
-  for (const k of CUE_BG) video.classList.toggle('cue-bg-' + k, c.bg === k);
-  applyCueLine();
+  cues.className = `cues cue-size-${c.size} cue-bg-${c.bg} cue-pos-${c.pos}`;
+  if (subEl) showSubTrack(subEl); else renderCues();
 }
 
+/* the line of the browser's own cues; the layer places its own by class */
 function applyCueLine() {
   const v = CUE_POS[state.cue.pos];
   if (!subEl || !subEl.track || !subEl.track.cues) return;
