@@ -66,6 +66,19 @@ With git, if you have it:
 git clone https://github.com/MythHand/Lapka.git
 ```
 
+## Step 3, the short way: the launcher
+
+In the unpacked folder there are `start.command` (macOS), `start.bat`
+(Windows) and `start.sh` (Linux). A double click on the first two does steps
+3 and 4 for you: checks Node.js, installs what is missing the first time,
+starts Lapka and opens it in the browser. Closing that window stops Lapka.
+
+On macOS the first double click may be refused with "cannot be opened because
+it is from an unidentified developer": right-click the file → Open, once.
+On Linux run it from a terminal: `./start.sh`.
+
+If the launcher worked, skip to step 5. The long way follows.
+
 ## Step 3. Open a terminal in the Lapka folder
 
 **macOS.** In Finder, right-click the `Lapka` folder → "New Terminal at Folder"

@@ -76,6 +76,11 @@ Open http://127.0.0.1:8800 in your browser. Chrome or Edge are recommended:
 the extended picture-in-picture window exists only there. To stop the server:
 Ctrl+C in the terminal.
 
+Or without the terminal: `start.command` on macOS and `start.bat` on Windows
+open by a double click, `./start.sh` on Linux. Each checks Node.js, installs
+what is missing the first time, starts Lapka and opens it in the browser;
+closing the window stops it.
+
 ![Settings: shortcuts, language and player, the Lapka folder, cache, the quality to save in](docs/media/setting.png)
 
 Lapka's files go into the folder you choose in the settings (the gear →
@@ -87,8 +92,8 @@ the port.
 
 In short: install Node.js from [nodejs.org](https://nodejs.org/) (the LTS
 button), download this project (the green **Code** button → **Download ZIP**),
-unpack it, open a terminal in that folder and run two commands, `npm install`
-and `npm start`. Then open http://127.0.0.1:8800 in the browser.
+unpack it and double-click `start.command` (macOS) or `start.bat` (Windows).
+The browser opens Lapka by itself.
 
 Step by step for macOS, Windows and Linux, ffmpeg and the usual troubles
 included: [docs/INSTALL.md](docs/INSTALL.md). If you are
