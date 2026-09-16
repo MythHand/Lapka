@@ -2418,7 +2418,7 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
-  if (e.target.closest('.item__save')) return isSaving(it) ? pauseLoading() : offerSave(it, e.target.closest('.item__save'));
+  if (e.target.closest('.item__save')) return saveMarkClick(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
 
@@ -2434,8 +2434,18 @@ const saveQualities = it => {
   return [...out.entries()].map(([label, stream]) => ({ label, stream }));
 };
 const saveMenu = $('#saveMenu');
+/* The mark of a row, clicked. What it does follows the row's state: a
+   save running is paused, one paused or failed is taken up again with the
+   quality it had, and only a fresh start asks for the quality when there
+   is more than one to choose from. */
+function saveMarkClick(it, btn) {
+  const sv = it.save;
+  if (isSaved(it)) return;
+  if (isSaving(it)) return pauseItems([it]);
+  if (sv && (sv.st === 'paused' || sv.st === 'failed')) return saveItem(it, streamOfQuality(it, sv.quality));
+  return offerSave(it, btn);
+}
 async function offerSave(it, btn) {
-  if (isSaved(it) || isSaving(it)) return;
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
   const opts = saveQualities(it);
   if (opts.length < 2) return saveItem(it, opts[0] && opts[0].stream);
@@ -2457,7 +2467,8 @@ async function offerSave(it, btn) {
 }
 document.addEventListener('click', e => { if (!e.target.closest('#saveMenu') && !e.target.closest('.item__save')) saveMenu.hidden = true; });
 
-/* the stream to save in the wanted quality, for saving many at once */
+/* the stream of a named quality, for taking a save up again the way it was started */
+const streamOfQuality = (it, quality) => (quality && (saveQualities(it).find(o => o.label === quality) || {}).stream) || null;
 const streamToSave = it => {
   const want = state.remote.settings?.saveQuality || 'auto';
   const opts = saveQualities(it);
@@ -2493,8 +2504,21 @@ async function loadLibrary() {
   paintSaved();
 }
 
-/* Saves the server runs by itself, taken up again after a start, and
-   the ones it could not finish: read now and then, shown on the rows. */
+/* ═══════════════ saving: state, poll, painters, popover, run ═══════════════
+   One state per row, in it.save:
+     null                      nothing asked, or done (saved is read from the library)
+     { st:'opening' }          the episode is being opened for the stream to save
+     { st:'saving', jobId }    the server assembles the file; done/total/phase from the job
+     { st:'paused' }           held by hand, keeps done/total and the quality it had
+     { st:'failed', error }    the server gave up; keeps done/total
+   mine: this page runs the job and paints it every half second; a job the
+   server runs by itself (taken up after a start) is read by the poll. */
+const isSaving = it => !!(it.save && (it.save.st === 'saving' || it.save.st === 'opening'));
+const isPaused = it => !!(it.save && it.save.st === 'paused');
+const isFailed = it => !!(it.save && it.save.st === 'failed');
+const jobQuality = job => (job && job.quality) || null;
+
+/* the server's jobs and records, read now and then, laid on the rows this page is not running itself */
 let savesT = null;
 async function watchSaves() {
   clearTimeout(savesT);
@@ -2502,12 +2526,13 @@ async function watchSaves() {
   try { d = await api('/api/saves'); } catch (_) { return; }
   let active = false;
   for (const it of state.list) {
-    if (it.save && !it.save.error && it.save.mine) continue;   // this page is running it and knows better
+    if (it.save && it.save.mine) continue;   // this page is running it and knows better
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { phase: job.phase, done: job.done, total: job.total, jobId: job.id }; active = true; }
-    else if (rec && (rec.error || rec.paused)) it.save = { error: rec.error || null, paused: !!rec.paused, done: rec.done || 0, total: rec.total || 0, phase: rec.phase };
+    if (job) { it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, jobId: job.id, quality: jobQuality(job) }; active = true; }
+    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, phase: rec.phase, quality: rec.quality || null };
+    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, phase: rec.phase, quality: rec.quality || null };
     else if (it.save && !it.save.mine) it.save = null;
   }
   paintSaved();
@@ -2515,7 +2540,7 @@ async function watchSaves() {
   else if (d.active.length) savesT = setTimeout(watchSaves, 3000);
 }
 
-/* every row's save mark, every part's count, the header's count */
+/* every row's mark, every part's count, the header's count, the popover */
 function paintSaved() {
   for (const li of queueList.children) {
     if (li.classList.contains('queue__group')) { paintGroupSave(li); continue; }
@@ -2527,44 +2552,46 @@ function paintSaved() {
   const all = state.list.length, done = state.list.filter(isSaved).length;
   saveCount.textContent = all ? `${done}/${all}` : '';
   btnSaveAll.classList.toggle('is-done', all > 0 && done === all);
-  btnSaveAll.classList.toggle('is-busy', savingAll);
-  paintSavePop();   // the popover, if up, follows in place: its nodes stay, only their words change
+  btnSaveAll.classList.toggle('is-busy', state.list.some(isSaving));
   btnSaveAll.hidden = !all;
+  paintSavePop();
 }
-/* The button of one row. The ring is drawn once and then only moved:
+
+/* The mark of one row. The ring is drawn once and then only moved:
    rebuilding it on every tick would take the tooltip down with it. A
-   save that failed keeps the ring where it stopped, in warning colour,
-   and says why. The text of the tooltip lives on the button, and the
-   tooltip shown now follows it. */
+   paused ring stands grey with the pause sign inside; a failed one keeps
+   its ring in warning colour and says why. The text of the tooltip lives
+   on the button, and the tooltip shown now follows it. */
 const RING = 2 * Math.PI * 9;
 function paintSaveButton(btn, it) {
   const saved = isSaved(it), sv = it.save;
-  const saving = isSaving(it), failed = !!(sv && sv.error), paused = !!(sv && sv.paused && !sv.error);
-  btn.classList.toggle('is-saved', saved && !saving && !failed && !paused);
+  const saving = isSaving(it), paused = isPaused(it), failed = isFailed(it);
+  btn.classList.toggle('is-saved', saved && !saving && !paused && !failed);
   btn.classList.toggle('is-saving', saving);
-  btn.classList.toggle('is-failed', failed);
   btn.classList.toggle('is-paused', paused);
+  btn.classList.toggle('is-failed', failed);
   let tip, sub = '';
-  if (saving || failed || paused) {
+  if (saving || paused || failed) {
     const p = sv.phase === 'assemble' ? 1 : sv.total ? sv.done / sv.total : 0;
     const pct = Math.round(p * 100);
     let ring = btn.querySelector('.ring');
     if (!ring) {
-      btn.innerHTML = `<svg class="ring" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(2)}"/></svg>`;
+      btn.innerHTML = `<svg class="ring" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(2)}"/></svg><i class="ring__pause"></i>`;
       ring = btn.querySelector('.ring');
     }
     ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
     ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
-    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct }) : ''; }
+    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = (sv.total ? t('queue.saveStopped', { done: sv.done, total: sv.total, pct }) + ' · ' : '') + t('queue.retryHint'); }
     else if (paused) { tip = t('queue.savePaused', { done: sv.done, total: sv.total, pct }); sub = t('queue.resumeHint'); }
+    else if (sv.st === 'opening') { tip = t('queue.opening'); sub = t('queue.pauseHint'); }
     else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.pauseHint'); }
     else { tip = t('queue.saving', { done: sv.done, total: sv.total, pct }); sub = t('queue.pauseHint'); }
+    delete btn.dataset.icon;
   } else {
     const want = saved ? PH.check : PH.download;
     if (btn.dataset.icon !== (saved ? 'check' : 'download')) { btn.innerHTML = phSvg(want); btn.dataset.icon = saved ? 'check' : 'download'; }
     tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
   }
-  if (saving || failed || paused) delete btn.dataset.icon;
   btn.dataset.tip = tip; btn.dataset.tipSub = sub;
   if (tipFor === btn) paintTip(btn);
 }
@@ -2603,10 +2630,19 @@ function paintGroupSave(li) {
   if (!el) return;
   el.querySelector('.queue__group-count').textContent = `${done}/${items.length}`;
   el.classList.toggle('is-done', items.length > 0 && done === items.length);
+  el.classList.toggle('is-busy', items.some(isSaving));
   el.title = t('queue.saveGroup');
 }
 
-/* the popover over the header's button: what the folder holds, in numbers */
+/* ── the popover ───────────────────────────────────────────────
+   Over the header's button for the whole queue, over a group's mark for
+   that part. Hovering previews it, a click pins it. It says what the part
+   or the queue holds and what is happening to it, and carries the buttons
+   that act on exactly that scope: start or take up everything in it that
+   is not saved, or pause what is loading in it. It is built once when it
+   opens and then painted in place: the nodes stay, so the button under the
+   pointer is the same button a moment later. Under the anchor, on the
+   body, so the queue panel cannot clip it. */
 let popT = null;
 const sizeOf = it => (state.saved.get(savedKey(it)) || []).reduce((a, b) => a + (b.size || 0), 0);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
@@ -2617,13 +2653,6 @@ function popRow(grid, k, v, small) {
   if (small) { val.append(' '); val.append(el('small', '', small)); }
   grid.append(val);
 }
-/* The popover: over the header's button for the whole queue, over a
-   group's mark for that part. Hovering previews it, a click pins it, and
-   the saving is started, or paused, by the button inside it, never by the
-   click that opened it. It is built once when it opens and then painted
-   in place: the nodes stay where they are, so the button under the
-   pointer is the same button a moment later. Under the anchor, on the
-   body, so the queue panel cannot clip it. */
 let popScope = null, popAnchor = null, popPinned = false, pop = null;
 function placeSavePop() {
   if (savePop.parentNode !== document.body) document.body.append(savePop);
@@ -2634,21 +2663,19 @@ function placeSavePop() {
 }
 const popItems = () => popScope === null ? state.list : state.list.filter(it => it.group === popScope);
 
-/* the skeleton: every node that will change is kept by name */
 function buildSavePop() {
-  const items = popItems();
   const season = popScope === null ? null : state.seasons.find(x => x.series.id === popScope);
   const q = popSection(popScope === null ? t('pop.queue') : (season ? `${season.ordinal} · ${season.series.title}` : t('pop.part')));
   const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill); q.append(bar);
   const g = el('div', 'savepop__grid');
-  const saved = el('span', 'savepop__v'), rest = el('span', 'savepop__v'), dur = el('span', 'savepop__v');
-  const kSaved = el('span', 'savepop__k', t('pop.saved')), kRest = el('span', 'savepop__k', t('pop.rest')), kDur = el('span', 'savepop__k', t('pop.duration'));
-  g.append(kSaved, saved, kRest, rest, kDur, dur);
+  const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); g.append(k, v); return { k, v }; };
+  const saved = row('pop.saved'), loading = row('pop.loading'), paused = row('pop.paused'), failed = row('pop.failed'), rest = row('pop.rest'), dur = row('pop.duration');
   q.append(g);
   const acts = el('div', 'savepop__acts');
-  const btn = el('button', 'btn'), left = el('span', 'savepop__left');
-  btn.onclick = ev => { ev.stopPropagation(); if (pop.running) pauseLoading(); else saveMany(popItems()); };
-  acts.append(btn, left); q.append(acts);
+  const go = el('button', 'btn btn--solid'), pause = el('button', 'btn');
+  go.onclick = ev => { ev.stopPropagation(); saveMany(popItems()); };
+  pause.onclick = ev => { ev.stopPropagation(); pauseItems(popItems(), popScope === null); };
+  acts.append(go, pause); q.append(acts);
   const frag = document.createDocumentFragment(); frag.append(q);
   const parts = [];
   if (popScope === null && state.seasons.length > 1) {
@@ -2664,13 +2691,15 @@ function buildSavePop() {
   const lib = popScope === null ? popSection(t('pop.library')) : null;
   if (lib) { lib.hidden = true; frag.append(lib); }
   savePop.replaceChildren(frag);
-  pop = { refs: { fill, saved, rest, dur, kRest, kDur, btn, left, parts, lib }, running: false };
+  pop = { refs: { fill, saved, loading, paused, failed, rest, dur, go, pause, parts, lib } };
 }
 
-/* the numbers and the button, from the queue as it is now */
+/* the words and the buttons, from the queue as it is now */
 function paintSavePop() {
   if (savePop.hidden || !pop) return;
-  const r = pop.refs, items = popItems(), saved = items.filter(isSaved), leftOver = items.filter(it => !isSaved(it));
+  const r = pop.refs, items = popItems();
+  const saved = items.filter(isSaved), loading = items.filter(isSaving), paused = items.filter(isPaused), failed = items.filter(isFailed);
+  const left = items.filter(it => !isSaved(it));
   const savedBytes = saved.reduce((a, it) => a + sizeOf(it), 0);
   const known = items.filter(it => it.dur), dur = known.reduce((a, it) => a + it.dur, 0);
   /* what the rest would take, judged by what is saved already: by the
@@ -2678,24 +2707,27 @@ function paintSavePop() {
   const savedDur = saved.reduce((a, it) => a + (it.dur || 0), 0);
   const perSec = savedBytes && savedDur ? savedBytes / savedDur : 0;
   const perEp = saved.length ? savedBytes / saved.length : 0;
-  const estimate = leftOver.reduce((a, it) => a + (it.dur && perSec ? it.dur * perSec : perEp), 0);
-  const small = (node, main, note) => { node.textContent = main; if (note) { const sm = document.createElement('small'); sm.textContent = note; node.append(' ', sm); } };
+  const estimate = left.reduce((a, it) => a + (it.dur && perSec ? it.dur * perSec : perEp), 0);
+  const put = (row, main, note, show = true) => {
+    row.k.hidden = row.v.hidden = !show;
+    if (!show) return;
+    row.v.textContent = main;
+    if (note) { const sm = document.createElement('small'); sm.textContent = note; row.v.append(' ', sm); }
+  };
   r.fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%';
-  small(r.saved, `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
-  r.kRest.hidden = r.rest.hidden = !estimate;
-  if (estimate) small(r.rest, `${leftOver.length}`, t('pop.about', { size: fmtSize(estimate) }));
-  r.kDur.hidden = r.dur.hidden = !dur;
-  if (dur) small(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '');
-  /* the button: a pause while anything here is loading, otherwise the start */
-  const running = items.some(isSaving);
-  pop.running = running;
-  r.btn.classList.toggle('btn--solid', !running);
-  if (running) { r.btn.textContent = t('pop.pause'); r.btn.disabled = false; }
-  else {
-    r.btn.textContent = leftOver.some(it => it.save && it.save.paused) ? t('pop.resume') : (popScope === null ? t('pop.download') : t('pop.downloadPart'));
-    r.btn.disabled = !leftOver.length || savingAll;
-  }
-  r.left.textContent = leftOver.length && !running ? t('pop.left', { n: leftOver.length }) : '';
+  put(r.saved, `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
+  put(r.loading, String(loading.length), loading[0] && loading[0].save.total ? `${loading[0].save.done} / ${loading[0].save.total}` : '', loading.length > 0);
+  put(r.paused, String(paused.length), '', paused.length > 0);
+  put(r.failed, String(failed.length), failed[0] ? failed[0].save.error : '', failed.length > 0);
+  put(r.rest, String(left.length), t('pop.about', { size: fmtSize(estimate) }), estimate > 0 && left.length > 0);
+  put(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '', dur > 0);
+  /* the buttons: start or take up what is not saved here; pause what loads here */
+  const toGo = left.filter(it => !isSaving(it));
+  r.go.hidden = !toGo.length;
+  r.go.disabled = savingAll;                 // one run at a time: while one goes, another waits for it
+  r.go.textContent = (paused.length || failed.length ? t(popScope === null ? 'pop.resumeAll' : 'pop.resumePart') : t(popScope === null ? 'pop.download' : 'pop.downloadPart')) + ` · ${toGo.length}`;
+  r.pause.hidden = !loading.length;
+  r.pause.textContent = t(popScope === null ? 'pop.pauseAll' : 'pop.pausePart');
   for (const part of r.parts) {
     const its = items.filter(it => it.seriesId === part.id), done = its.filter(isSaved);
     part.c.textContent = `${done.length}/${its.length}`;
@@ -2755,70 +2787,87 @@ btnSaveAll.addEventListener('pointerleave', hideSavePop);
 savePop.addEventListener('pointerenter', () => clearTimeout(popT));
 savePop.addEventListener('pointerleave', hideSavePop);
 savePop.addEventListener('click', e => e.stopPropagation());
-document.addEventListener('click', e => { if (popPinned && !e.target.closest('#btnSaveAll')) unpinSavePop(); });
+document.addEventListener('click', e => { if (popPinned && !e.target.closest('#btnSaveAll') && !e.target.closest('.queue__group-save')) unpinSavePop(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned) unpinSavePop(); });
+/* the header's button and a group's mark open their popovers; nothing starts from the click itself */
+btnSaveAll.onclick = () => { if (popPinned && popScope === null) return unpinSavePop(); pinSavePop(null); };
+queueList.addEventListener('click', e => {
+  const g = e.target.closest('.queue__group-save');
+  if (!g) return;
+  e.stopPropagation();
+  const li = g.closest('.queue__group');
+  if (popPinned && popScope === li.dataset.group) return unpinSavePop();
+  pinSavePop(li.dataset.group, g);
+});
 
-const isSaving = it => !!(it.save && !it.save.error && !it.save.paused);
-
-/* One save, start to end. The row is marked at once, before the episode is
-   even opened, so a pause asked for in that window is honoured too: the
-   flag is read after the episode opens and again as soon as the server
-   has given the job its id. */
+/* ── one save, start to end ────────────────────────────────────
+   The row is marked at once, before the episode is even opened, so a
+   pause asked for in that window is honoured too: the wish is read after
+   the episode opens and again as soon as the server has named the job. */
 async function saveItem(it, stream = null) {
   if (isSaving(it) || isSaved(it)) return false;
-  it.pauseWanted = false;
-  it.save = { phase: 'fetch', done: 0, total: 0, mine: true }; paintSaved();
-  const held = () => { it.save = { phase: 'fetch', done: 0, total: 0, paused: true }; paintSaved(); return false; };
+  it.pauseWanted = false; it.held = false;
+  const quality = stream ? (stream.quality || null) : (it.save && it.save.quality) || null;
+  it.save = { st: 'opening', phase: 'fetch', done: 0, total: 0, mine: true, quality }; paintSaved();
+  const held = (job) => { it.save = { st: 'paused', phase: (job || {}).phase || 'fetch', done: (job || {}).done || 0, total: (job || {}).total || 0, quality: jobQuality(job) || quality }; paintSaved(); return false; };
   try {
     if (!it.stream) await resolveItem(it);
-    if (it.pauseWanted) return held();
-    const st = stream || streamToSave(it);
+    if (it.pauseWanted) return held(null);
+    const st = stream || streamOfQuality(it, quality) || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
     let job = await post('/api/save?stream=' + st.id);
     if (it.pauseWanted && job.state === 'working') job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     while (job.state === 'working') {
-      it.save = { phase: job.phase, done: job.done, total: job.total, mine: true, jobId: job.id }; paintSaved();
+      it.save = { st: 'saving', phase: job.phase, done: job.done, total: job.total, mine: true, jobId: job.id, quality: jobQuality(job) || quality }; paintSaved();
       await sleep(500);
       job = await api('/api/save/' + job.id);
     }
-    if (job.state === 'paused') { it.save = { phase: job.phase, done: job.done, total: job.total, paused: true }; paintSaved(); return false; }
+    if (job.state === 'paused') return held(job);
     if (job.state !== 'done') throw new Error(job.error || '?');
     it.save = null;
     await loadLibrary();
     return true;
   } catch (e) {
-    it.save = { ...(it.save || {}), error: e.message, mine: false }; paintSaved();
+    it.save = { st: 'failed', error: e.message, phase: (it.save || {}).phase, done: (it.save || {}).done || 0, total: (it.save || {}).total || 0, quality }; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
     return false;
   }
 }
 
-/* A pause holds the whole loading, whatever asked for it: the row's ring
-   or the button in a popover. The server pauses every job it runs, its own
-   resume loop included, and each record keeps where it got to; the run over
-   many episodes on this page ends here; a save still opening its episode is
-   held as soon as it can be. Nothing continues until a hand asks. */
+/* ── the pause, by scope ───────────────────────────────────────
+   A row's ring pauses that row. A part's button pauses the rows of that
+   part: the ones loading are paused on the server, the ones waiting their
+   turn in a run are held, and the run goes on with the rest. The queue's
+   button pauses everything, the server's own jobs and its resume loop
+   included. Each paused row keeps where it got to and the quality it had,
+   and waits for a hand. */
 let savingAll = false, runHeld = false;
-async function pauseLoading() {
-  runHeld = true;
-  for (const it of state.list) if (isSaving(it)) it.pauseWanted = true;
-  try { await post('/api/saves/pause'); } catch (_) {}
-  for (const it of state.list) if (isSaving(it)) it.save = { phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, paused: true };
+async function pauseItems(items, whole = false) {
+  if (whole) runHeld = true;
+  for (const it of items) if (!isSaved(it)) { it.held = true; if (isSaving(it)) it.pauseWanted = true; }
+  const jobs = items.filter(it => isSaving(it) && it.save.jobId);
+  try {
+    if (whole) await post('/api/saves/pause');
+    else await Promise.all(jobs.map(it => post('/api/save/pause?id=' + encodeURIComponent(it.save.jobId))));
+  } catch (e) { toast(t('toast.pauseFail', { why: e.message })); return; }
+  for (const it of items) if (isSaving(it)) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, quality: it.save.quality || null };
   paintSaved();
   clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }
 
-/* several episodes, one after another: the server assembles one file at a time anyway */
+/* several rows, one after another: the server assembles one file at a
+   time anyway. A row held by a pause of its part is skipped; a pause of
+   the whole queue ends the run. */
 async function saveMany(items) {
   if (savingAll) return;
-  savingAll = true; runHeld = false; paintSaved();
+  savingAll = true; runHeld = false;
+  for (const it of items) it.held = false;
+  paintSaved();
   let n = 0;
-  try { for (const it of items) { if (runHeld) break; if (!isSaved(it)) { if (await saveItem(it)) n++; } } }
+  try { for (const it of items) { if (runHeld) break; if (it.held || isSaved(it) || isSaving(it)) continue; if (await saveItem(it)) n++; } }
   finally { savingAll = false; runHeld = false; paintSaved(); }
   if (n) toast(t('toast.savedMany', { n }));
 }
-/* the header's button opens its popover; the saving starts from the button inside */
-btnSaveAll.onclick = () => { if (popPinned && popScope === null) return unpinSavePop(); pinSavePop(null); };
 
 function removeItem(it) {
   const i = idxOf(it), wasCurrent = it === cur();

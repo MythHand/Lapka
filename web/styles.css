@@ -1471,6 +1471,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .queue__group-save:hover{ color:var(--tx-1); background:var(--glass-hi); }
 .queue__group-save .ph{ width:14px; height:14px; fill:currentColor; }
 .queue__group-save.is-done{ color:var(--tx-2); } .queue__group-save.is-done .ph{ display:none; }
+.queue__group-save.is-busy .ph{ animation:pulse 1s ease-in-out infinite; }
 .queue__group-title{ font-family:var(--font); letter-spacing:var(--track); color:var(--tx-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
 .queue__group-year{ font-variant-numeric:tabular-nums; }
 .queue__group-kind{ padding:1px .45em; border:1px solid var(--line-2); border-radius:6px; font-size:calc(11px + var(--fs)); }
@@ -1494,9 +1495,13 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .item__save.is-failed{ opacity:1; }
 .item__save.is-failed .ring__fill{ stroke:#e0a24a; }
 .item__save.is-failed .ring__track{ stroke:rgba(224,162,74,.35); }
-/* paused: the ring stays where it got to, quiet, and waits for a click */
+/* paused: the ring stays where it got to, grey, with the pause sign inside; a click takes it up */
+.item__save{ position:relative; }
 .item__save.is-paused{ opacity:1; }
 .item__save.is-paused .ring__fill{ stroke:var(--tx-3); }
+.ring__pause{ display:none; position:absolute; left:50%; top:50%; width:2px; height:7px; margin:-3.5px 0 0 -3px; background:var(--tx-2); box-shadow:4px 0 0 var(--tx-2); }
+.item__save.is-paused .ring__pause{ display:block; }
+.item__save.is-paused:hover .ring__pause{ background:var(--tx-1); box-shadow:4px 0 0 var(--tx-1); }
 .item__save:hover{ color:var(--tx-1); background:var(--glass-hi); }
 .item__save .ph{ width:16px; height:16px; fill:currentColor; }
 
@@ -1554,9 +1559,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .savepop__parts .c.is-done{ color:var(--tx-3); }
 .savepop__bar{ height:4px; margin:0 0 12px; border-radius:2px; background:var(--glass-hi); overflow:hidden; }
 .savepop__bar i{ display:block; height:100%; background:var(--tx-2); border-radius:2px; }
-.savepop__acts{ display:flex; align-items:center; gap:12px; margin-top:14px; }
+.savepop__acts{ display:flex; align-items:center; gap:8px; margin-top:14px; }
+.savepop__acts:not(:has(.btn:not([hidden]))){ display:none; }
 .savepop__acts .btn{ height:var(--ctl-h); }
-.savepop__left{ font-family:var(--mono); font-size:calc(12px + var(--fs)); color:var(--tx-3); }
 .savepop.is-pinned{ box-shadow:var(--shadow), 0 0 0 1px var(--line-3); }
 .savepop__path{
   display:inline-flex; align-items:center; gap:8px; max-width:100%; margin-top:12px;

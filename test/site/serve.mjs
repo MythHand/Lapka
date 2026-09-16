@@ -66,6 +66,8 @@ export function startSite({ port = 0, media } = {}) {
       const file = path.join(media, m[1]);
       let st;
       try { st = await fsp.stat(file); } catch { return notFound(res); }
+      /* SITE_SLOW_MS: every segment waits this long, so a save takes real time (for trying pauses by hand) */
+      if (process.env.SITE_SLOW_MS && /\.(ts|mp4)$/.test(file) && !req.headers.range) await new Promise(r => setTimeout(r, Number(process.env.SITE_SLOW_MS)));
       const type = TYPES[path.extname(file)] || 'application/octet-stream';
       const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
       if (range && (range[1] || range[2])) {
