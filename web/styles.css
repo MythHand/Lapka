@@ -1194,9 +1194,8 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
 .menu__row{ display:flex; flex-direction:column; gap:9px; padding:12px; }
 .menu__row + .menu__row{ border-top:1px solid rgba(255,255,255,.055); }
 .menu__rowlabel{
-  font-size:calc(13px + var(--fs)); line-height:1.4; color:var(--tx-1);
+  font-size:calc(12.5px + var(--fs)); line-height:1.4; color:var(--tx-2);
 }
-.menu__rowlabel::before{ content:'› '; color:var(--tx-3); }
 .seg2{ display:flex; gap:6px; }
 .seg2 button{
   flex:1; min-width:0; padding:7px 6px; border-radius:var(--ctl-r);
@@ -1444,7 +1443,7 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
   color:var(--tx-1); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0; line-height:1;
 }
 .queue__group-label::before{ content:'████▌'; font-weight:400; }
-.queue__group-label::after{ content:'▐███'; font-weight:400; color:var(--tx-3); }
+.queue__group-label::after{ content:'▐'; font-weight:400; color:var(--tx-3); }
 .queue__group-label .n{ display:inline-block; min-width:3ch; text-align:center; }
 .queue__group + .item, .queue__group + .tile{ border-top:0; }
 /* the number as a bookmark: a light tab from the panel's edge, rounded on its free side */
