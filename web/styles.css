@@ -749,7 +749,9 @@ svg.ph{ fill:currentColor; stroke:none; }
   box-shadow:24px 0 60px rgba(0,0,0,.5);
   display:flex; flex-direction:column; overflow:hidden;
   transform:translateX(-101%);
-  transition:transform var(--slide);
+  /* the width moves with the same ease and time as the frame beside it, so a
+     change of width never jumps */
+  transition:transform var(--slide), width var(--slide);
 }
 .workspace.queue-open .queue{ transform:none; }
 /* While the queue is empty the view and order controls have nothing to
