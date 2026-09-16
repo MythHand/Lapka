@@ -295,7 +295,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 .notice{
   position:absolute; top:18px; left:calc(50% + var(--shift) / 2);
   transform:translateX(-50%) translateY(-8px);
-  z-index:5; display:none; align-items:center; gap:12px;
+  z-index:8; display:none; align-items:center; gap:12px;   /* over the empty screen (7): a question asked there must be seen */
   max-width:min(92%, 640px);
   padding:11px 12px 11px 16px; border-radius:var(--r-lg);
   background:var(--glass); backdrop-filter:blur(24px) saturate(1.3);
@@ -1620,8 +1620,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .home__acts .cache__clear{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
 
 /* ── the busy line: in the middle of the picture, a spinner for an icon ── */
-.notice.notice--busy{ top:50%; transform:translateX(-50%) translateY(-50%); font-size:calc(14px + var(--fs)); padding:14px 16px 14px 18px; }
-.notice.notice--busy.show{ transform:translateX(-50%) translateY(-50%); }
+/* in the middle of the picture: every busy line, and a question that must be seen */
+.notice.notice--mid, .notice.notice--mid.show{ top:50%; transform:translateX(-50%) translateY(-50%); }
+.notice.notice--busy{ font-size:calc(14px + var(--fs)); padding:14px 16px 14px 18px; }
 .notice.notice--busy .notice__ico{ animation:notice-spin 1s linear infinite; }
 @keyframes notice-spin{ to{ transform:rotate(360deg); } }
 

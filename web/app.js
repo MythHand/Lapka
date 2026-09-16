@@ -460,7 +460,7 @@ const state = {
   set: loadSettings(),   // the player settings, see SETTINGS
   cue: {             // subtitle styling, all within what ::cue can do
     size: strFromStore('pip.cue.size', 'm'),
-    bg:   strFromStore('pip.cue.bg', 'shadow') === 'none' ? 'std' : strFromStore('pip.cue.bg', 'shadow'),   // 'none' of old is the standard look now
+    bg:   ['none', 'std'].includes(strFromStore('pip.cue.bg', 'shadow')) ? 'browser' : strFromStore('pip.cue.bg', 'shadow'),   // 'none' of old is the browser's look now
     pos:  strFromStore('pip.cue.pos', 'auto'),
   },
   pipWin: null, errStreak: 0, seq: 0,
@@ -1559,7 +1559,7 @@ function preferredSub(it) {
    changes, a choice is made), so only the latest one attaches, and a track
    already up for the same file is left alone.
 
-   Two ways of drawing. In the standard look the track is showing and the
+   Two ways of drawing. In the browser's look the track is showing and the
    browser draws the cues itself, with the plate the system gives them (on a
    Mac the system caption style is applied with !important and cannot be
    restyled). In every other look the track is hidden, it still runs its
@@ -1567,7 +1567,7 @@ function preferredSub(it) {
 const cues = $('#cues');
 let subEl = null, subTicket = 0;
 const sameUrl = (a, b) => new URL(a, location.href).href === new URL(b, location.href).href;
-const ownCueLook = () => state.cue.bg !== 'std';
+const ownCueLook = () => state.cue.bg !== 'browser';
 
 function dropSubTrack() {
   for (const el of video.querySelectorAll('track')) {
@@ -1626,17 +1626,17 @@ function renderCues() {
 }
 video.addEventListener('emptied', renderCues);
 
-/* What is controlled: size, backing and line height. In the standard look
+/* What is controlled: size, backing and line height. In the browser's look
    only the size reaches the browser's cues; the backing and the position
    are the browser's. In Lapka's looks all three are classes on the layer. */
 const CUE_SIZE = ['s', 'm', 'l', 'xl'];
-const CUE_BG = ['std', 'shadow', 'plate'];
+const CUE_BG = ['browser', 'shadow', 'plate'];
 const CUE_POS = { low: -1, auto: 'auto', high: -4 };
 
 const CUE_UI = [
   /* S/M/L/XL are not translated: the letters read the same everywhere */
   { key: 'size', label: 'cue.size', opts: [['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']] },
-  { key: 'bg',   label: 'cue.bg',   opts: [['std', 'cue.bg.std'], ['shadow', 'cue.bg.shadow'], ['plate', 'cue.bg.plate']] },
+  { key: 'bg',   label: 'cue.bg',   opts: [['browser', 'cue.bg.browser'], ['shadow', 'cue.bg.shadow'], ['plate', 'cue.bg.plate']] },
   { key: 'pos',  label: 'cue.pos',  opts: [['low', 'cue.pos.low'], ['auto', 'cue.pos.auto'], ['high', 'cue.pos.high']] },
 ];
 
@@ -1911,7 +1911,7 @@ function homeRow(col) {
       /* the old folder holds a library: taken along, or left where it is */
       if (r.hasContent) {
         closeMenus();
-        showNotice(t('notice.homeMove', { path: r.chosen }), { action: t('notice.homeMoveGo'), onAction: async () => {
+        showNotice(t('notice.homeMove', { path: r.chosen }), { mid: true, action: t('notice.homeMoveGo'), onAction: async () => {
           try { const m = await post('/api/home?path=' + encodeURIComponent(r.chosen) + '&move=1'); toast(t('toast.homeMoved', { path: m.home })); loadLibrary(); }
           catch (e) { toast(t('toast.homeFail', { why: e.message })); }
         }, onClose: async () => {
@@ -2065,18 +2065,21 @@ let noticeDo = null, noticeUndo = null, noticeKind = null;
 /* busy: the player is working (opening, waiting, trying another
    source); the line stands in the middle of the picture with a
    spinner, so a pause never reads as a dead player */
-function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false } = {}) {
+/* mid: the line stands in the middle of the picture, where a question is
+   seen at once; a busy line always stands there */
+function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false } = {}) {
   noticeText.textContent = text;
   const btn = $('#noticeAction');
   btn.hidden = !action;
   btn.textContent = action || '';
   noticeDo = onAction; noticeUndo = onClose; noticeKind = kind;
   notice.classList.toggle('notice--busy', busy);
+  notice.classList.toggle('notice--mid', busy || mid);
   notice.classList.add('show');
 }
 function hideNotice(kind = null) {
   if (kind && noticeKind !== kind) return;   // another line is up: leave it
-  notice.classList.remove('show', 'notice--busy'); noticeDo = null; noticeUndo = null; noticeKind = null;
+  notice.classList.remove('show', 'notice--busy', 'notice--mid'); noticeDo = null; noticeUndo = null; noticeKind = null;
 }
 /* the busy lines: what is being opened, a source that is slow to answer */
 let loadingT = 0, stallT = 0;

@@ -1,8 +1,17 @@
-The MIT License in LICENSE covers the code of this project. It does not
-cover the MythHand name, logo, mark and avatar: the files
-assets/logo.svg, assets/logo-white.svg, assets/symbol.svg and
-assets/avatar.svg, and the same drawings built into index.html and
-app.js. All rights to them are reserved by MythHand. They may not be
-used, copied or modified, in a copy of this project or anywhere else,
-without written permission from MythHand. Naming MythHand as the origin
-of the code is allowed.
+# Знаки и имена
+
+Лицензия AGPL-3.0 в файле LICENSE распространяется на код Lapka. Она не
+распространяется на:
+
+- имя **Lapka** и его написание в интерфейсе;
+- **печать Lapka** — лапу и надпись LAPKA, набранные символами, во всех кадрах
+  анимации, как они нарисованы в `web/app.js`;
+- имя, знак и аватар **MythHand**, включая мини-знак MythHand в интерфейсе.
+
+Все права на них принадлежат MythHand. Их нельзя использовать, копировать или
+переделывать ни в копии этого проекта, ни где-либо ещё без письменного
+разрешения MythHand. Форк проекта должен идти под своим именем и своим знаком.
+Указывать MythHand как источник кода можно и нужно.
+
+Шрифты в `web/assets/fonts` принадлежат их авторам и идут под собственными
+лицензиями (SIL Open Font License, файл OFL.txt рядом с каждым шрифтом).
