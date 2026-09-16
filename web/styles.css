@@ -502,8 +502,8 @@ svg.ph{ fill:currentColor; stroke:none; }
 .menu__item.sel .menu__tick{ opacity:1; }
 .menu__body{ flex:1; min-width:0; }
 .menu__main{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.menu__sub{ display:block; font-family:var(--mono); font-size:calc(11.5px + var(--fs)); letter-spacing:0; color:var(--tx-3); margin-top:3px; line-height:1.45; }
-.menu__empty{ padding:14px 12px; font-family:var(--mono); font-size:calc(12.5px + var(--fs)); color:var(--tx-3); line-height:1.6; }
+.menu__sub{ display:block; font-size:calc(11.5px + var(--fs)); color:var(--tx-3); margin-top:3px; line-height:1.45; }
+.menu__empty{ padding:14px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-3); line-height:1.6; }
 .menu__item:disabled{ opacity:.42; cursor:default; }
 .menu__item:disabled:hover{ background:none; color:var(--tx-2); }
 
@@ -1194,7 +1194,7 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
 .menu__row{ display:flex; flex-direction:column; gap:9px; padding:12px; }
 .menu__row + .menu__row{ border-top:1px solid rgba(255,255,255,.055); }
 .menu__rowlabel{
-  font-family:var(--mono); font-size:calc(13px + var(--fs)); letter-spacing:0; line-height:1.4; color:var(--tx-1);
+  font-size:calc(13px + var(--fs)); line-height:1.4; color:var(--tx-1);
 }
 .menu__rowlabel::before{ content:'› '; color:var(--tx-3); }
 .seg2{ display:flex; gap:6px; }
@@ -1328,7 +1328,7 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
 /* the list of keyboard shortcuts */
 .keys__row{
   display:flex; align-items:baseline; gap:10px;
-  padding:5px 12px; font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2);
+  padding:5px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
 }
 .keys__caps{ flex:0 0 96px; display:flex; gap:4px; flex-wrap:wrap; }
 .keys__caps kbd{
@@ -1436,12 +1436,18 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
   padding:14px 14px 6px 0; margin:0;
   font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3);
 }
+/* the tab of the group is drawn, not boxed: a bar of block glyphs from the
+   screen's edge, the number, a shorter bar after it; the number sits in a
+   cell of fixed width, so every tab is the same width whatever it holds */
+.queue__group-label{
+  flex:none; display:inline-flex; align-items:center; white-space:pre;
+  color:var(--tx-1); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0; line-height:1;
+}
+.queue__group-label::before{ content:'████▌'; font-weight:400; }
+.queue__group-label::after{ content:'▐███'; font-weight:400; color:var(--tx-3); }
+.queue__group-label .n{ display:inline-block; min-width:3ch; text-align:center; }
 .queue__group + .item, .queue__group + .tile{ border-top:0; }
 /* the number as a bookmark: a light tab from the panel's edge, rounded on its free side */
-.queue__group-label{
-  flex:none; padding:3px 12px 3px 14px; border-radius:0 6px 6px 0;
-  color:var(--s-0); background:var(--tx-1); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0;
-}
 .queue__group-save{
   flex:none; margin-left:auto; display:inline-flex; align-items:center; gap:4px; padding:2px 6px; border-radius:8px;
   color:var(--tx-3); cursor:pointer; text-transform:none; letter-spacing:var(--track); font-variant-numeric:tabular-nums;
@@ -1489,7 +1495,7 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
 
 /* ── the place: the folder and the cache ────────────────────── */
 .home__acts{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.home__manual{ font-family:var(--mono); font-size:calc(12px + var(--fs)); color:var(--tx-3); background:none; border:0; cursor:pointer; text-decoration:underline; padding:4px 2px; }
+.home__manual{ font:inherit; font-size:calc(12px + var(--fs)); color:var(--tx-3); background:none; border:0; cursor:pointer; text-decoration:underline; padding:4px 2px; }
 .home__manual:hover{ color:var(--tx-1); }
 
 /* ── saving the whole queue, from its header ────────────────── */
@@ -1516,7 +1522,6 @@ video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
 .savepop__sec{ margin-top:18px; }
 .savepop__sec:first-child{ margin-top:0; }
 .savepop__head{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); margin-bottom:10px; }
-.savepop__head::before{ content:'› '; }
 .savepop__grid, .savepop__parts{ font-family:var(--mono); letter-spacing:0; }
 .savepop__grid{ display:grid; grid-template-columns:max-content 1fr; column-gap:20px; row-gap:9px; align-items:baseline; }
 .savepop__k{ color:var(--tx-3); white-space:nowrap; }

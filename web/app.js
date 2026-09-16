@@ -1553,43 +1553,60 @@ function preferredSub(it) {
   return byLang ? byLang.index : null;
 }
 
-/* the track is attached to video as a separate track element */
+/* One track element on the video at a time, owned here. A track that is
+   simply removed leaves its last cue painted on the stage, so a track is
+   switched off before it goes. Calls overlap (a source starts, the dub
+   changes, a choice is made), so only the latest one attaches, and a track
+   already up for the same file is left alone. */
+let subEl = null, subTicket = 0;
+const sameUrl = (a, b) => new URL(a, location.href).href === new URL(b, location.href).href;
+
+function dropSubTrack() {
+  for (const el of video.querySelectorAll('track')) {
+    try { if (el.track) el.track.mode = 'disabled'; } catch (_) {}
+    el.remove();
+  }
+  subEl = null;
+}
+
+function showSubTrack(el) {
+  if (el !== subEl || !el.track) return;
+  el.track.mode = 'showing';
+  applyCueLine();
+}
+
 async function applySubs(it) {
-  video.querySelectorAll('track').forEach(x => x.remove());
-  if (!it || it.subIndex == null || !it.subs) return;
+  const ticket = ++subTicket;
+  const url = it && it.subIndex != null && it.subs ? (it.subs.find(x => x.index === it.subIndex) || {}).url : null;
+  if (!url) { dropSubTrack(); return; }
+  if (subEl && subEl.isConnected && sameUrl(subEl.getAttribute('src'), url)) { showSubTrack(subEl); return; }
 
-  const url = (it.subs.find(x => x.index === it.subIndex) || {}).url;
-  if (!url) return;
-  try {
-    /* fetched in advance so an error can be caught and shown, not swallowed */
-    const r = await fetch(url);
-    if (!r.ok) { toast(t('subs.fail')); it.subIndex = null; syncSubsButton(); return; }
-  } catch (_) { return; }
-  if (it !== cur() || it.subIndex == null) return;
+  /* fetched in advance so an error can be caught and shown, not swallowed */
+  let ok;
+  try { ok = (await fetch(url)).ok; } catch (_) { return; }
+  if (ticket !== subTicket || it !== cur() || it.subIndex == null) return;
+  if (!ok) { toast(t('subs.fail')); it.subIndex = null; syncSubsButton(); return; }
 
+  dropSubTrack();
   const el = document.createElement('track');
   el.kind = 'subtitles';
   el.src = url;
   el.default = true;
+  subEl = el;
   video.append(el);
   /* switched on after the browser has parsed the file */
-  el.addEventListener('load', () => {
-    if (el.track) el.track.mode = 'showing';
-    applyCueLine();
-  }, { once: true });
-  setTimeout(() => { if (el.track) { el.track.mode = 'showing'; applyCueLine(); } }, 200);
+  el.addEventListener('load', () => showSubTrack(el), { once: true });
+  setTimeout(() => showSubTrack(el), 200);
 }
 
 /* What can actually be controlled in WebVTT: size, backdrop and line
    height. Everything else, the cue font, the horizontal position, ASS
    styling, is set by the file itself and the browser does not expose
-   it. */
-const CUE_SIZE = { s: '80%',  m: '100%', l: '128%', xl: '160%' };
-const CUE_BG = {
-  none:   { bg: 'transparent', sh: 'none' },
-  shadow: { bg: 'transparent', sh: '0 1px 3px #000, 0 0 6px rgba(0,0,0,.95), 0 0 1px #000' },
-  plate:  { bg: 'rgba(0,0,0,.72)', sh: 'none' },
-};
+   it. Size and backdrop are classes on the video element: ::cue reads
+   a class of its video, and the video is what moves into the extended
+   PiP window, so the look goes with it. */
+const CUE_SIZE = ['s', 'm', 'l', 'xl'];
+const CUE_BG = ['none', 'shadow', 'plate'];
 const CUE_POS = { low: -1, auto: 'auto', high: -4 };
 
 const CUE_UI = [
@@ -1600,25 +1617,16 @@ const CUE_UI = [
 ];
 
 function applyCueStyle() {
-  const c = state.cue, b = CUE_BG[c.bg] || CUE_BG.shadow;
-  /* the variables go on the video element itself: it is what moves into
-     the extended PiP window, and variables set on the document would
-     stay behind in the tab */
-  video.style.setProperty('--cue-size', CUE_SIZE[c.size] || '100%');
-  video.style.setProperty('--cue-bg', b.bg);
-  video.style.setProperty('--cue-shadow', b.sh);
-  /* and as classes: ::cue reads a class of the video where it does not read a variable */
-  for (const k of Object.keys(CUE_SIZE)) video.classList.toggle('cue-size-' + k, c.size === k);
-  for (const k of Object.keys(CUE_BG)) video.classList.toggle('cue-bg-' + k, c.bg === k);
+  const c = state.cue;
+  for (const k of CUE_SIZE) video.classList.toggle('cue-size-' + k, c.size === k);
+  for (const k of CUE_BG) video.classList.toggle('cue-bg-' + k, c.bg === k);
   applyCueLine();
 }
 
 function applyCueLine() {
   const v = CUE_POS[state.cue.pos];
-  for (const tr of video.textTracks || []) {
-    if (!tr.cues) continue;
-    for (const cue of tr.cues) { try { cue.line = v; } catch (_) {} }
-  }
+  if (!subEl || !subEl.track || !subEl.track.cues) return;
+  for (const cue of subEl.track.cues) { try { cue.line = v; } catch (_) {} }
 }
 
 function setCue(key, val) {
@@ -2114,7 +2122,7 @@ function groupRow(season) {
   li.dataset.group = series.id;
   li.innerHTML = '<span class="queue__group-label"></span><span class="queue__group-title"></span><span class="queue__group-year"></span><span class="queue__group-kind"></span>' +
     `<span class="queue__group-save">${phSvg(PH.download)}<span class="queue__group-count"></span></span>`;
-  li.querySelector('.queue__group-label').textContent = ordinal;
+  li.querySelector('.queue__group-label').append(Object.assign(document.createElement('span'), { className: 'n', textContent: String(ordinal) }));
   li.querySelector('.queue__group-title').textContent = series.title;
   li.querySelector('.queue__group-year').textContent = series.year || '';
   li.querySelector('.queue__group-kind').textContent = kindLabel(series);

@@ -740,7 +740,7 @@ ru: {
   'pop.ofDisk': 'из {total}',
   'queue.saveStopped': 'Дошло до {done} из {total} ({pct}%). Нажмите, чтобы продолжить',
   'set.saveQuality': 'Качество сохранения',
-  'set.autoResume': 'Продолжать незавершённые сохранения',
+  'set.autoResume': 'Возобновлять прерванные сохранения',
   'queue.saveAs': 'Сохранить в качестве',
   'notice.noOpen': 'Не открылась: {name}. {why}',
   'notice.retry': 'Попробовать снова',
