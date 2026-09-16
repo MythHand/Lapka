@@ -160,8 +160,11 @@ the browser tab is closed. Three ways to stop it:
 - **The button.** In the player: the gear → the bottom of the "Where things are
   kept" column → **Quit Lapka**, twice (the first click asks). The tab says
   Lapka has quit and can be closed.
-- **The launcher's twin.** `stop.command` (macOS), `stop.bat` (Windows) or
-  `./stop.sh` (Linux) in the same folder.
+- **The launcher's twin.** Double-click `stop.command` (macOS) or `stop.bat`
+  (Windows) in the same folder; on Linux `./stop.sh` in a terminal. To start
+  again, the same with `start.command` / `start.bat` / `./start.sh`. In a
+  terminal these files are run with `./` in front: `./start.command`, not
+  `start.command`.
 - **If you started it from a terminal** with `npm start`: Ctrl+C in that
   terminal, or close the terminal window.
 
