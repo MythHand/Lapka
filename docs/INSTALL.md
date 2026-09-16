@@ -1,119 +1,120 @@
-# Установка Lapka по шагам
+# Installing Lapka step by step
 
-Для тех, кто не ставил программы из исходников. Ничего сложного: Lapka это
-папка с файлами, которую запускает Node.js. Никаких установщиков самой Lapka
-нет, и в систему она ничего не прописывает.
+Русская версия: [INSTALL.ru.md](INSTALL.ru.md)
 
-Если вы делаете это с ИИ-ассистентом, покажите ему эту страницу целиком.
+For those who have never run a program from its source. Nothing hard: Lapka is
+a folder of files that Node.js runs. There is no installer for Lapka itself,
+and it writes nothing into the system.
 
-## Что понадобится
+If you are doing this with an AI assistant, show it this whole page.
 
-| Что | Зачем | Обязательно |
+## What you need
+
+| What | Why | Required |
 |---|---|---|
-| Node.js 22 или новее | запускает сервер Lapka | да |
-| Браузер Chrome или Edge | плеер; расширенное окно PiP есть только в них | да (Firefox и Safari покажут плеер без расширенного окна) |
-| ffmpeg | сохранение серий в файл | нет, только для сохранения |
-| Терминал | ввести две команды | да |
+| Node.js 22 or newer | runs the Lapka server | yes |
+| Chrome or Edge | the player; the extended PiP window exists only there | yes (Firefox and Safari show the player without the extended window) |
+| ffmpeg | saving episodes to a file | no, only for saving |
+| A terminal | to type two commands | yes |
 
-Терминал уже есть в системе: на macOS это программа «Терминал» (Terminal), на
-Windows «Терминал» или PowerShell, на Linux любой эмулятор терминала.
+The terminal is already on the system: on macOS the Terminal app, on Windows
+the Terminal or PowerShell, on Linux any terminal emulator.
 
-## Шаг 1. Node.js
+## Step 1. Node.js
 
-Проверьте, нет ли его уже. В терминале:
+Check whether it is there already. In the terminal:
 
 ```bash
 node -v
 ```
 
-Если ответ вида `v22.…` или `v24.…`, шаг пропускаем. Если команда не найдена или
-версия меньше 22, ставим.
+If the answer looks like `v22.…` or `v24.…`, skip this step. If the command is
+not found or the version is below 22, install it.
 
-**macOS.** Зайти на https://nodejs.org/, нажать кнопку **LTS**, открыть
-скачанный `.pkg` и пройти установщик. Или через Homebrew, если он у вас есть:
+**macOS.** Go to https://nodejs.org/, press the **LTS** button, open the
+downloaded `.pkg` and walk through the installer. Or with Homebrew, if you
+have it:
 
 ```bash
 brew install node
 ```
 
-**Windows.** Зайти на https://nodejs.org/, нажать **LTS**, запустить `.msi`,
-везде «Далее». Галочку про «automatically install the necessary tools» можно
-не ставить. После установки закройте и заново откройте терминал.
+**Windows.** Go to https://nodejs.org/, press **LTS**, run the `.msi`, "Next"
+everywhere. The checkbox about "automatically install the necessary tools" can
+stay off. After the installation close the terminal and open it again.
 
-**Linux.** Пакет `nodejs` из репозитория дистрибутива часто старый. Надёжнее
-установщик с nodejs.org (раздел «Package manager») или nvm:
+**Linux.** The `nodejs` package of the distribution is often old. Safer: the
+installer from nodejs.org (the "Package manager" section) or nvm:
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash
 ```
 
-затем в новом терминале `nvm install --lts`.
+then, in a new terminal, `nvm install --lts`.
 
-Снова `node -v`, чтобы убедиться.
+`node -v` again, to be sure.
 
-## Шаг 2. Скачать Lapka
+## Step 2. Download Lapka
 
-Способ без git: на странице https://github.com/MythHand/Lapka нажать зелёную
-кнопку **Code** → **Download ZIP**, распаковать архив туда, где он будет жить,
-например в «Документы». Получится папка `Lapka-main`; можно переименовать в
-`Lapka`.
+Without git: on https://github.com/MythHand/Lapka press the green **Code**
+button → **Download ZIP**, unpack the archive where it will live, for example
+in Documents. You get a folder `Lapka-main`; you may rename it to `Lapka`.
 
-Способ с git, если он есть:
+With git, if you have it:
 
 ```bash
 git clone https://github.com/MythHand/Lapka.git
 ```
 
-## Шаг 3. Открыть терминал в папке Lapka
+## Step 3. Open a terminal in the Lapka folder
 
-**macOS.** В Finder правой кнопкой по папке `Lapka` → «Новый терминал по адресу
-папки» (если пункта нет, включите его в Системные настройки → Клавиатура →
-Сочетания клавиш → Службы). Или в терминале набрать `cd ` и перетащить папку
-в окно терминала, потом Enter.
+**macOS.** In Finder, right-click the `Lapka` folder → "New Terminal at Folder"
+(if the item is missing, switch it on in System Settings → Keyboard → Keyboard
+Shortcuts → Services). Or type `cd ` in the terminal, drag the folder into the
+window, and press Enter.
 
-**Windows.** Открыть папку `Lapka` в Проводнике, правой кнопкой по пустому
-месту → «Открыть в Терминале». Или в адресной строке Проводника написать
-`cmd` и нажать Enter.
+**Windows.** Open the `Lapka` folder in Explorer, right-click an empty spot →
+"Open in Terminal". Or type `cmd` in Explorer's address bar and press Enter.
 
-**Linux.** Правой кнопкой по папке → «Открыть в терминале», или `cd` до неё.
+**Linux.** Right-click the folder → "Open in Terminal", or `cd` into it.
 
-Проверка: команда `ls` (в Windows `dir`) должна показать файлы `package.json`,
-папки `core` и `web`.
+Check: `ls` (in Windows `dir`) should list the file `package.json` and the
+folders `core` and `web`.
 
-## Шаг 4. Установить зависимости и запустить
+## Step 4. Install the dependencies and start
 
-Один раз:
+Once:
 
 ```bash
 npm install
 ```
 
-Каждый раз, когда хотите смотреть:
+Every time you want to watch:
 
 ```bash
 npm start
 ```
 
-В терминале появится строка `Lapka: http://127.0.0.1:8800`. Откройте этот
-адрес в Chrome или Edge. Пока терминал открыт, Lapka работает; закрыть её:
-Ctrl+C в терминале или просто закрыть окно терминала.
+The terminal prints a line `Lapka: http://127.0.0.1:8800`. Open that address in
+Chrome or Edge. Lapka runs while the terminal is open; to close it, Ctrl+C in
+the terminal or simply close the terminal window.
 
-## Шаг 5. Папка для файлов
+## Step 5. The folder for files
 
-В плеере: шестерёнка справа вверху → «Папка Lapka» → «Выбрать другую папку».
-Откроется системный диалог выбора папки. Туда лягут сохранённые серии и
-служебные файлы. Если папку не выбирать, файлы копятся в `.dev/home` внутри
-папки Lapka.
+In the player: the gear at the top right → "Lapka folder" → "Choose another
+folder". The system's folder dialog opens. Saved episodes and Lapka's own files
+go there. If you never choose a folder, the files pile up in `.dev/home` inside
+the Lapka folder.
 
-На Linux системный диалог требует программу `zenity`; без неё путь можно
-ввести руками по ссылке «указать путь вручную» в том же меню.
+On Linux the system dialog needs the `zenity` program; without it the path can
+be typed by hand through the "type a path instead" link in the same menu.
 
-## ffmpeg, только для сохранения серий
+## ffmpeg, only for saving episodes
 
-Смотреть можно без него. Для кнопки «сохранить» нужен ffmpeg, доступный из
-терминала по имени `ffmpeg`.
+Watching works without it. The save button needs ffmpeg reachable from the
+terminal by the name `ffmpeg`.
 
-**macOS** (через Homebrew):
+**macOS** (with Homebrew):
 
 ```bash
 brew install ffmpeg
@@ -125,7 +126,8 @@ brew install ffmpeg
 winget install Gyan.FFmpeg
 ```
 
-После установки закройте и заново откройте терминал, затем снова `npm start`.
+After the installation close the terminal and open it again, then `npm start`
+once more.
 
 **Linux:**
 
@@ -133,37 +135,39 @@ winget install Gyan.FFmpeg
 sudo apt install ffmpeg
 ```
 
-(или пакетный менеджер вашего дистрибутива). Проверка везде: `ffmpeg -version`.
+(or the package manager of your distribution). The check everywhere:
+`ffmpeg -version`.
 
-## Обновление
+## Updating
 
-Скачать новый ZIP и распаковать поверх старой папки, или в папке `Lapka`
-выполнить `git pull`, если ставили через git. Потом снова `npm install` и
-`npm start`. Настройки и выбранная папка сохраняются.
+Download a fresh ZIP and unpack it over the old folder, or run `git pull` in
+the `Lapka` folder if you installed with git. Then `npm install` and
+`npm start` again. The settings and the chosen folder stay.
 
-## Если что-то не так
+## If something is off
 
-**`npm` или `node` не найдены.** Node.js не установлен или терминал открыт
-до установки. Закройте терминал, откройте заново, `node -v`.
+**`npm` or `node` not found.** Node.js is not installed, or the terminal was
+opened before the installation. Close the terminal, open it again, `node -v`.
 
-**Порт 8800 занят.** Запустите на другом:
+**Port 8800 is taken.** Start on another one:
 
 ```bash
 PORT=8801 npm start
 ```
 
-В Windows PowerShell: `$env:PORT=8801; npm start`.
+In Windows PowerShell: `$env:PORT=8801; npm start`.
 
-**Страница не открывается.** Убедитесь, что терминал с `npm start` открыт и в
-нём нет красных ошибок; адрес именно `http://127.0.0.1:8800`, не `https`.
+**The page does not open.** Make sure the terminal with `npm start` is open
+and shows no red errors; the address is exactly `http://127.0.0.1:8800`, not
+`https`.
 
-**Сохранение не работает, играет нормально.** Нет ffmpeg или он не в PATH.
-Проверьте `ffmpeg -version` в новом окне терминала.
+**Saving does not work, playing does.** No ffmpeg, or it is not in PATH. Check
+`ffmpeg -version` in a new terminal window.
 
-**Сайт не открылся.** Не все сайты устроены одинаково; список проверенных в
-[README](../README.md). Сайты с DRM и сайты, которые закрывают свои плееры,
-Lapka не вскрывает по принципу.
+**A site did not open.** Not every site is built the same way; the list of
+tested ones is in the [README](../README.md). Sites with DRM, and sites that
+lock their players, Lapka does not break into, on principle.
 
-**Нет расширенного окна PiP.** Оно есть только в Chrome и Edge (Document
-Picture-in-Picture). В других браузерах доступно обычное окно картинки в
-картинке.
+**No extended PiP window.** It exists only in Chrome and Edge (Document
+Picture-in-Picture). In other browsers the ordinary picture-in-picture window
+is there.

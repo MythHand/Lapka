@@ -91,7 +91,7 @@ unpack it, open a terminal in that folder and run two commands, `npm install`
 and `npm start`. Then open http://127.0.0.1:8800 in the browser.
 
 Step by step for macOS, Windows and Linux, ffmpeg and the usual troubles
-included: [docs/INSTALL.md](docs/INSTALL.md) (in Russian for now). If you are
+included: [docs/INSTALL.md](docs/INSTALL.md). If you are
 installing with an AI assistant, give it the link to that file: everything it
 needs for an exact answer is there.
 

@@ -1,20 +1,29 @@
-# Синтетический аниме-сайт
+# The synthetic anime site
 
-Lapka разрабатывается против этих страниц, а не против чужих сайтов.
+Русская версия: [README.ru.md](README.ru.md)
 
-- `cases.mjs` — список случаев. Один случай на одно устройство реального сайта: как
-  перечислены серии, где живёт переключатель озвучек, сколько плееров и как они встроены.
-  Новый случай появляется только когда встречается страница, которую старые не покрывают.
-- `render.mjs` — HTML страниц. Обычная разметка без подсказок для Lapka: og-теги, h1,
-  список ссылок, select, data-атрибуты на переключателях, iframe.
-- `serve.mjs` — сервер. Страницы рендерятся на лету, видео берётся из ffmpeg-фикстур.
+Lapka is developed against these pages, not against other people's sites.
 
-Посмотреть глазами:
+- `cases.mjs` is the list of cases. One case per way a real site is built: how
+  the episodes are listed, where the dub switch lives, how many players there
+  are and how they are embedded. A new case appears only when a page turns up
+  that the old ones do not cover.
+- `render.mjs` is the HTML of the pages. Ordinary markup with no hints for
+  Lapka: og tags, an h1, a list of links, a select, data attributes on the
+  switches, an iframe.
+- `serve.mjs` is the server. The pages are rendered on the fly, the video comes
+  from ffmpeg fixtures.
+
+To look at it with your own eyes:
 
 ```bash
 node test/site/serve.mjs
 ```
 
-`test/site.test.mjs` обходит сайт целиком и проверяет, что каждая ссылка, embed и поток,
-на которые ссылаются страницы, отвечают. Это защита от расхождения случаев и рендера по
-мере роста.
+`SITE_SLOW_MS=3000` before the command delays every video file by three
+seconds: that is how pauses, the line and the cancelling of saves are tried by
+hand.
+
+`test/site.test.mjs` walks the whole site and checks that every link, embed and
+stream the pages refer to answers. It guards against the cases and the
+rendering drifting apart as they grow.

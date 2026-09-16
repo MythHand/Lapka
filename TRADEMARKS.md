@@ -1,17 +1,19 @@
-# Знаки и имена
+# Marks and names
 
-Лицензия AGPL-3.0 в файле LICENSE распространяется на код Lapka. Она не
-распространяется на:
+Русская версия: [TRADEMARKS.ru.md](TRADEMARKS.ru.md)
 
-- имя **Lapka** и его написание в интерфейсе;
-- **печать Lapka** — лапу и надпись LAPKA, набранные символами, во всех кадрах
-  анимации, как они нарисованы в `web/app.js`;
-- имя, знак и аватар **MythHand**, включая мини-знак MythHand в интерфейсе.
+The AGPL-3.0 licence in LICENSE covers the code of Lapka. It does not cover:
 
-Все права на них принадлежат MythHand. Их нельзя использовать, копировать или
-переделывать ни в копии этого проекта, ни где-либо ещё без письменного
-разрешения MythHand. Форк проекта должен идти под своим именем и своим знаком.
-Указывать MythHand как источник кода можно и нужно.
+- the name **Lapka** and its spelling in the interface;
+- the **Lapka seal**: the paw and the LAPKA banner drawn in characters, in every
+  frame of the animation, as drawn in `web/app.js`;
+- the **MythHand** name, mark and avatar, the small MythHand mark in the
+  interface included.
 
-Шрифты в `web/assets/fonts` принадлежат их авторам и идут под собственными
-лицензиями (SIL Open Font License, файл OFL.txt рядом с каждым шрифтом).
+All rights to them belong to MythHand. They may not be used, copied or altered,
+neither in a copy of this project nor anywhere else, without written permission
+from MythHand. A fork of the project must go under a name and a mark of its own.
+Naming MythHand as the origin of the code is allowed and welcome.
+
+The fonts in `web/assets/fonts` belong to their authors and come under their own
+licences (SIL Open Font License, the OFL.txt file beside each font).

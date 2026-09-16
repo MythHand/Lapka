@@ -88,7 +88,7 @@ Ctrl+C в терминале.
 `npm start`. Дальше открыть в браузере адрес http://127.0.0.1:8800.
 
 Подробно и по шагам для macOS, Windows и Linux, включая ffmpeg и типичные
-ошибки: [docs/INSTALL.md](docs/INSTALL.md). Если ставите с помощью
+ошибки: [docs/INSTALL.ru.md](docs/INSTALL.ru.md). Если ставите с помощью
 ИИ-ассистента, дайте ему ссылку на этот файл: там всё, что нужно для точного
 ответа.
 
@@ -98,7 +98,7 @@ Ctrl+C в терминале.
   `SITE_SLOW_MS=3000 npm run site` замедляет отдачу файлов синтетического сайта, чтобы
   руками проверять паузу и очередь сохранений.
 - `npm test` — все тесты. `npm run check` — статическая проверка фронта.
-- Карта ядра и контракты блоков: [core/README.md](core/README.md).
+- Карта ядра и контракты блоков: [core/README.ru.md](core/README.ru.md).
 
 ![npm test: 165 тестов проходят](docs/media/tests.png)
 
@@ -119,7 +119,7 @@ Lapka нейтральна: это инструмент на вашей маши
 код из Lapka, берёте его под AGPL; тот же код из репозитория PIP-Player берётся
 оттуда под MIT. Имя Lapka, печать Lapka (лапа и надпись символами), имя и знак MythHand под
 AGPL не попадают и вместе с кодом не раздаются, подробнее в
-[TRADEMARKS.md](TRADEMARKS.md). Шрифты в `web/assets/fonts` идут под
+[TRADEMARKS.ru.md](TRADEMARKS.ru.md). Шрифты в `web/assets/fonts` идут под
 SIL Open Font License.
 
 © 2026 MythHand · Togulev Dmitry
