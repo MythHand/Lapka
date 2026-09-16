@@ -691,6 +691,12 @@ for (const el of document.querySelectorAll('.paw')) el.textContent = PAW_FRAMES[
 setTimeout(pressPaws, 700);
 setInterval(pressPaws, 4200);
 
+/* the Open button waits for a link in the field */
+const btnOpen = $('#btnOpen');
+function syncOpenButton() { if (btnOpen) btnOpen.disabled = !linkInput.value.trim(); }
+linkInput.addEventListener('input', syncOpenButton);
+syncOpenButton();
+
 /* ═══════════════ opening a link ═══════════════
    One address in. The server reads the page, finds the series and
    its episodes, and the queue is those episodes. Each episode is
@@ -1106,7 +1112,8 @@ function attachSource(stream) {
     hls.on(Hls.Events.ERROR, (_, d) => {
       if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
       const it = cur();
-      if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true });
+      /* a network error while the picture still moves is nothing to say; stalled, it is said at once */
+      if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) { if (video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); else sayStalled(it); }
     });
     hls.on(Hls.Events.MANIFEST_PARSED, () => { applyLevelPref(); syncQualityButton(); pickAudioTrack(stream); });
     hls.on(Hls.Events.LEVEL_SWITCHED, () => { syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu(); });
@@ -1600,6 +1607,9 @@ function applyCueStyle() {
   video.style.setProperty('--cue-size', CUE_SIZE[c.size] || '100%');
   video.style.setProperty('--cue-bg', b.bg);
   video.style.setProperty('--cue-shadow', b.sh);
+  /* and as classes: ::cue reads a class of the video where it does not read a variable */
+  for (const k of Object.keys(CUE_SIZE)) video.classList.toggle('cue-size-' + k, c.size === k);
+  for (const k of Object.keys(CUE_BG)) video.classList.toggle('cue-bg-' + k, c.bg === k);
   applyCueLine();
 }
 
@@ -3243,6 +3253,7 @@ video.addEventListener('playing', () => {
 });
 video.addEventListener('waiting', () => { const it = cur(); if (it && it.loadedSrc) sayStalled(it); });
 video.addEventListener('canplay', () => { clearTimeout(stallT); hideNotice('busy'); });
+video.addEventListener('timeupdate', () => { if (noticeKind === 'busy' && !video.paused && video.readyState >= 3) hideNotice('busy'); });   // the picture moves: nothing is waiting
 video.addEventListener('ended', () => {
   /* looping one file works even with autoplay off: it is a mode set
      explicitly, not an automatic decision */
@@ -3516,6 +3527,7 @@ document.addEventListener('keyup', e => {
 
 function paintModeHint() {
   modeHint.innerHTML = t('hint.link');
+  syncOpenButton();
 }
 
 window.addEventListener('beforeunload', () => {

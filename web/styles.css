@@ -476,7 +476,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   position:absolute; bottom:calc(100% + 12px); right:0;
   min-width:340px; max-width:min(440px, calc(100vw - 24px));
   max-height:min(340px, calc(100vh - 130px)); overflow-y:auto;
-  padding:7px; border-radius:var(--r-md);
+  padding:7px; border-radius:var(--ctl-r);
   background:rgba(22,23,26,.96);
   backdrop-filter:blur(28px) saturate(1.4);
   -webkit-backdrop-filter:blur(28px) saturate(1.4);
@@ -490,10 +490,10 @@ svg.ph{ fill:currentColor; stroke:none; }
    a menu inside them is open. */
 .menu{ z-index:20; }
 .gear.menuwrap:has(.menu.open){ z-index:20; transition:opacity .24s, transform .24s, z-index 0s; }
-.menu__title{ padding:8px 12px 6px; font-size:calc(11.5px + var(--fs)); color:var(--tx-3); }
+.menu__title{ padding:8px 12px 6px; font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); }
 .menu__item{
   display:flex; align-items:flex-start; gap:11px; width:100%;
-  padding:10px 12px; border-radius:var(--r-sm);
+  padding:10px 12px; border-radius:6px;
   text-align:left; color:var(--tx-2); font-size:calc(13px + var(--fs));
 }
 .menu__item:hover{ background:var(--glass-hi); color:var(--tx-1); }
@@ -502,8 +502,8 @@ svg.ph{ fill:currentColor; stroke:none; }
 .menu__item.sel .menu__tick{ opacity:1; }
 .menu__body{ flex:1; min-width:0; }
 .menu__main{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.menu__sub{ display:block; font-size:calc(11.5px + var(--fs)); color:var(--tx-3); margin-top:3px; line-height:1.45; }
-.menu__empty{ padding:14px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-3); line-height:1.6; }
+.menu__sub{ display:block; font-family:var(--mono); font-size:calc(11.5px + var(--fs)); letter-spacing:0; color:var(--tx-3); margin-top:3px; line-height:1.45; }
+.menu__empty{ padding:14px 12px; font-family:var(--mono); font-size:calc(12.5px + var(--fs)); color:var(--tx-3); line-height:1.6; }
 .menu__item:disabled{ opacity:.42; cursor:default; }
 .menu__item:disabled:hover{ background:none; color:var(--tx-2); }
 
@@ -769,7 +769,7 @@ svg.ph{ fill:currentColor; stroke:none; }
    and it is unclear where one ends and the next begins. */
 .toolgrp{ display:flex; align-items:center; gap:8px; }
 .toolgrp__cap{
-  font-size:calc(11.5px + var(--fs)); color:var(--tx-3); white-space:nowrap;
+  font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); white-space:nowrap;
 }
 
 /* A segmented group: three separate pills with text read as three
@@ -777,7 +777,7 @@ svg.ph{ fill:currentColor; stroke:none; }
    with dividers show at once that this is a single set of actions. */
 .segbar{
   display:flex; align-items:stretch;
-  border:1px solid var(--line); border-radius:10px;
+  border:1px solid var(--line-2); border-radius:var(--ctl-r);
   background:var(--glass-soft); overflow:hidden;
 }
 .segbar__b{
@@ -919,7 +919,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .item__meta{
   display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:5px;
-  font-size:calc(12px + var(--fs)); color:var(--tx-3);
+  font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3);
   min-width:0;
 }
 .item.active .item__name{ color:#fff; }
@@ -1183,30 +1183,29 @@ body.pip-body::before{ display:none; }
    interface the plate goes and legibility comes from an outline */
 .ico-gear{ fill:currentColor; stroke:none; }
 
-video::cue{
-  background:var(--cue-bg, transparent);
-  color:#fff;
-  font-family:var(--font);
-  font-size:var(--cue-size, 100%);
-  text-shadow:var(--cue-shadow, 0 1px 3px #000, 0 0 6px rgba(0,0,0,.95));
-}
+video::cue{ color:#fff; font-family:var(--font); font-size:100%; background:transparent; text-shadow:0 1px 3px #000, 0 0 6px rgba(0,0,0,.95), 0 0 1px #000; }
+/* the choice is a class on the video: ::cue does not read variables reliably */
+video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; }  video.cue-size-xl::cue{ font-size:160%; }
+video.cue-bg-none::cue{ background:transparent; text-shadow:none; }
+video.cue-bg-plate::cue{ background:rgba(0,0,0,.72); text-shadow:none; }
 
 /* setting switches inside the menu */
 /* the label above the options: they did not fit on one line */
 .menu__row{ display:flex; flex-direction:column; gap:9px; padding:12px; }
 .menu__row + .menu__row{ border-top:1px solid rgba(255,255,255,.055); }
 .menu__rowlabel{
-  font-size:calc(12.5px + var(--fs)); line-height:1.4; color:var(--tx-2);
+  font-family:var(--mono); font-size:calc(13px + var(--fs)); letter-spacing:0; line-height:1.4; color:var(--tx-1);
 }
+.menu__rowlabel::before{ content:'› '; color:var(--tx-3); }
 .seg2{ display:flex; gap:6px; }
 .seg2 button{
-  flex:1; min-width:0; padding:8px 6px; border-radius:9px;
-  border:1px solid var(--line); background:transparent;
-  color:var(--tx-2); font-size:calc(12px + var(--fs)); line-height:1.35;
+  flex:1; min-width:0; padding:7px 6px; border-radius:var(--ctl-r);
+  border:1px solid var(--line-2); background:var(--glass-soft);
+  color:var(--tx-2); font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; line-height:1.35;
   transition:background .14s, color .14s, border-color .14s;
 }
 .seg2 button:hover{ background:var(--glass-hi); color:var(--tx-1); }
-.seg2 button.sel{ background:rgba(255,255,255,.15); color:#fff; border-color:var(--line-3); }
+.seg2 button.sel{ background:var(--tx-1); color:var(--s-0); border-color:var(--tx-1); }
 
 /* The cache row: one bar that shows what is taken and sets the limit.
    Solid is taken, lighter is the room left under the limit, the knob is
@@ -1329,13 +1328,13 @@ video::cue{
 /* the list of keyboard shortcuts */
 .keys__row{
   display:flex; align-items:baseline; gap:10px;
-  padding:5px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
+  padding:5px 12px; font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2);
 }
 .keys__caps{ flex:0 0 96px; display:flex; gap:4px; flex-wrap:wrap; }
 .keys__caps kbd{
   min-width:20px; padding:2px 6px; border-radius:6px;
   border:1px solid var(--line-2); background:var(--glass-hi);
-  font-family:var(--font); font-size:calc(11px + var(--fs)); line-height:1.5;
+  font-family:var(--mono); font-size:calc(11px + var(--fs)); line-height:1.5;
   color:var(--tx-1); text-align:center;
 }
 .keys__what{ flex:1; min-width:0; color:var(--tx-3); line-height:1.45; }
@@ -1435,12 +1434,12 @@ video::cue{
 .queue__group{
   display:flex; align-items:center; gap:10px; list-style:none;
   padding:14px 14px 6px 0; margin:0;
-  font-size:calc(12px + var(--fs)); letter-spacing:.06em; text-transform:uppercase; color:var(--tx-3);
+  font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3);
 }
 .queue__group + .item, .queue__group + .tile{ border-top:0; }
 /* the number as a bookmark: a light tab from the panel's edge, rounded on its free side */
 .queue__group-label{
-  flex:none; padding:3px 12px 3px 14px; border-radius:0 10px 10px 0;
+  flex:none; padding:3px 12px 3px 14px; border-radius:0 6px 6px 0;
   color:var(--s-0); background:var(--tx-1); font-weight:700; font-variant-numeric:tabular-nums; letter-spacing:0;
 }
 .queue__group-save{
@@ -1450,9 +1449,9 @@ video::cue{
 .queue__group-save:hover{ color:var(--tx-1); background:var(--glass-hi); }
 .queue__group-save .ph{ width:14px; height:14px; fill:currentColor; }
 .queue__group-save.is-done{ color:var(--tx-2); } .queue__group-save.is-done .ph{ display:none; }
-.queue__group-title{ text-transform:none; letter-spacing:var(--track); color:var(--tx-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+.queue__group-title{ font-family:var(--font); letter-spacing:var(--track); color:var(--tx-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
 .queue__group-year{ font-variant-numeric:tabular-nums; }
-.queue__group-kind{ padding:0 .45em; border:1px solid var(--line-2); border-radius:999px; font-size:calc(11px + var(--fs)); }
+.queue__group-kind{ padding:1px .45em; border:1px solid var(--line-2); border-radius:6px; font-size:calc(11px + var(--fs)); }
 .queue__group-kind:empty{ display:none; }
 .queue__list--grid .queue__group{ grid-column:1 / -1; }
 
@@ -1476,29 +1475,29 @@ video::cue{
 .item__save .ph{ width:16px; height:16px; fill:currentColor; }
 
 /* ── the Lapka folder in the settings ───────────────────────── */
-.home__path{ font-size:calc(12px + var(--fs)); color:var(--tx-2); word-break:break-all; margin:4px 0 8px; }
+.home__path{ font-family:var(--mono); font-size:calc(12px + var(--fs)); color:var(--tx-2); word-break:break-all; margin:4px 0 8px; }
 .home__form{ display:flex; gap:6px; }
 
 /* ── the language as chips, each as wide as its name ────────── */
 .langs{ display:flex; flex-wrap:wrap; gap:6px; }
 .lang{
-  font:inherit; font-size:calc(13px + var(--fs)); letter-spacing:var(--track); color:var(--tx-2);
-  padding:5px 10px; border-radius:999px; border:1px solid var(--line); background:transparent; cursor:pointer;
+  font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2);
+  padding:6px 10px; border-radius:var(--ctl-r); border:1px solid var(--line-2); background:var(--glass-soft); cursor:pointer;
 }
-.lang:hover{ color:var(--tx-1); border-color:var(--line-2); background:var(--glass-soft); }
-.lang.sel{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
+.lang:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
+.lang.sel{ color:var(--s-0); border-color:var(--tx-1); background:var(--tx-1); }
 
 /* ── the place: the folder and the cache ────────────────────── */
 .home__acts{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
-.home__manual{ font:inherit; font-size:calc(12px + var(--fs)); color:var(--tx-3); background:none; border:0; cursor:pointer; text-decoration:underline; padding:4px 2px; }
+.home__manual{ font-family:var(--mono); font-size:calc(12px + var(--fs)); color:var(--tx-3); background:none; border:0; cursor:pointer; text-decoration:underline; padding:4px 2px; }
 .home__manual:hover{ color:var(--tx-1); }
 
 /* ── saving the whole queue, from its header ────────────────── */
 .toolgrp--save{ position:relative; }
 .saveall{
-  display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border-radius:8px;
-  font:inherit; font-size:calc(12px + var(--fs)); font-variant-numeric:tabular-nums; letter-spacing:var(--track);
-  color:var(--tx-2); background:transparent; border:1px solid var(--line); cursor:pointer;
+  display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 10px; border-radius:var(--ctl-r);
+  font-family:var(--mono); font-size:calc(12px + var(--fs)); font-variant-numeric:tabular-nums; letter-spacing:0;
+  color:var(--tx-2); background:var(--glass-soft); border:1px solid var(--line-2); cursor:pointer;
 }
 .saveall:hover{ color:var(--tx-1); border-color:var(--line-2); background:var(--glass-soft); }
 .saveall .ph{ width:15px; height:15px; fill:currentColor; }
@@ -1516,7 +1515,9 @@ video::cue{
 }
 .savepop__sec{ margin-top:18px; }
 .savepop__sec:first-child{ margin-top:0; }
-.savepop__head{ font-size:calc(11px + var(--fs)); letter-spacing:.08em; text-transform:uppercase; color:var(--tx-3); margin-bottom:10px; }
+.savepop__head{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); margin-bottom:10px; }
+.savepop__head::before{ content:'› '; }
+.savepop__grid, .savepop__parts{ font-family:var(--mono); letter-spacing:0; }
 .savepop__grid{ display:grid; grid-template-columns:max-content 1fr; column-gap:20px; row-gap:9px; align-items:baseline; }
 .savepop__k{ color:var(--tx-3); white-space:nowrap; }
 .savepop__v{ color:var(--tx-1); font-variant-numeric:tabular-nums; }
@@ -1543,8 +1544,8 @@ video::cue{
 /* ── the tooltip: at once, under the pointer, alive while it is shown ── */
 .tip{
   position:fixed; z-index:70; max-width:min(420px, calc(100vw - 24px)); padding:8px 11px;
-  border-radius:var(--r-sm); background:rgba(22,23,26,.97); border:1px solid var(--line-2); box-shadow:var(--shadow);
-  font-size:calc(12px + var(--fs)); line-height:1.5; color:var(--tx-1); pointer-events:none; white-space:nowrap;
+  border-radius:6px; background:rgba(22,23,26,.97); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; line-height:1.5; color:var(--tx-1); pointer-events:none; white-space:nowrap;
 }
 .tip__sub{ color:var(--tx-3); white-space:normal; }
 
@@ -1585,7 +1586,7 @@ video::cue{
 .menu__tags{ flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:210px; margin-left:8px; }
 /* .qtag, not .tag: .tag is the queue's round button and must stay so */
 .qtag{
-  font-size:calc(11px + var(--fs)); line-height:1; padding:4px 7px; border-radius:6px; cursor:pointer;
+  font-family:var(--mono); font-size:calc(11px + var(--fs)); letter-spacing:0; line-height:1; padding:4px 7px; border-radius:6px; cursor:pointer;
   color:var(--tx-2); border:1px solid var(--line); background:var(--glass-soft); font-variant-numeric:tabular-nums;
 }
 .qtag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
@@ -1624,6 +1625,8 @@ video::cue{
 }
 .mark .paw, .mark .banner{ color:var(--tx-1); }   /* one seal, one colour */
 .mark--left{ justify-content:flex-start; margin:0 0 1.5em; }
+/* on the start screen the seal stands well apart from the words and the field */
+.empty .mark{ margin-bottom:5.5em; }
 
 /* ── the left side while nothing is open ───────────────────────
    Two voices: the system speaks in the monospace (the state, the
@@ -1707,3 +1710,5 @@ video::cue{
 .btn--solid{ color:#0b0b0c; background:#fff; border-color:#fff; font-weight:500; }
 .btn--solid:hover{ color:#0b0b0c; background:#e6e6e8; border-color:#e6e6e8; }
 .btn--lg{ height:var(--ctl-h-lg); padding:0 18px; font-size:calc(14px + var(--fs)); }
+.btn:disabled, .tag:disabled{ opacity:.35; cursor:default; transform:none; }
+.btn--solid:disabled:hover{ background:#fff; border-color:#fff; }
