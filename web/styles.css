@@ -1178,12 +1178,18 @@ body.pip-body::before{ display:none; }
 .prep__cmd{
   margin-top:20px; padding:12px 14px; border-radius:var(--r-sm);
   background:rgba(0,0,0,.45); border:1px solid var(--line);
-  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:var(--mono); letter-spacing:0;
   font-size:calc(11.5px + var(--fs)); line-height:1.6; color:var(--tx-3);
-  overflow-wrap:anywhere; max-height:96px; overflow-y:auto;
+  /* the log: the newest line at the bottom, the oldest leaving at the top */
+  display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; max-height:calc(12 * 1.6em + 24px);
+  overflow-wrap:anywhere;
 }
 .prep__cmd:empty{ display:none; }
+.cmd__line{ white-space:pre-wrap; overflow-wrap:anywhere; }
+.cmd__line::before{ content:'› '; color:var(--tx-3); }
+.cmd__line:last-child{ color:var(--tx-1); }
 .prep__note{ margin-top:18px; font-size:calc(12px + var(--fs)); color:var(--tx-3); line-height:1.44; }
+.prep--link .prep__note{ display:none; }
 .stage.pip-mode .prep__note,
 .stage.pip-mode .prep__cmd,
 .stage.pip-mode .prep__head span:last-child{ display:none; }

@@ -255,6 +255,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
           return json(res, e.code || 500, { error: e.message });
         }
       }
+      /* the same look, told as it goes: a stream of events, a step each, then the answer */
+      if (req.method === 'GET' && p === '/api/look/live') {
+        const target = url.searchParams.get('url');
+        if (!/^https?:\/\//i.test(target || '')) return json(res, 400, { error: 'url must be http(s)' });
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', 'connection': 'keep-alive' });
+        const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+        const t0 = Date.now();
+        try { const looked = await lapka.look(target, { onStep: s => send('step', s) }); send('done', { ...looked, ms: Date.now() - t0 }); }
+        catch (e) { send('fail', { error: e.message }); }
+        return res.end();
+      }
       if (req.method === 'GET' && p === '/api/look') {
         const target = url.searchParams.get('url');
         if (!/^https?:\/\//i.test(target || '')) return json(res, 400, { error: 'url must be http(s)' });

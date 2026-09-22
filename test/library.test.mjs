@@ -161,9 +161,29 @@ describe('the state', () => {
   });
 });
 
+/* ── the look told as it goes ── */
+describe('the live look', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  test('a stream of steps, then the answer', async () => {
+    const r = await get(`/api/look/live?url=${encodeURIComponent(site.base + '/s/select/ep-1')}`);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type'), /text\/event-stream/);
+    const text = await r.text();
+    const events = text.split('\n\n').filter(Boolean).map(chunk => { const m = /^event: (\w+)\ndata: ([\s\S]*)$/.exec(chunk); return m && { event: m[1], data: JSON.parse(m[2]) }; }).filter(Boolean);
+    const steps = events.filter(e => e.event === 'step').map(e => e.data);
+    assert.ok(steps.length >= 3, `steps: ${steps.join(' | ')}`);
+    assert.match(steps[0], /^Читаю страницу/);
+    assert.ok(steps.some(s => /плеер/.test(s)), 'the players are told');
+    const done = events.at(-1);
+    assert.equal(done.event, 'done');
+    assert.equal(done.data.series.episodes.length, 4);
+    assert.equal((await get('/api/look/live?url=nope')).status, 400);
+  });
+});
+
 /* ── the folder weighed and cleared, the notes forgotten ── */
 describe('clearing the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
   test('the home answer weighs the folder without the cache and counts the files and the notes', async () => {
+    await lapka.state.flush();          // what earlier tests changed lands on disk before the two weighings
     const h = await (await get('/api/home')).json();
     assert.ok(h.files >= 1, `files ${h.files}`);
     assert.ok(h.bytes > 0, 'the saved files weigh something');

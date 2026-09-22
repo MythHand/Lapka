@@ -123,10 +123,15 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   }
 
   /* The players of one episode page, opened, into the series. */
-  async function openPlayers(series, report) {
+  async function openPlayers(series, report, { onStep = () => {} } = {}) {
     const number = report.episode.value;
     const embeds = report.players.filter(p => !p.stream);
-    const results = await Promise.all(embeds.map(p => openPlayer(p, number, report.url)));
+    if (embeds.length) onStep(`Открываю ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}`);
+    /* each player is said as it answers, not when the last one has */
+    const said = r => r.error ? `${r.player.id}: ${r.error}`
+      : r.unfolded ? `${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`
+      : `${r.player.id}: потоки есть`;
+    const results = await Promise.all(embeds.map(p => openPlayer(p, number, report.url).then(r => { onStep(said(r)); return r; })));
     const opened = [];
     for (const r of results) {
       opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null, unfolded: r.unfolded || null,
@@ -315,9 +320,12 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   }
 
   /* One address in, a catalog and the reports behind it out. */
-  async function look(url) {
+  async function look(url, { onStep = () => {} } = {}) {
     const reports = [];
+    const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+    onStep(`Читаю страницу ${host}`);
     const first = await readPage(url);
+    for (const s of first.steps) onStep(s);
     reports.push(first);
 
     /* a site Lapka knows through its API adds what the page cannot say */
@@ -355,7 +363,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
        or one its extractor can unfold */
     const whole = first.players.some(p => p.kind === 'deferred' || extractorFor(extractors, p.url)?.unfold);
     if (first.kind === 'episode' && (number !== null || whole)) {
-      const got = await openPlayers(series, first);
+      const got = await openPlayers(series, first, { onStep });
       opened = got.opened; steps.push(...got.steps);
     }
 

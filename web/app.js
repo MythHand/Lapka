@@ -636,6 +636,17 @@ async function api(path, opts) {
   if (!r.ok) throw new Error(d.error || String(r.status));
   return d;
 }
+/* the look of a page told as it goes: every step to onStep, the answer at the end */
+function lookLive(url, onStep) {
+  return new Promise((resolve, reject) => {
+    const es = new EventSource('/api/look/live?url=' + encodeURIComponent(url));
+    const close = () => es.close();
+    es.addEventListener('step', e => { try { onStep(JSON.parse(e.data)); } catch (_) {} });
+    es.addEventListener('done', e => { close(); resolve(JSON.parse(e.data)); });
+    es.addEventListener('fail', e => { close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} reject(new Error(d.error || 'look failed')); });
+    es.onerror = () => { close(); reject(new Error(t('set.cacheFail'))); };
+  });
+}
 const post = path => api(path, { method: 'POST', headers: { 'x-lapka': '1' } });
 
 /* stop playback completely: not only pause but also dropping the
@@ -659,18 +670,37 @@ function showProgress(it, key) {
   prepName.textContent = it.name;
   prepTrack.textContent = state.series ? state.series.title : '';
   prepSteps.replaceChildren();
-  const li = document.createElement('li');
-  li.className = 'step step--active';
-  li.innerHTML = '<span class="step__mark"></span><span class="step__text"></span><span class="step__aux"></span>';
-  li.querySelector('.step__text').textContent = t(key);
-  prepSteps.append(li);
-  prepCmd.textContent = '';
+  prepCmd.replaceChildren();
+  prepPhase(key);
   prep.classList.add('show');
   state.busy = true;
   paintFavicon();
 }
+/* The phases of the wait, one active at a time, and under them the log
+   of what is being done right now, line by line as the server and the
+   page report it, the newest at the bottom like a terminal: a long
+   wait is then seen working, not hanging. */
+function prepPhase(key, aux = '') {
+  const last = prepSteps.lastElementChild;
+  if (last) { last.classList.remove('step--active'); last.classList.add('step--done'); last.querySelector('.step__mark').textContent = '✓'; }
+  const li = document.createElement('li');
+  li.className = 'step step--active';
+  li.innerHTML = '<span class="step__mark"></span><span class="step__text"></span><span class="step__aux"></span>';
+  li.querySelector('.step__text').textContent = t(key);
+  li.querySelector('.step__aux').textContent = aux;
+  prepSteps.append(li);
+}
+function prepAux(aux) { const li = prepSteps.lastElementChild; if (li) li.querySelector('.step__aux').textContent = aux; }
+const PREP_LINES = 12;
+function prepLog(text) {
+  const line = document.createElement('div');
+  line.className = 'cmd__line';
+  line.textContent = text;
+  prepCmd.append(line);
+  while (prepCmd.children.length > PREP_LINES) prepCmd.firstElementChild.remove();
+}
 function hideProgress() {
-  prep.classList.remove('show');
+  prep.classList.remove('show', 'prep--link');
   state.busy = false;
   paintFavicon();
 }
@@ -829,23 +859,27 @@ const seasonOf = it => state.seasons.find(s => s.series.id === it.seriesId) || n
    its page, so what each opened part names is gathered too, round
    after round, until nothing new comes. One that fails is left out
    and said so. */
-async function openSeasons(main) {
+async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {}) {
   const norm = u => String(u || '').replace(/[#?].*$/, '').replace(/\/+$/, '');
   const me = norm(main.sourceUrl);
   const known = new Map();   // url → { entry, series }
   const add = e => { const k = norm(e.url); if (!k || known.has(k)) return; known.set(k, { entry: { ...e, self: k === me }, series: k === me ? main : null }); };
   for (const e of main.franchise || []) add(e);
   if (known.size < 2) return [{ series: main, entry: (main.franchise || []).find(e => e.self) || null }];
-  toast(t('toast.seasons', { n: known.size }));
+  onStart(known.size);                 // the phase line says how many; no toast over it
+  let done = 0;
   for (let round = 0; round < 12; round++) {   // a long chain of neighbours takes a round per link
     const todo = [...known.values()].filter(x => !x.series && !x.failed);
     if (!todo.length) break;
-    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url))));
-    todo.forEach((x, i) => {
-      const r = got[i];
-      if (r.status === 'fulfilled' && r.value && r.value.series.episodes.length) { x.series = r.value.series; for (const e of r.value.series.franchise || []) add(e); }
-      else { x.failed = true; toast(t('toast.seasonFail', { title: x.entry.title || x.entry.url })); }
-    });
+    /* each part is told as it comes, not when the round is over */
+    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url)).then(r => {
+      const ok = r && r.series.episodes.length > 0;
+      if (ok) { x.series = r.series; for (const e of r.series.franchise || []) add(e); }
+      else x.failed = true;
+      onPart({ title: x.entry.title || (ok ? r.series.title : x.entry.url), episodes: ok ? r.series.episodes.length : 0, ok, done: ++done, total: known.size });
+      return r;
+    }, e => { x.failed = true; onPart({ title: x.entry.title || x.entry.url, episodes: 0, ok: false, done: ++done, total: known.size }); throw e; })));
+    todo.forEach((x, i) => { if (got[i].status !== 'fulfilled' || x.failed) toast(t('toast.seasonFail', { title: x.entry.title || x.entry.url })); });
   }
   /* one part per series: an episode's address and its series' address name the same series */
   const seen = new Set();
@@ -855,17 +889,22 @@ async function openSeasons(main) {
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
   url = String(url || '').trim();
   if (!/^https?:\/\//i.test(url)) { toast(t('toast.badLink')); return false; }
+  video.pause();                       // a new link is a new intent: what plays stops at once, the wait is shown over it
   showProgress({ name: url }, 'prep.page');
+  prep.classList.add('prep--link');    // the note about re-encoding is for a file, not a page
   let got;
-  try { got = await api('/api/look?url=' + encodeURIComponent(url)); }
+  try { got = await lookLive(url, prepLog); }
   catch (e) { hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
-  hideProgress();
-  if (!got.series.episodes.length) { toast(t('toast.noEpisodes')); return false; }
+  if (!got.series.episodes.length) { hideProgress(); toast(t('toast.noEpisodes')); return false; }
 
   stopPlayback(); playToken++;
   state.series = got.series;
   state.current = null;
-  state.seasons = await openSeasons(got.series);
+  state.seasons = await openSeasons(got.series, {
+    onStart: n => prepPhase('prep.parts', `0 / ${n}`),
+    onPart: p => { prepAux(`${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
+  });
+  hideProgress();
   state.list = [];
   for (const { series } of state.seasons) {
     for (const ep of series.episodes) {
