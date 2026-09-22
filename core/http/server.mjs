@@ -23,6 +23,9 @@ import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
 
+/* the version, from the package: the one place it is written */
+export const VERSION = createRequire(import.meta.url)('../../package.json').version;
+
 const VENDOR = { 'hls.min.js': createRequire(import.meta.url).resolve('hls.js/dist/hls.min.js') };
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' };
@@ -80,7 +83,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
     try {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
-      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', home: store?.home || null });
+      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', version: VERSION, home: store?.home || null });
       if (req.method === 'GET' && p === '/api/home' && library) {
         const series = await library.list();
         return json(res, 200, { home: store.home, series: series.length, files: series.reduce((n, s) => n + s.episodes.length, 0), filesBytes: series.reduce((n, s) => n + s.episodes.reduce((m, e) => m + (e.size || 0), 0), 0), bytes: await store.weigh(), notes: state ? state.notes() : 0, notesBytes: await store.weigh(store.own), cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });

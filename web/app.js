@@ -2207,16 +2207,20 @@ function homeRow(col) {
    the storage on the right, the keys along the bottom. The server is
    asked how it is while the sheet is open. */
 let serverState = 'checking';         // up | down | off | checking
+let serverVersion = '';               // "1.1.0", as the package says; shown as v1.1
 async function checkServer() {
   if (serverState === 'off') return paintStatus();
-  try { await api('/api/ping'); serverState = 'up'; } catch (_) { serverState = 'down'; }
+  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
+/* "v1.1" for 1.1.0, "v1.1.2" for 1.1.2: a patch of nought is not said */
+const shortVersion = v => v ? 'v' + String(v).replace(/\.0$/, '') : '';
 function paintStatus() {
   const row = gearMenu.querySelector('.status');
   if (!row) return;
   row.querySelector('.status__dot').className = 'status__dot is-' + serverState;
   row.querySelector('.status__label').textContent = t('set.status.' + serverState);
+  row.querySelector('.status__version').textContent = shortVersion(serverVersion);
 }
 setInterval(() => { if (gearMenu.classList.contains('open')) checkServer(); }, 4000);
 
@@ -2228,7 +2232,7 @@ function buildGearMenu() {
   left.className = 'menu__col menu__col--left';
   const status = document.createElement('div');
   status.className = 'menu__row status';
-  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div>';
+  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span><span class="cache__size status__version"></span></div>';
   const quitNote = document.createElement('div');
   quitNote.className = 'cache__note quit__note';
   quitNote.textContent = t('set.quitNote');
