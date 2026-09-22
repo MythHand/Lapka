@@ -130,7 +130,7 @@ export function findCurrentEpisode(doc, url) {
 /* "2 сезон", "Season 2", "2nd season", "S2", or a bare number at the
    end of a title ("Богиня благословляет этот прекрасный мир 2",
    "Этот Замечательный Мир! 3 (OVA)"): the season a title names */
-const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /сезон\s*№?\s*(\d{1,2})(?!\d)/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\b(?:part|часть)\s*(\d{1,2})(?!\d)/i, /\bS(\d{1,2})\b(?!\d)/];
+const SEASON = [/(\d{1,2})\s*-?\s*(?:й|ой|ый)?\s*сезон/i, /сезон\s*№?\s*(\d{1,2})(?!\d)/i, /season\s*(\d{1,2})/i, /(\d{1,2})(?:st|nd|rd|th)\s+season/i, /\b(?:part|часть)\s*(\d{1,2})(?!\d)/i, /\bS(\d{1,2})\b(?!\d)/, /(?:^|[\s[(])(?:ТВ|TV)-(\d{1,2})(?!\d)/i];
 
 /* "neobjatnyj-okean-sezon-3", "one_piece_season_2", "…/s2/": the season an address names */
 const SEASON_PATH = /(?:^|[-_/])(?:sezon|season|s)[-_]?(\d{1,2})(?=[-_/.]|$)/i;

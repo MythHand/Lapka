@@ -99,7 +99,7 @@ describe('the synthetic site', () => {
 describe('seasons', () => {
   test('the season in a title', async () => {
     const { seasonFromText } = await import('../core/discover/series.mjs');
-    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2], ['Богиня благословляет этот прекрасный мир 2', 2], ['Этот Замечательный Мир! 3 (OVA)', 3], ['Стальной алхимик 2003', null], ['Ван-Пис 1080p', null]])
+    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2], ['Богиня благословляет этот прекрасный мир 2', 2], ['Этот Замечательный Мир! 3 (OVA)', 3], ['Стальной алхимик 2003', null], ['Ван-Пис 1080p', null], ['Дни Сакамото [ТВ-1]', 1], ['One Piece TV-2', 2]])
       assert.equal(seasonFromText(t), n, t);
   });
   test('a series in two seasons: each page names the other, and knows which one it is', () => {
@@ -153,6 +153,18 @@ describe('the page\'s own word', () => {
     const c = toContribution(r);
     assert.equal(c.series.year, 2024);
     assert.equal(c.series.kind, 'movie');
+  });
+});
+
+describe('players in script objects', () => {
+  test('an address of a known player in a script object counts without a name beside it', () => {
+    const html = `<html><head><title>Дни [ТВ-1] смотреть</title></head><body><h1>Дни [ТВ-1]</h1>
+      <script>var kodik = {"item_id":"serial-1","translators":{"AniDUB":{"seasons":{"1":{"link":"\\/\\/kodikplayer.com\\/season\\/107290\\/f172c0\\/720p","list":[1,2,3]}}},"SHIZA":{"seasons":{"1":{"link":"\\/\\/kodikplayer.com\\/season\\/107274\\/899b7e\\/720p","list":[1,2,3]}}}}};</script>
+      <script>var other = {"link":"https://example.org/promo","list":[1]};</script>
+    </body></html>`;
+    const r = discover({ html, url: 'https://site.test/5190-dni.html' });
+    assert.deepEqual(r.players.map(p => p.url).sort(), ['https://kodikplayer.com/season/107274/899b7e/720p', 'https://kodikplayer.com/season/107290/f172c0/720p']);
+    assert.equal(r.season, 1);
   });
 });
 

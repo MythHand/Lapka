@@ -131,7 +131,22 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const said = r => r.error ? `${r.player.id}: ${r.error}`
       : r.unfolded ? `${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`
       : `${r.player.id}: потоки есть`;
-    const results = await Promise.all(embeds.map(p => openPlayer(p, number, report.url).then(r => { onStep(said(r)); return r; })));
+    /* Embeds a player can unfold hold the whole series each: one such
+       embed per player is opened first, and the rest of that player's are
+       opened only when it did not unfold (a page lists one Kodik season
+       embed per dub, sixteen of them, and any one of them names them all). */
+    const open = p => openPlayer(p, number, report.url).then(r => { onStep(said(r)); return r; });
+    const unfolding = p => !!extractorFor(extractors, p.url)?.unfold;
+    const firstOf = new Map();
+    const heads = [], tails = [];
+    for (const p of embeds) {
+      const x = unfolding(p) ? extractorFor(extractors, p.url).name : null;
+      if (x && firstOf.has(x)) tails.push(p); else { if (x) firstOf.set(x, p); heads.push(p); }
+    }
+    const results = await Promise.all(heads.map(open));
+    const rest = tails.filter(p => { const x = extractorFor(extractors, p.url).name; const first = results.find(r => r.player === firstOf.get(x)); return !(first && first.unfolded); });
+    if (rest.length) results.push(...await Promise.all(rest.map(open)));
+    for (const p of tails) if (!results.some(r => r.player === p)) results.push({ player: p, extractor: extractorFor(extractors, p.url).name, error: null, same: true });
     const opened = [];
     for (const r of results) {
       opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null, unfolded: r.unfolded || null,
@@ -145,9 +160,11 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     }
     const steps = [];
     if (embeds.length) {
+      const same = results.filter(r => r.same).length, asked = embeds.length - same;
       const ok = results.filter(r => r.contribution).length;
-      steps.push(ok === embeds.length ? `Открыла ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}, потоки есть`
-        : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
+      steps.push((ok === asked ? `Открыла ${asked} ${plural(asked, 'плеер', 'плеера', 'плееров')}, потоки есть`
+        : `Открыла ${ok} из ${asked} ${plural(asked, 'плеера', 'плееров', 'плееров')}`)
+        + (same ? `; ещё ${same} ${plural(same, 'ссылка ведёт', 'ссылки ведут', 'ссылок ведут')} в тот же плеер` : ''));
       for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
       for (const r of results) if (r.unfolded) steps.push(`${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`);
     }

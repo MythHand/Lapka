@@ -23,6 +23,8 @@ const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-
 const SCRIPT_URL_KEYS = ['remote', 'url', 'src', 'embed', 'link', 'file', 'iframe', 'code'];
 const SCRIPT_NAME_KEYS = ['server', 'name', 'title', 'player', 'host', 'provider'];
 const SCRIPT_DUB_KEYS = ['dub', 'dubbing', 'translation', 'voice', 'audio', 'language'];
+/* hosts that are players by name: an address of theirs in a script needs no label beside it to count */
+const PLAYER_HOST = /kodik|aniboom|alloha|sibnet|cdnvideohub|streamtape|mp4upload|streamwish|filemoon|dood|vidhide|mixdrop|vk\.com|ok\.ru/i;
 /* data-src is how images load lazily too: on a picture element, or
    one that calls itself a picture, or with a picture's address, it is
    an image; on a frame, a video or a switch item it is a player */
@@ -136,7 +138,8 @@ export function findPlayers(doc, url, { profile } = {}) {
       if (!embed) continue;
       const name = SCRIPT_NAME_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v.trim());
       const dub = SCRIPT_DUB_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v.trim());
-      if (!name && !dub) continue;
+      /* no name beside it: still a player when the host is one ({"link":"//kodikplayer.com/season/…","list":[1,2,3]}) */
+      if (!name && !dub) { let host = ''; try { host = new URL(embed).hostname; } catch { /* not an address */ } if (PLAYER_HOST.test(host)) add(embed, 'script', 'script object'); continue; }
       fromScripts.push({ embed, name: name ? clean(name) : null, dub: dub ? clean(dub) : null });
     }
   }
