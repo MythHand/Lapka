@@ -198,6 +198,11 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         state.setPosition(q.get('series'), Number(q.get('episode')), q.get('dub'), q.has('t') ? Number(q.get('t')) : null);
         return json(res, 200, { ok: true });
       }
+      if (state && mutating && p === '/api/state/watched') {
+        const q = url.searchParams;
+        state.setWatched(q.get('series'), Number(q.get('episode')), q.get('on') !== '0');
+        return json(res, 200, { ok: true });
+      }
       if (state && mutating && p === '/api/state/dub') {
         state.setDub(url.searchParams.get('series'), url.searchParams.get('dub') || null);
         return json(res, 200, { ok: true });

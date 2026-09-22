@@ -859,8 +859,10 @@ svg.ph{ fill:currentColor; stroke:none; }
   box-shadow:0 1px 3px rgba(0,0,0,.45); display:none; pointer-events:none;
 }
 .item__thumb .pos{ height:2px; }
-.has-pos .pos{ display:block; }
+.has-pos .pos, .is-watched .pos{ display:block; }
 .pos i{ display:block; height:100%; width:calc(var(--pos, 0) * 100%); border-radius:inherit; background:#fff; }
+/* watched to the end: the bar is full; left in the middle again, the bar shows the middle */
+.is-watched:not(.has-pos) .pos i{ width:100%; }
 .tile::after{
   content:''; position:absolute; inset:0; border-radius:9px;
   box-shadow:inset 0 0 0 2px #fff; pointer-events:none;
@@ -926,6 +928,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3);
   min-width:0;
 }
+.item.is-watched .item__name{ color:var(--tx-3); }
 .item.active .item__name{ color:#fff; }
 .item__meta b{ font-weight:400; color:var(--tx-2); }
 /* duration and size have a fixed width so the columns do not dance */

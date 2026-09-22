@@ -406,6 +406,7 @@ function markPos(it, sec) {
   const d = duration();
   const gone = sec < POS_MIN || (d && sec > d - POS_TAIL);
   if (gone) delete state.positions[k]; else state.positions[k] = Math.round(sec);
+  if (d > POS_TAIL && sec > d - POS_TAIL) markWatched(it);   // the last minute: the episode is finished
   clearTimeout(posTimers[k]);
   const [series, episode, dub] = k.split('/');
   posTimers[k] = setTimeout(() => post(`/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec)}`).catch(() => {}), 800);
@@ -415,15 +416,30 @@ function markPos(it, sec) {
   }
 }
 
+/* An episode watched to its end is remembered by the series and the
+   number, whatever the dub, and for good: watching it again does not
+   take the mark away. */
+const watchKey = it => it && it.seriesId ? `${it.seriesId}/${it.number}` : null;
+function markWatched(it) {
+  const k = watchKey(it);
+  if (!k || state.watched[k]) return;
+  state.watched[k] = true;
+  const [series, episode] = k.split('/');
+  post(`/api/state/watched?series=${series}&episode=${episode}`).catch(() => {});
+  for (const li of queueList.children) if (byId(li.dataset.id) === it) paintPos(li, it);
+}
+
 /* Where watching stopped, drawn as a bar on the episode's frame, in the
    rows and in the tiles alike. Only what the player would return to is
-   drawn: the first half minute and the last minute are not kept, so a
-   finished episode has no bar. */
+   drawn: the first half minute and the last minute are not kept. A
+   watched episode keeps a full bar and a quieter name; left in the
+   middle again, its bar shows the middle. */
 function paintPos(li, it) {
   const k = posKey(it);
   const at = k ? state.positions[k] : null, d = it.dur;
   const f = at && d ? Math.min(1, at / d) : 0;
   li.classList.toggle('has-pos', f > 0);
+  li.classList.toggle('is-watched', !!state.watched[watchKey(it)]);
   li.style.setProperty('--pos', f.toFixed(4));
 }
 
@@ -463,6 +479,7 @@ const state = {
   quality: strFromStore('lapka.quality', 'auto'),   // '1080p', '720p', … or 'auto' for the best there is
   saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, size, path }]
   positions: {},     // series/episode/dub → seconds, mirrored from the server
+  watched: {},       // series/episode → true, mirrored from the server
   remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,
   autoplay: strFromStore('lapka.autoplay', '1') !== '0',
@@ -3606,6 +3623,7 @@ video.addEventListener('waiting', () => { const it = cur(); if (it && it.loadedS
 video.addEventListener('canplay', () => { clearTimeout(stallT); hideNotice('busy'); });
 video.addEventListener('timeupdate', () => { if (noticeKind === 'busy' && !video.paused && video.readyState >= 3) hideNotice('busy'); });   // the picture moves: nothing is waiting
 video.addEventListener('ended', () => {
+  markWatched(cur());              // however short the episode was
   /* looping one file works even with autoplay off: it is a mode set
      explicitly, not an automatic decision */
   const advancing = state.loop === 'one' || state.autoplay;
@@ -3859,11 +3877,12 @@ document.addEventListener('keyup', e => {
   btnAudio.hidden = true;
   btnSubs.hidden = true;
 
-  /* what the server remembers: positions and the dub per series */
+  /* what the server remembers: positions, watched episodes and the dub per series */
   try {
     const st = await api('/api/state');
     state.remote = st;
     for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = v.t;
+    for (const k of Object.keys(st.watched || {})) state.watched[k] = true;
   } catch (_) { /* the server may be starting */ }
 
   sessionReady = true;

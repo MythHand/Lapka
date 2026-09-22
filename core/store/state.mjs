@@ -1,8 +1,8 @@
 /* ═══════════════════════════════════════════════════════════
    State: what the user did, remembered.
 
-   Where each episode was left, which dub the user chose for a series,
-   the settings. One JSON file, written whole and atomically, a little
+   Where each episode was left, which episodes were watched to the end,
+   which dub the user chose for a series, the settings. One JSON file, written whole and atomically, a little
    after the last change rather than on every tick of the clock.
    Keys are catalog identities, never paths.
    ═══════════════════════════════════════════════════════════ */
@@ -14,7 +14,7 @@ const POS_KEEP = 500;
 
 export async function openState(own) {
   const file = path.join(own, 'state.json');
-  let data = { v: STATE_V, positions: {}, dubs: {}, settings: {}, saves: {} };
+  let data = { v: STATE_V, positions: {}, watched: {}, dubs: {}, settings: {}, saves: {} };
   try {
     const got = JSON.parse(await fsp.readFile(file, 'utf8'));
     if (got && got.v === STATE_V) data = { ...data, ...got };
@@ -40,6 +40,13 @@ export async function openState(own) {
       /* the oldest are let go, so the file does not grow with every episode ever watched */
       const keys = Object.keys(data.positions);
       if (keys.length > POS_KEEP) for (const k of keys.sort((a, b) => data.positions[a].at - data.positions[b].at).slice(0, keys.length - POS_KEEP)) delete data.positions[k];
+      soon();
+    },
+    /* an episode watched to its end, whatever the dub; kept for good, unlike the positions */
+    watched(seriesId, episode) { return !!data.watched[`${seriesId}/${episode}`]; },
+    setWatched(seriesId, episode, on = true) {
+      const k = `${seriesId}/${episode}`;
+      if (on) data.watched[k] = { at: Date.now() }; else delete data.watched[k];
       soon();
     },
     dub(seriesId) { return data.dubs[seriesId] || null; },
