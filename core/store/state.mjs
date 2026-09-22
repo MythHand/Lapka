@@ -33,10 +33,11 @@ export async function openState(own) {
     file,
     get: () => data,
     position(seriesId, episode, dub) { return data.positions[posKey(seriesId, episode, dub)]?.t ?? null; },
-    setPosition(seriesId, episode, dub, seconds) {
+    /* the duration goes along, so a row can show where the episode was left before it is ever opened again */
+    setPosition(seriesId, episode, dub, seconds, duration = 0) {
       const k = posKey(seriesId, episode, dub);
       if (seconds === null) delete data.positions[k];
-      else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), at: Date.now() };
+      else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), d: Math.max(0, Number(duration) || 0), at: Date.now() };
       /* the oldest are let go, so the file does not grow with every episode ever watched */
       const keys = Object.keys(data.positions);
       if (keys.length > POS_KEEP) for (const k of keys.sort((a, b) => data.positions[a].at - data.positions[b].at).slice(0, keys.length - POS_KEEP)) delete data.positions[k];

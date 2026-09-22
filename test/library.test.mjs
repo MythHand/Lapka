@@ -121,7 +121,7 @@ describe('the state', () => {
   test('positions and the dub choice survive a restart', async () => {
     const own = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-state-'));
     const a = await openState(own);
-    a.setPosition('s1', 3, 'anilibria', 754.5);
+    a.setPosition('s1', 3, 'anilibria', 754.5, 1440);
     a.setPosition('s1', 4, 'anilibria', 12);
     a.setDub('s1', 'anilibria');
     a.setWatched('s1', 2);
@@ -131,6 +131,7 @@ describe('the state', () => {
     await a.close();
     const b = await openState(own);
     assert.equal(b.position('s1', 3, 'anilibria'), 754.5);
+    assert.equal(b.get().positions['s1/3/anilibria'].d, 1440);
     assert.equal(b.position('s1', 4, 'anilibria'), 12);
     assert.equal(b.position('s1', 5, 'anilibria'), null);
     assert.equal(b.dub('s1'), 'anilibria');
@@ -146,11 +147,12 @@ describe('the state', () => {
   });
 
   test('the routes write it', async () => {
-    assert.equal((await post('/api/state/position?series=s9&episode=2&dub=jam&t=33')).status, 200);
+    assert.equal((await post('/api/state/position?series=s9&episode=2&dub=jam&t=33&d=1400')).status, 200);
     assert.equal((await post('/api/state/dub?series=s9&dub=jam')).status, 200);
     assert.equal((await post('/api/state/watched?series=s9&episode=1')).status, 200);
     const st = await (await get('/api/state')).json();
     assert.equal(st.positions['s9/2/jam'].t, 33);
+    assert.equal(st.positions['s9/2/jam'].d, 1400);
     assert.ok(st.watched['s9/1'].at > 0);
     assert.equal(st.dubs.s9, 'jam');
     assert.equal((await fetch(lapka.base + '/api/state/dub?series=s9&dub=x', { method: 'POST' })).status, 403);
