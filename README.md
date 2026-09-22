@@ -107,7 +107,7 @@ needs for an exact answer is there.
 
 ## Development
 
-- `npm run dev` — Lapka on 8800 and the synthetic test site on 8801.
+- `npm run dev` — Lapka on 8800 and the synthetic test site on 8801 (the site's clips are made with ffmpeg; without it only Lapka starts).
   `SITE_SLOW_MS=3000 npm run site` slows the synthetic site's files down, for
   trying pauses and the save queue by hand.
 - `npm test` — all tests. `npm run check` — the static check of the front end.
