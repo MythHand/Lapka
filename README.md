@@ -130,11 +130,11 @@ it is the tooling for working on Lapka's code, not needed for watching.
   `SITE_SLOW_MS=3000 npm run site` slows the synthetic site's files down, for
   trying pauses and the save queue by hand.
 - `npm test` — all tests. `npm run check` — the static check of the front end.
-  The tests of real sites run on snapshots of their pages, which are kept outside the
-  repository; without them those tests report themselves as skipped.
+  The tests of real sites are kept outside the repository together with the snapshots
+  of their pages.
 - The map of the core and the contracts of its blocks: [core/README.md](core/README.md).
 
-![npm test: 181 tests pass](docs/media/tests.png)
+![npm test: 100 tests pass](docs/media/tests.png)
 
 ## Boundaries
 
