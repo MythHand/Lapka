@@ -70,6 +70,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     return check;
   };
   const server = await startServer({ port, webDir, ctx });
+  ctx.port = server.port || port;   // the one really listened on, for starting again after an update
   /* saves cut short last time are taken up again, a moment after start, unless switched off */
   ctx.resumeSaves = () => (ctx.state.setting('autoResume') === 'off' ? Promise.resolve([]) : ctx.saver.resume(ctx.lapka));
   /* A save cut short is taken up again while Lapka runs: a moment

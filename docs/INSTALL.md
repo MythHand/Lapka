@@ -173,7 +173,13 @@ disk and come back at the next start.
 
 ## Updating
 
-The short way: double-click `update.command` (macOS) or `update.bat`
+From Lapka itself: settings → the "Version v…" row → "Check for an update".
+When there is a newer one, an "Update to v…" button appears: Lapka fetches the
+new version, installs what it needs, starts itself again and asks to reload the
+page. It works for a folder downloaded as a ZIP too: the release archive is
+taken from GitHub then. The check goes online only when the button is pressed.
+
+The short way outside Lapka: double-click `update.command` (macOS) or `update.bat`
 (Windows), or run `./update.sh` on Linux. If the folder came by `git clone`,
 it pulls the newest version, installs what changed and starts Lapka again if
 it was running. If the folder came as a ZIP, it says where the new ZIP is.
@@ -205,6 +211,11 @@ and shows no red errors; the address is exactly `http://127.0.0.1:8800`, not
 
 **Saving does not work, playing does.** No ffmpeg, or it is not in PATH. Check
 `ffmpeg -version` in a new terminal window.
+
+**`Error: spawn ffmpeg ENOENT`.** The same: ffmpeg was not found. Watching works
+without it, saving does not. If it came from `npm run dev`: that is the
+developers' command, which also starts a test site whose clips are made with
+ffmpeg; to watch, use `npm start` or the launcher.
 
 **A site did not open.** Not every site is built the same way; the list of
 tested ones is in the [README](../README.md). Sites with DRM, and sites that

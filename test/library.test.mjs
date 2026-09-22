@@ -161,6 +161,16 @@ describe('the state', () => {
   });
 });
 
+/* ── the update route is Lapka's own to set off ── */
+describe('the update route', () => {
+  test('the stream opens only with a token from a POST of Lapka\'s own', async () => {
+    assert.equal((await get('/api/update/live?token=nope')).status, 403);
+    assert.equal((await fetch(lapka.base + '/api/update/start', { method: 'POST' })).status, 403, 'no header, no token');
+    const r = await (await post('/api/update/start?tag=v9.9.9')).json();
+    assert.match(r.token, /^[a-z0-9]{10,}$/);
+  });
+});
+
 /* ── the look told as it goes ── */
 describe('the live look', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
   test('a stream of steps, then the answer', async () => {

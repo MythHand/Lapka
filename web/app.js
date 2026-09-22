@@ -1916,7 +1916,7 @@ const KEYS_UI = [
   [
     [['Space', 'K'],   'keys.play'],
     [['←', '→'],       'keys.seek5'],
-    [['⇧←', '⇧→'],     'keys.seek1'],
+    [['Shift ←', 'Shift →'], 'keys.seek1'],
     [['J', 'L'],       'keys.seek10'],
     [['0–9'],          'keys.jump'],
     [['Home', 'End'],  'keys.edges'],
@@ -2215,6 +2215,70 @@ async function checkServer() {
 }
 /* "v1.1.0", as the tag on GitHub reads */
 const shortVersion = v => v ? 'v' + String(v) : '';
+
+/* ── the update ────────────────────────────────────────────────
+   One row: the version as a heading, then a button that asks GitHub
+   once, then either the word that this is the latest or the button to
+   update; pressed, the button gives way to the steps as the server
+   tells them, Lapka restarts itself, and when it answers again with the
+   new version the row asks to reload the page. The state outlives the
+   sheet, which is rebuilt on every opening. */
+const update = { phase: 'idle', latest: null, tag: null, why: '', steps: [] };
+function paintUpdate() {
+  const row = gearMenu.querySelector('.upd');
+  if (!row) return;
+  const head = row.querySelector('.upd__head'), note = row.querySelector('.upd__note'), log = row.querySelector('.upd__log'), btn = row.querySelector('.upd__btn');
+  head.textContent = t('set.version', { v: shortVersion(serverVersion) || '…' });
+  const v = shortVersion(update.latest);
+  const show = (noteText, btnText, { disabled = false } = {}) => { note.textContent = noteText; btn.hidden = !btnText; btn.textContent = btnText || ''; btn.disabled = disabled; };
+  log.replaceChildren();
+  switch (update.phase) {
+    case 'checking': show('', t('upd.checking'), { disabled: true }); break;
+    case 'latest': show(t('upd.latest'), ''); break;
+    case 'newer': show('', t('upd.to', { v })); break;
+    case 'updating': show('', ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = s; log.append(d); } break;
+    case 'restarting': show(t('upd.waiting'), ''); break;
+    case 'done': show(t('upd.done', { v }), t('upd.reload')); break;
+    case 'failed': show(t('upd.failed', { why: update.why }), t('upd.check')); break;
+    default: show('', t('upd.check'));
+  }
+}
+async function updateClick() {
+  if (update.phase === 'done') { location.reload(); return; }
+  if (update.phase === 'newer') return startUpdate();
+  if (update.phase === 'checking' || update.phase === 'updating' || update.phase === 'restarting') return;
+  update.phase = 'checking'; paintUpdate();
+  try {
+    const r = await post('/api/update/check');
+    update.latest = r.latest; update.tag = r.tag;
+    update.phase = r.newer ? 'newer' : 'latest';
+  } catch (e) { update.phase = 'failed'; update.why = e.message; }
+  paintUpdate();
+}
+async function startUpdate() {
+  update.phase = 'updating'; update.steps = []; paintUpdate();
+  let token;
+  try { token = (await post('/api/update/start?tag=' + encodeURIComponent(update.tag || ''))).token; }
+  catch (e) { update.phase = 'failed'; update.why = e.message; paintUpdate(); return; }
+  const es = new EventSource('/api/update/live?token=' + encodeURIComponent(token));
+  es.addEventListener('step', e => { try { update.steps.push(JSON.parse(e.data)); } catch (_) {} paintUpdate(); });
+  es.addEventListener('fail', e => { es.close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} update.phase = 'failed'; update.why = d.error || 'update failed'; paintUpdate(); });
+  es.addEventListener('done', () => { es.close(); update.phase = 'restarting'; paintUpdate(); awaitRestart(); });
+  es.onerror = () => { if (update.phase === 'updating') { es.close(); update.phase = 'failed'; update.why = t('set.cacheFail'); paintUpdate(); } };
+}
+/* Lapka is gone and comes back: the new one answers with the new version */
+function awaitRestart() {
+  const began = Date.now();
+  const tick = async () => {
+    try {
+      const p = await api('/api/ping');
+      if (p.version && (!update.latest || p.version === update.latest)) { serverVersion = p.version; serverState = 'up'; update.phase = 'done'; paintStatus(); paintUpdate(); return; }
+    } catch (_) { /* still away */ }
+    if (Date.now() - began > 180000) { update.phase = 'failed'; update.why = t('upd.lost'); paintUpdate(); return; }
+    setTimeout(tick, 1000);
+  };
+  setTimeout(tick, 1500);
+}
 function paintStatus() {
   const row = gearMenu.querySelector('.status');
   if (!row) return;
@@ -2261,6 +2325,15 @@ function buildGearMenu() {
   status.append(quitNote, quitGuide, quit);
   left.append(status);
   paintStatus(); checkServer();
+
+  /* the version, and the way to the next one: asked for on the button, never on its own */
+  const upd = document.createElement('div');
+  upd.className = 'menu__row upd';
+  upd.innerHTML = '<span class="menu__rowlabel upd__head"></span><div class="home__part"><div class="home__what"><div class="cache__note upd__note"></div><div class="upd__log"></div></div><button class="btn btn--quiet upd__btn"></button></div>';
+  upd.querySelector('.upd__btn').onclick = ev => { ev.stopPropagation(); updateClick(); };
+  upd.addEventListener('click', ev => ev.stopPropagation());
+  left.append(upd);
+  paintUpdate();
 
   /* ─ second: the interface ─ */
   const ui = document.createElement('div');

@@ -22,9 +22,8 @@ import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
-
-/* the version, from the package: the one place it is written */
-export const VERSION = createRequire(import.meta.url)('../../package.json').version;
+import { VERSION, checkUpdate, runUpdate, restartAfterExit, installKind } from '../update.mjs';
+export { VERSION };
 
 const VENDOR = { 'hls.min.js': createRequire(import.meta.url).resolve('hls.js/dist/hls.min.js') };
 
@@ -122,6 +121,35 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         catch (e) { return json(res, 500, { error: e.message }); }
       }
       if (ctx.quit && mutating && p === '/api/quit') { ctx.quit(); return json(res, 200, { ok: true }); }
+
+      /* Updating: GitHub is asked only here, on the button. The update itself
+         is a stream of steps like the live look; it starts with a one-time
+         token from a POST, so no page but Lapka's own can set it off. */
+      if (mutating && p === '/api/update/check') {
+        try { return json(res, 200, { ...(await checkUpdate()), kind: installKind() }); }
+        catch (e) { return json(res, 502, { error: e.message }); }
+      }
+      if (ctx.quit && mutating && p === '/api/update/start') {
+        const tag = url.searchParams.get('tag') || '';
+        ctx.updateToken = { token: Math.random().toString(36).slice(2) + Date.now().toString(36), tag, until: Date.now() + 60 * 1000 };
+        return json(res, 200, { token: ctx.updateToken.token });
+      }
+      if (ctx.quit && req.method === 'GET' && p === '/api/update/live') {
+        const t = ctx.updateToken;
+        if (!t || t.token !== url.searchParams.get('token') || t.until < Date.now()) return json(res, 403, { error: 'no such update' });
+        ctx.updateToken = null;
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', 'connection': 'keep-alive' });
+        const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+        try {
+          await runUpdate({ tag: t.tag, onStep: s => send('step', s) });
+          send('step', 'Перезапускаю Lapka');
+          send('done', { ok: true });
+          res.end();
+          restartAfterExit({ port: ctx.port });
+          ctx.quit();
+        } catch (e) { send('fail', { error: e.message }); res.end(); }
+        return;
+      }
       if (ctx.switchHome && mutating && p === '/api/home/pick') {
         try {
           const picked = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
