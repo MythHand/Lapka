@@ -107,9 +107,10 @@ needs for an exact answer is there.
 
 ## Development
 
-Nothing in this section is needed for watching: the ordinary start is described
-above, under "Running it", and in the guide. This is what is needed to work on
-Lapka itself.
+How to start Lapka is said in the two sections above: "Running it" is the
+developer's start from a clone (`git clone`, `npm install`, `npm start`), "If you
+are not a developer" is the ZIP install with a launcher. This section is neither:
+it is the tooling for working on Lapka's code, not needed for watching.
 
 - `npm run dev` — Lapka on 8800 and the synthetic test site on 8801: a stand-in
   "anime site" from `test/site` that the generic reading of pages is checked

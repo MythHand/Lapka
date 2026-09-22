@@ -2209,7 +2209,7 @@ function homeRow(col) {
 let serverState = 'checking';         // up | down | off | checking
 let serverVersion = '';               // "1.1.0", as the package says; shown as v1.1
 async function checkServer() {
-  if (serverState === 'off') return paintStatus();
+  if (serverState === 'off' || serverState === 'updating') return paintStatus();
   try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
@@ -2241,7 +2241,7 @@ function paintUpdate() {
     case 'checking': show('', t('upd.checking'), { disabled: true }); break;
     case 'latest': show(t('upd.latest'), t('upd.again')); break;
     case 'newer': show(t('upd.available', { v }), t('upd.to', { v })); break;
-    case 'updating': show('', ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = s; log.append(d); } break;
+    case 'updating': show(t('upd.updating', { v }), ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = s; log.append(d); } break;
     case 'restarting': show(t('upd.waiting'), ''); break;
     case 'done': show(t('upd.done', { v }), t('upd.reload')); break;
     case 'failed': show(t('upd.failed', { why: update.why }), t('upd.again')); break;
@@ -2261,15 +2261,15 @@ async function updateClick() {
   paintUpdate();
 }
 async function startUpdate() {
-  update.phase = 'updating'; update.steps = []; paintUpdate();
+  update.phase = 'updating'; update.steps = []; serverState = 'updating'; paintStatus(); paintUpdate();
   let token;
   try { token = (await post('/api/update/start?tag=' + encodeURIComponent(update.tag || ''))).token; }
   catch (e) { update.phase = 'failed'; update.why = e.message; paintUpdate(); return; }
   const es = new EventSource('/api/update/live?token=' + encodeURIComponent(token));
   es.addEventListener('step', e => { try { update.steps.push(JSON.parse(e.data)); } catch (_) {} paintUpdate(); });
-  es.addEventListener('fail', e => { es.close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} update.phase = 'failed'; update.why = d.error || 'update failed'; paintUpdate(); });
+  es.addEventListener('fail', e => { es.close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} update.phase = 'failed'; update.why = d.error || 'update failed'; serverState = 'up'; paintStatus(); paintUpdate(); });
   es.addEventListener('done', () => { es.close(); update.phase = 'restarting'; paintUpdate(); awaitRestart(); });
-  es.onerror = () => { if (update.phase === 'updating') { es.close(); update.phase = 'failed'; update.why = t('set.cacheFail'); paintUpdate(); } };
+  es.onerror = () => { if (update.phase === 'updating') { es.close(); update.phase = 'failed'; update.why = t('set.cacheFail'); serverState = 'up'; paintStatus(); paintUpdate(); } };
 }
 /* Lapka is gone and comes back: the new one answers with the new version */
 function awaitRestart() {
@@ -2279,7 +2279,7 @@ function awaitRestart() {
       const p = await api('/api/ping');
       if (p.version && (!update.latest || p.version === update.latest)) { serverVersion = p.version; serverState = 'up'; update.phase = 'done'; paintStatus(); paintUpdate(); return; }
     } catch (_) { /* still away */ }
-    if (Date.now() - began > 180000) { update.phase = 'failed'; update.why = t('upd.lost'); paintUpdate(); return; }
+    if (Date.now() - began > 180000) { update.phase = 'failed'; update.why = t('upd.lost'); serverState = 'down'; paintStatus(); paintUpdate(); return; }
     setTimeout(tick, 1000);
   };
   setTimeout(tick, 1500);

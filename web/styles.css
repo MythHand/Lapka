@@ -1374,6 +1374,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .status__dot.is-checking{ background:var(--tx-3); box-shadow:none; }
 .status__dot.is-down{ background:#e0a24a; box-shadow:0 0 0 3px rgba(224,162,74,.18); animation:status-breathe 1.4s ease-in-out infinite; }
 .status__dot.is-off{ background:transparent; border:2px solid var(--tx-3); box-shadow:none; }
+.status__dot.is-updating{ background:#e0a24a; box-shadow:0 0 0 3px rgba(224,162,74,.18); animation:status-breathe 1.4s ease-in-out infinite; }
 @keyframes status-breathe{ 50%{ opacity:.35; } }
 @media (prefers-reduced-motion: reduce){ .status__dot.is-down{ animation:none; } }
 /* Opening: the menu comes from the gear's side, sliding 60px left into
