@@ -2284,7 +2284,6 @@ function paintStatus() {
   if (!row) return;
   row.querySelector('.status__dot').className = 'status__dot is-' + serverState;
   row.querySelector('.status__label').textContent = t('set.status.' + serverState);
-  row.querySelector('.status__version').textContent = shortVersion(serverVersion);
 }
 setInterval(() => { if (gearMenu.classList.contains('open')) checkServer(); }, 4000);
 
@@ -2296,7 +2295,7 @@ function buildGearMenu() {
   left.className = 'menu__col menu__col--left';
   const status = document.createElement('div');
   status.className = 'menu__row status';
-  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div><div class="cache__size status__version"></div>';
+  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div>';
   const quitNote = document.createElement('div');
   quitNote.className = 'cache__note quit__note';
   quitNote.textContent = t('set.quitNote');
@@ -2333,7 +2332,6 @@ function buildGearMenu() {
   upd.querySelector('.upd__btn').onclick = ev => { ev.stopPropagation(); updateClick(); };
   upd.addEventListener('click', ev => ev.stopPropagation());
   left.append(upd);
-  paintUpdate();
 
   /* ─ second: the interface ─ */
   const ui = document.createElement('div');
@@ -2424,6 +2422,7 @@ function buildGearMenu() {
   keys.append(grid);
 
   gearMenu.append(left, ui, player, place, keys);
+  paintStatus(); paintUpdate();      // the rows are in the sheet now: painted from what is known
 }
 
 btnGear.onclick = e => {
