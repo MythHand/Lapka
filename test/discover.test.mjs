@@ -119,6 +119,35 @@ describe('seasons', () => {
   });
 });
 
+describe('the page\'s own word', () => {
+  test('a franchise block with the year inside each link outranks season links; the window title and a labelled year name the page', () => {
+    const html = `<html><head><meta property="og:type" content="movie"><title>Герой: Фильм смотреть аниме фильм онлайн</title></head><body>
+      <h1>Герой: Фильм</h1>
+      <ul class="info"><li><span>Год выхода:</span> <a href="/catalog/2024/">2024</a></li><li><span>Время:</span> 90 мин.</li></ul>
+      <div class="section"><div class="section__title"><span>Порядок</span> просмотра:</div><div class="items">
+        <div class="item"><a href="/1-geroj.html"><img alt="Герой"><div class="label">2016</div><div class="t">Герой</div></a></div>
+        <div class="item"><a href="/2-geroj-2.html"><img alt="Герой 2 сезон"><div class="label">2017</div><div class="t">Герой 2 сезон</div></a></div>
+        <div class="item"><a href="/3-geroj-ova.html"><img alt="Герой OVA"><div class="label">2018</div><div class="t">Герой OVA</div></a></div>
+      </div></div>
+      <div class="also"><a href="/77-drugoe-3-sezon.html">Другое 3 сезон</a></div>
+    </body></html>`;
+    const r = discover({ html, url: 'https://site.test/9-geroj-film.html' });
+    assert.equal(r.year, 2024);
+    assert.equal(r.kind_, 'movie');
+    assert.equal(r.season, null, 'a place in a block ordered by year is not a season');
+    /* og:type says movie on every page of such sites: the title's own word decides */
+    const tv = discover({ html: html.replace('<title>Герой: Фильм смотреть аниме фильм онлайн</title>', '<title>Герой 2 сезон смотреть аниме сериал онлайн</title>').replace('<h1>Герой: Фильм</h1>', '<h1>Герой 2 сезон</h1>'), url: 'https://site.test/2-geroj-2.html' });
+    assert.equal(tv.kind_, 'tv');
+    assert.equal(tv.season, 2);
+    assert.deepEqual(r.franchise.map(f => [f.order, f.title, f.year, f.kind, f.self]), [
+      [1, 'Герой', 2016, 'tv', false], [2, 'Герой 2 сезон', 2017, 'tv', false], [3, 'Герой OVA', 2018, 'ova', false], [4, 'Герой: Фильм', 2024, 'movie', true],
+    ]);
+    const c = toContribution(r);
+    assert.equal(c.series.year, 2024);
+    assert.equal(c.series.kind, 'movie');
+  });
+});
+
 describe('into the catalog', () => {
   test('series page then episode page: episodes with dubs and sources', () => {
     const s = createSeries({ sourceUrl: `${BASE}/s/links/` });

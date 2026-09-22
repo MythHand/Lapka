@@ -284,7 +284,9 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
         const hrefs = new Set(links.map(a => same(a.getAttribute('href'))).filter(Boolean));
         if (hrefs.size > 1) continue;   // several parts inside: not one item
         const a = links[0] || null;
-        const name = clean(a ? links.map(l => textOf(l) || l.getAttribute('title') || l.querySelector('img')?.getAttribute('alt')).find(Boolean) : (item.textContent || '').replace(y.textContent, ''));
+        /* the year may sit inside the link ("2016 · Name" as one link): it is the year, not a part of the name */
+        const unYear = s => String(s || '').replace(y.textContent, ' ');
+        const name = clean(a ? links.map(l => unYear(textOf(l)) || l.getAttribute('title') || l.querySelector('img')?.getAttribute('alt')).map(s => String(s || '').trim()).find(Boolean) : unYear(item.textContent));
         if (!name) continue;
         const href = a ? [...hrefs][0] : null;
         if (a && !href) continue;
@@ -298,6 +300,7 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
          what it knows of itself */
       let self = items.find(it => it.href === page) || items.find(it => !it.href) || items.find(it => title && it.title.toLowerCase() === String(title).toLowerCase());
       if (!self) { self = { title: String(title || ''), url: null, href: page, year: own.year || null, kind: own.kind || kindOfName(String(title || '')) }; items.push(self); }
+      else if (own.kind) self.kind = own.kind;   // what the page says of itself outranks a guess from its name
       /* a part without a link cannot be looked at, and is left out unless it is this page */
       const parts = items.filter(it => it === self || it.url).map(it => ({ title: it.title, url: it === self ? String(url).replace(/#.*$/, '') : it.url, year: it.year, kind: it.kind, self: it === self }));
       if (parts.length < 2) continue;
@@ -308,10 +311,27 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
   return [];
 }
 
-/* What the page says of itself in schema.org data (JSON-LD): the year
-   it came out and what it is, a series or a film. */
+/* What the page says of itself: in schema.org data (JSON-LD) the year
+   it came out and what it is, a series or a film; failing that, the
+   kind from the window's title and the year from a labelled field
+   ("Год выхода: 2024", "Year: 2024") as sites without structured data
+   write it. */
+const LABELLED_YEAR = /^(?:год(?:\s+(?:выхода|выпуска|производства))?|year|release(?:\s+year)?|дата выхода)\s*:?\s*((?:19|20)\d{2})\b/i;
 export function findSelf(doc) {
   const out = { year: null, kind: null };
+  /* the window's title often names the kind in its tail ("… смотреть аниме
+     фильм онлайн", "… anime series online"); og:type does not: sites put
+     "movie" on every page. Only a title that says one and not the other counts. */
+  const tail = clean(doc.querySelector('title')?.textContent || '').toLowerCase();
+  const film = /(?:^|\s)(?:фильм|movie|film)(?:\s|$)/.test(tail), serial = /(?:^|\s)(?:сериал|series|tv)(?:\s|$)/.test(tail);
+  if (film !== serial) out.kind = film ? 'movie' : 'tv';
+  /* the smallest element that reads "Год выхода: 2024", label and value together, in whatever tags */
+  for (const el of doc.querySelectorAll('li, div, span, td, tr, dt, dd, p')) {
+    const text = clean(el.textContent);
+    if (text.length > 60) continue;
+    const m = LABELLED_YEAR.exec(text);
+    if (m) { out.year = Number(m[1]); break; }
+  }
   for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
     let d; try { d = JSON.parse(s.textContent); } catch { continue; }
     for (const node of (Array.isArray(d) ? d : [d]).flatMap(x => x && x['@graph'] ? x['@graph'] : [x])) {
@@ -320,8 +340,8 @@ export function findSelf(doc) {
       if (!/^(TVSeries|TVSeason|Movie|VideoObject|CreativeWorkSeries|Series)$/i.test(type)) continue;
       const date = node.datePublished || node.startDate || node.dateCreated || '';
       const y = /^(19|20)\d{2}/.exec(String(date));
-      if (y && !out.year) out.year = Number(y[0]);
-      if (!out.kind) out.kind = /Movie/i.test(type) ? 'movie' : /TV|Series/i.test(type) ? 'tv' : null;
+      if (y) out.year = Number(y[0]);                        // structured data outranks a labelled field
+      out.kind = /Movie/i.test(type) ? 'movie' : /TV|Series/i.test(type) ? 'tv' : out.kind;
     }
   }
   return out;
