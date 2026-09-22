@@ -11,7 +11,7 @@
 import { createSession } from './session/index.mjs';
 import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
 import { playerId } from './discover/players.mjs';
-import { loadExtractors, extractorFor } from './extract/index.mjs';
+import { loadExtractors, extractorFor, closedDoor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
 import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS, dubKey } from './catalog/index.mjs';
@@ -72,6 +72,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       try { const url = await followDeferred(player.url, pageUrl); player = { ...player, url, id: playerId(url, pageUrl), kind: 'iframe', followed: true }; }
       catch (e) { return { player, error: e.message }; }
     }
+    const shut = closedDoor(player.url);
+    if (shut) return { player, error: shut };
     const x = extractorFor(extractors, player.url);
     if (!x) return { player, error: 'no extractor' };
     try {

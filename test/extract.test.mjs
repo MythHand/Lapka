@@ -17,7 +17,7 @@ import fsp from 'node:fs/promises';
 import { build, haveFfmpeg } from './fixtures.mjs';
 import { startSite } from './site/serve.mjs';
 import { bootLapka } from '../core/lapka.mjs';
-import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
+import { loadExtractors, extractorFor, closedDoor } from '../core/extract/index.mjs';
 import generic from '../core/extract/players/generic.mjs';
 import { createSession } from '../core/session/index.mjs';
 
@@ -128,5 +128,14 @@ describe('the generic extractor on a Sibnet embed', { skip: !existsSync(new URL(
     assert.equal(got.streams[0].kind, 'mp4');
     assert.match(got.streams[0].url, /^https:\/\/video\.sibnet\.ru\/v\/[a-f0-9]+\/3647476\.mp4$/);
     assert.equal(got.streams[0].headers.referer, 'https://video.sibnet.ru/shell.php?videoid=3647476');
+  });
+});
+
+describe('closed doors', () => {
+  test('a player behind a door known to be closed is refused without a request, with the reason', () => {
+    assert.match(closedDoor('https://www.youtube.com/embed/abc?autoplay=1'), /closed door/);
+    assert.match(closedDoor('https://youtu.be/abc'), /closed door/);
+    assert.equal(closedDoor('https://kodik.info/serial/1/abc/720p'), null);
+    assert.equal(closedDoor('not a url'), null);
   });
 });
