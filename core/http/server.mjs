@@ -21,6 +21,7 @@ import { Readable } from 'node:stream';
 import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
+import { homeInside } from '../store/config.mjs';
 
 const VENDOR = { 'hls.min.js': createRequire(import.meta.url).resolve('hls.js/dist/hls.min.js') };
 
@@ -120,8 +121,9 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (ctx.quit && mutating && p === '/api/quit') { ctx.quit(); return json(res, 200, { ok: true }); }
       if (ctx.switchHome && mutating && p === '/api/home/pick') {
         try {
-          const chosen = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
-          if (!chosen) return json(res, 200, { cancelled: true });
+          const picked = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
+          if (!picked) return json(res, 200, { cancelled: true });
+          const chosen = await homeInside(picked);   // the page shows the folder that will be used
           /* not switched yet: the page asks whether to take the files along */
           const has = (await library.list()).length > 0;
           return json(res, 200, { ok: true, chosen, hasContent: has, from: store.home });
