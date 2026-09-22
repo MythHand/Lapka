@@ -98,9 +98,9 @@ the settings (the paw in the top right corner). To update: in the settings, the
 installs and starts itself again; or `update.command`, `update.bat`, `./update.sh`
 (not a second `git clone`: git refuses to write into a folder that exists).
 
-![Settings: shortcuts, language and player, the Lapka folder, cache, the quality to save in](docs/media/setting.png)
+![Settings: the state and the version, the interface, the player, the storage with the folder, the saved videos, the notes and the cache, the shortcuts](docs/media/setting.png)
 
-Lapka's files go into the folder you choose in the settings (the gear →
+Lapka's files go into the folder you choose in the settings (the paw →
 "Lapka folder"). Until the first choice it is `.dev/home` inside the project
 folder. The `LAPKA_HOME` environment variable forces a folder, `PORT` changes
 the port.

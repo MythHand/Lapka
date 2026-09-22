@@ -115,7 +115,7 @@ the terminal or simply close the terminal window.
 
 ## Step 5. The folder for files
 
-In the player: the gear at the top right → "Lapka folder" → "Choose another
+In the player: the paw at the top right → "Lapka folder" → "Choose another
 folder". The system's folder dialog opens. Saved episodes and Lapka's own files
 go there. If you never choose a folder, the files pile up in `.dev/home` inside
 the Lapka folder.
@@ -157,9 +157,9 @@ sudo apt install ffmpeg
 Lapka runs as a small server on your machine; it does not stop by itself when
 the browser tab is closed. Three ways to stop it:
 
-- **The button.** In the player: the gear → the bottom of the "Where things are
-  kept" column → **Quit Lapka**, twice (the first click asks). The tab says
-  Lapka has quit and can be closed.
+- **The button.** In the player: the paw → the first column, under the state →
+  **Quit Lapka**, twice (the first click asks). The tab says Lapka has quit and
+  can be closed.
 - **The launcher's twin.** Double-click `stop.command` (macOS) or `stop.bat`
   (Windows) in the same folder; on Linux `./stop.sh` in a terminal. To start
   again, the same with `start.command` / `start.bat` / `./start.sh`. In a
