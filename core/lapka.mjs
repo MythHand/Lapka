@@ -126,7 +126,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   async function openPlayers(series, report, { onStep = () => {} } = {}) {
     const number = report.episode.value;
     const embeds = report.players.filter(p => !p.stream);
-    if (embeds.length) onStep(`Открываю ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}`);
+    if (embeds.length) { onStep({ phase: 'players', n: embeds.length }); onStep(`Открываю ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}`); }
     /* each player is said as it answers, not when the last one has */
     const said = r => r.error ? `${r.player.id}: ${r.error}`
       : r.unfolded ? `${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`
@@ -323,6 +323,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   async function look(url, { onStep = () => {} } = {}) {
     const reports = [];
     const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+    onStep({ phase: 'page' });
     onStep(`Читаю страницу ${host}`);
     const first = await readPage(url);
     for (const s of first.steps) onStep(s);

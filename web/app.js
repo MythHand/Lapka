@@ -128,7 +128,7 @@ const pulseEl = $('#pulse'), pulseIcon = $('#pulseIcon'), flashEl = $('#flash');
 const notice = $('#notice'), noticeText = $('#noticeText');
 const endCard = $('#endCard'), endMeta = $('#endMeta');
 const emptyEl = $('#empty'), modeHint = $('#modeHint');
-const prep = $('#prep'), prepName = $('#prepName'), prepTrack = $('#prepTrack');
+const prep = $('#prep'), prepName = $('#prepName'), prepTrack = $('#prepTrack'), prepHead = $('#prepHead');
 const prepSteps = $('#prepSteps'), prepCmd = $('#prepCmd');
 const deck = $('#deck'), seek = $('#seek'), seekFill = $('#seekFill');
 const seekBuffer = $('#seekBuffer'), seekKnob = $('#seekKnob'), seekTip = $('#seekTip');
@@ -667,31 +667,69 @@ function stopPlayback() {
    answers. */
 function showProgress(it, key) {
   closeMenus();
+  prep.classList.remove('prep--link');
+  prepHead.textContent = t('prep.head');
   prepName.textContent = it.name;
+  prepName.classList.remove('prep__name--url');
   prepTrack.textContent = state.series ? state.series.title : '';
   prepSteps.replaceChildren();
   prepCmd.replaceChildren();
-  prepPhase(key);
-  prep.classList.add('show');
-  state.busy = true;
-  paintFavicon();
-}
-/* The phases of the wait, one active at a time, and under them the log
-   of what is being done right now, line by line as the server and the
-   page report it, the newest at the bottom like a terminal: a long
-   wait is then seen working, not hanging. */
-function prepPhase(key, aux = '') {
-  const last = prepSteps.lastElementChild;
-  if (last) { last.classList.remove('step--active'); last.classList.add('step--done'); last.querySelector('.step__mark').textContent = '✓'; }
   const li = document.createElement('li');
   li.className = 'step step--active';
   li.innerHTML = '<span class="step__mark"></span><span class="step__text"></span><span class="step__aux"></span>';
   li.querySelector('.step__text').textContent = t(key);
-  li.querySelector('.step__aux').textContent = aux;
   prepSteps.append(li);
+  prep.classList.add('show');
+  state.busy = true;
+  paintFavicon();
 }
-function prepAux(aux) { const li = prepSteps.lastElementChild; if (li) li.querySelector('.step__aux').textContent = aux; }
-const PREP_LINES = 12;
+
+/* The wait for a link, composed whole before anything is known, so it
+   holds its shape while the work goes on: the address on one line, the
+   three phases there are (the page, its players, the parts of the
+   franchise), each waiting, working or done, and under them a log of
+   fixed height where what is being done arrives line by line, the
+   newest at the bottom like a terminal. */
+const LINK_PHASES = ['page', 'players', 'parts'];
+function showLinkWait(url) {
+  closeMenus();
+  prep.classList.add('prep--link');
+  prepHead.textContent = t('prep.link');
+  prepName.textContent = url;
+  prepName.classList.add('prep__name--url');
+  prepTrack.textContent = '';
+  prepSteps.replaceChildren();
+  for (const phase of LINK_PHASES) {
+    const li = document.createElement('li');
+    li.className = 'step step--wait';
+    li.dataset.phase = phase;
+    li.innerHTML = '<span class="step__mark"></span><span class="step__text"></span><span class="step__aux"></span>';
+    li.querySelector('.step__text').textContent = t('prep.' + phase);
+    prepSteps.append(li);
+  }
+  prepCmd.replaceChildren();
+  prep.classList.add('show');
+  state.busy = true;
+  paintFavicon();
+}
+/* a phase: waiting, working (with what is known of its progress), done, or passed over ("—") */
+function prepPhase(phase, mode, aux = '') {
+  const li = prepSteps.querySelector(`[data-phase="${phase}"]`);
+  if (!li) return;
+  li.className = 'step step--' + mode;
+  li.querySelector('.step__mark').textContent = mode === 'done' ? '✓' : '';
+  li.querySelector('.step__aux').textContent = mode === 'skip' ? '—' : aux;
+}
+/* a step from the server: a phase change, or a line for the log */
+function prepStep(step) {
+  if (step && typeof step === 'object') {
+    if (step.phase === 'players') prepPhase('page', 'done');
+    prepPhase(step.phase, 'active', step.n ? `0 / ${step.n}` : '');
+    return;
+  }
+  prepLog(String(step));
+}
+const PREP_LINES = 10;
 function prepLog(text) {
   const line = document.createElement('div');
   line.className = 'cmd__line';
@@ -700,7 +738,7 @@ function prepLog(text) {
   while (prepCmd.children.length > PREP_LINES) prepCmd.firstElementChild.remove();
 }
 function hideProgress() {
-  prep.classList.remove('show', 'prep--link');
+  prep.classList.remove('show');
   state.busy = false;
   paintFavicon();
 }
@@ -890,20 +928,24 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   url = String(url || '').trim();
   if (!/^https?:\/\//i.test(url)) { toast(t('toast.badLink')); return false; }
   video.pause();                       // a new link is a new intent: what plays stops at once, the wait is shown over it
-  showProgress({ name: url }, 'prep.page');
-  prep.classList.add('prep--link');    // the note about re-encoding is for a file, not a page
+  showLinkWait(url);
   let got;
-  try { got = await lookLive(url, prepLog); }
+  let players = 0;
+  try { got = await lookLive(url, step => { if (step && step.phase === 'players') players = step.n; prepStep(step); }); }
   catch (e) { hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
   if (!got.series.episodes.length) { hideProgress(); toast(t('toast.noEpisodes')); return false; }
+  prepPhase('page', 'done');
+  prepPhase('players', players ? 'done' : 'skip', players ? String(players) : '');
 
   stopPlayback(); playToken++;
   state.series = got.series;
   state.current = null;
+  let parts = 0;
   state.seasons = await openSeasons(got.series, {
-    onStart: n => prepPhase('prep.parts', `0 / ${n}`),
-    onPart: p => { prepAux(`${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
+    onStart: n => { parts = n; prepPhase('parts', 'active', `0 / ${n}`); },
+    onPart: p => { prepPhase('parts', 'active', `${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
   });
+  prepPhase('parts', parts ? 'done' : 'skip', parts ? String(parts) : '');
   hideProgress();
   state.list = [];
   for (const { series } of state.seasons) {

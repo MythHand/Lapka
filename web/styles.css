@@ -1188,6 +1188,21 @@ body.pip-body::before{ display:none; }
 .cmd__line{ white-space:pre-wrap; overflow-wrap:anywhere; }
 .cmd__line::before{ content:'› '; color:var(--tx-3); }
 .cmd__line:last-child{ color:var(--tx-1); }
+/* The wait for a link holds its shape from the first moment: a wider
+   sheet, the address on one line, three phases always there, and a log
+   ten lines tall whether it holds one line or ten, with a prompt at its
+   foot that blinks while the work goes on. */
+.prep--link .prep__box{ width:min(640px, 88%); }
+.prep--link .prep__name{ font-family:var(--mono); letter-spacing:0; font-size:calc(13px + var(--fs)); font-weight:400; color:var(--tx-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.prep--link .prep__file{ margin-bottom:18px; }
+.prep--link .prep__cmd, .prep--link .prep__cmd:empty{ display:flex; height:calc(11 * 1.6em + 24px); max-height:none; }
+.prep--link .prep__cmd::after{ content:'▮'; color:var(--tx-2); animation:prompt-blink 1s steps(2, start) infinite; }
+@keyframes prompt-blink{ 50%{ opacity:0; } }
+@media (prefers-reduced-motion: reduce){ .prep--link .prep__cmd::after{ animation:none; } }
+.step--wait{ color:var(--tx-3); }
+.step--wait .step__mark{ border-color:var(--line); }
+.step--skip{ color:var(--tx-3); }
+.step--skip .step__mark{ border-style:dashed; border-color:var(--line-2); }
 .prep__note{ margin-top:18px; font-size:calc(12px + var(--fs)); color:var(--tx-3); line-height:1.44; }
 .prep--link .prep__note{ display:none; }
 .stage.pip-mode .prep__note,

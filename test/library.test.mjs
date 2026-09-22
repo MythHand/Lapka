@@ -169,7 +169,9 @@ describe('the live look', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.match(r.headers.get('content-type'), /text\/event-stream/);
     const text = await r.text();
     const events = text.split('\n\n').filter(Boolean).map(chunk => { const m = /^event: (\w+)\ndata: ([\s\S]*)$/.exec(chunk); return m && { event: m[1], data: JSON.parse(m[2]) }; }).filter(Boolean);
-    const steps = events.filter(e => e.event === 'step').map(e => e.data);
+    const steps = events.filter(e => e.event === 'step' && typeof e.data === 'string').map(e => e.data);
+    const phases = events.filter(e => e.event === 'step' && typeof e.data === 'object').map(e => e.data.phase);
+    assert.deepEqual(phases, ['page', 'players'], 'the phases are told apart from the lines');
     assert.ok(steps.length >= 3, `steps: ${steps.join(' | ')}`);
     assert.match(steps[0], /^Читаю страницу/);
     assert.ok(steps.some(s => /плеер/.test(s)), 'the players are told');
