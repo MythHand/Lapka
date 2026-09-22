@@ -23,7 +23,7 @@ import { openState } from '../core/store/state.mjs';
 import { fileNameFor, safeName } from '../core/store/library.mjs';
 
 const ffmpeg = await haveFfmpeg();
-let site, lapka, home;
+let site, lapka, home, movedWrap;
 const get = (p, headers = {}) => fetch(lapka.base + p, { headers });
 const post = p => fetch(lapka.base + p, { method: 'POST', headers: { 'x-lapka': '1' } });
 const duration = file => new Promise((ok, bad) => execFile('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file], (e, out) => e ? bad(e) : ok(Number(out))));
@@ -39,6 +39,7 @@ after(async () => {
   if (lapka) await lapka.close();
   if (site) await site.close();
   if (home) await fsp.rm(home, { recursive: true, force: true });
+  if (movedWrap) await fsp.rm(movedWrap, { recursive: true, force: true });
 });
 
 describe('names', () => {
@@ -165,6 +166,7 @@ describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
     const before = await (await get('/api/library')).json();
     assert.ok(before.series.length >= 1, 'something to move');
     const other = path.join(await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-moved-')), 'Lapka');
+    movedWrap = path.dirname(other);
     const r = await (await post(`/api/home?path=${encodeURIComponent(other)}&move=1`)).json();
     assert.equal(r.home, other);
     assert.ok(r.moved >= 2, `moved ${r.moved}`);
