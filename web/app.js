@@ -1916,7 +1916,7 @@ const KEYS_UI = [
   [
     [['Space', 'K'],   'keys.play'],
     [['←', '→'],       'keys.seek5'],
-    [['⇧ ←', '⇧ →'],   'keys.seek1'],
+    [['⇧←', '⇧→'],     'keys.seek1'],
     [['J', 'L'],       'keys.seek10'],
     [['0–9'],          'keys.jump'],
     [['Home', 'End'],  'keys.edges'],
@@ -2213,8 +2213,8 @@ async function checkServer() {
   try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
-/* "v1.1" for 1.1.0, "v1.1.2" for 1.1.2: a patch of nought is not said */
-const shortVersion = v => v ? 'v' + String(v).replace(/\.0$/, '') : '';
+/* "v1.1.0", as the tag on GitHub reads */
+const shortVersion = v => v ? 'v' + String(v) : '';
 function paintStatus() {
   const row = gearMenu.querySelector('.status');
   if (!row) return;
@@ -2232,7 +2232,7 @@ function buildGearMenu() {
   left.className = 'menu__col menu__col--left';
   const status = document.createElement('div');
   status.className = 'menu__row status';
-  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span><span class="cache__size status__version"></span></div>';
+  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div><div class="cache__size status__version"></div>';
   const quitNote = document.createElement('div');
   quitNote.className = 'cache__note quit__note';
   quitNote.textContent = t('set.quitNote');

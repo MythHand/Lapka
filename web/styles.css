@@ -1370,7 +1370,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    running; amber breathes while the server is not answering; a ring is
    stopped; grey is not known yet. */
 .status__head{ display:flex; align-items:center; gap:9px; }
-.status__version{ margin-left:auto; }
+/* the version on a line of its own under the state: "v1.1.0", as the tag on GitHub reads */
+.status__version{ margin-top:-4px; }
+.status__version:empty{ display:none; }
 .status__dot{ flex:none; width:9px; height:9px; border-radius:50%; box-sizing:border-box; background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.12); }
 .status__dot.is-checking{ background:var(--tx-3); box-shadow:none; }
 .status__dot.is-down{ background:#e0a24a; box-shadow:0 0 0 3px rgba(224,162,74,.18); animation:status-breathe 1.4s ease-in-out infinite; }
