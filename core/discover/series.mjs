@@ -137,6 +137,9 @@ const SEASON_PATH = /(?:^|[-_/])(?:sezon|season|s)[-_]?(\d{1,2})(?=[-_/.]|$)/i;
 const SEASON_PATH_REV = /(?:^|[-_/])(\d{1,2})[-_](?:sezon|season)(?=[-_/.]|$)/i;
 export function seasonFromUrl(url) {
   let u; try { u = new URL(url); } catch { return null; }
+  /* "?season=3": a page that holds every season, looked at as one of them */
+  const q = Number(u.searchParams.get('season'));
+  if (Number.isInteger(q) && q > 0 && q < 100) return q;
   const p = u.pathname.toLowerCase();
   const m = SEASON_PATH.exec(p) || SEASON_PATH_REV.exec(p);
   return m ? Number(m[1]) : null;
@@ -146,7 +149,7 @@ export function seasonFromUrl(url) {
    океан, Сезон 3 (2026) все серии онлайн". The name is what is left
    once the year in brackets and the tail of watch-words go; the year
    is kept. */
-const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+хорошем\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+(?:хорошем|hd|высоком|отличном)\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
 export function tidyTitle(text, host = '') {
   let t = String(text || '').replace(SEO_HEAD, '');
   let year = null;
@@ -155,6 +158,8 @@ export function tidyTitle(text, host = '') {
   const tail = /\s*[—–|-]\s*([\p{L}\d.]+)\s*$/u.exec(t);
   if (site.length >= 3 && tail) { const w = tail[1].toLowerCase().replace(/\./g, ''); if (w.includes(site) || site.includes(w)) t = t.slice(0, tail.index); }
   t = t.replace(/\s*\(((?:19|20)\d{2})\)\s*/g, (_, y) => { year = year || Number(y); return ' '; });
+  /* "(сериал, 1-13,14,15 сезон)", "(TV Series)": a bracket that says what the page holds, not what it is called */
+  t = t.replace(/\s*\((?=[^()]*(?:сериал|сезон|season|series))[^()]*\)\s*/gi, ' ');
   for (let i = 0; i < 6; i++) { const was = t; t = t.replace(SEO_TAIL, ''); if (t === was) break; }
   t = t.replace(/\s+/g, ' ').replace(/[\s,:·|—–-]+$/g, '').trim();
   return { title: t || String(text || '').trim(), year };
@@ -163,6 +168,8 @@ const TRAILING = /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i;
 /* bare: whether a number at the end counts; it does in a title, not in a link ("3" in a strip of episodes) */
 export function seasonFromText(text, { bare = true } = {}) {
   const t = String(text || '');
+  /* "1-13,14,15 сезон": a run of seasons names them all, not one */
+  if (/\d\s*[-–,]\s*\d{1,2}\s*(?:й|ой|ый)?\s*(?:сезон|season)/i.test(t)) return null;
   for (const re of SEASON) { const m = re.exec(t); if (m) return Number(m[1]); }
   if (bare) { const m = TRAILING.exec(t); if (m) return Number(m[1]); }
   return null;

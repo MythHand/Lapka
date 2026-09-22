@@ -898,10 +898,13 @@ const seasonOf = it => state.seasons.find(s => s.series.id === it.seriesId) || n
    after round, until nothing new comes. One that fails is left out
    and said so. */
 async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {}) {
-  const norm = u => String(u || '').replace(/[#?].*$/, '').replace(/\/+$/, '');
+  /* an address, and the season it names when a page holds every season in one player: "…/show.html?season=3" */
+  const norm = u => { try { const x = new URL(u); const s = x.searchParams.get('season'); return x.origin + x.pathname.replace(/\/+$/, '') + (s ? '?season=' + s : ''); } catch { return String(u || '').replace(/[#?].*$/, '').replace(/\/+$/, ''); } };
   const me = norm(main.sourceUrl);
   const known = new Map();   // url → { entry, series }
-  const add = e => { const k = norm(e.url); if (!k || known.has(k)) return; known.set(k, { entry: { ...e, self: k === me }, series: k === me ? main : null }); };
+  /* the series already opened at this address in this season: the page itself, seen from another part with its season spelled out */
+  const opened = k => [...known.values()].find(x => x.series && norm(x.series.sourceUrl).replace(/\?season=\d+$/, '') === k.replace(/\?season=\d+$/, '') && (norm(x.series.sourceUrl) === k || (x.series.season && k.endsWith('?season=' + x.series.season))));
+  const add = e => { const k = norm(e.url); if (!k || known.has(k) || opened(k)) return; known.set(k, { entry: { ...e, self: k === me }, series: k === me ? main : null }); };
   for (const e of main.franchise || []) add(e);
   if (known.size < 2) return [{ series: main, entry: (main.franchise || []).find(e => e.self) || null }];
   onStart(known.size);                 // the phase line says how many; no toast over it

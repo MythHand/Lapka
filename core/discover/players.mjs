@@ -112,6 +112,18 @@ export function findPlayers(doc, url, { profile } = {}) {
 
   /* what is on the page right now */
   for (const f of doc.querySelectorAll('iframe')) add(abs(f.getAttribute('src') || f.getAttribute('data-src')), 'iframe', 'iframe');
+  /* a player dropped in as an element with its ids in attributes: the
+     CVH <video-player>. It gets an address of the player's own carrying
+     them, which its extractor reads; the page's own ?season=N goes along,
+     the way a page holding every season in one player is looked at */
+  for (const el of doc.querySelectorAll('video-player[data-title-id]')) {
+    const q = new URLSearchParams({ title_id: el.getAttribute('data-title-id') });
+    if (el.getAttribute('data-publisher-id')) q.set('pub', el.getAttribute('data-publisher-id'));
+    if (el.getAttribute('data-aggregator')) q.set('aggr', el.getAttribute('data-aggregator'));
+    let season = null; try { season = Number(new URL(url).searchParams.get('season')) || null; } catch { /* no address */ }
+    if (season) q.set('season', String(season));
+    add('https://player.cdnvideohub.com/embed?' + q, 'element', 'video-player');
+  }
   for (const v of doc.querySelectorAll('video')) {
     add(abs(v.getAttribute('src') || v.getAttribute('data-src')), 'video', 'video');
     for (const s of v.querySelectorAll('source')) add(abs(s.getAttribute('src')), 'video', 'video source');

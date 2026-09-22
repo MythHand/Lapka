@@ -42,11 +42,18 @@ export function createLapka({ session = createSession(), profiles = [], extracto
      episode that lives in a fragment answered only to a script's
      request, wrapped in JSON. The reading of what comes back stays
      general. */
+  /* "?season=N" on a page's address is Lapka's own word for one season of
+     a page that holds them all in one player: the site is not asked with
+     it (a site answers such an address with a redirect to the bare one),
+     and the reading keeps it on the address it was given. */
+  const seasonOff = url => { try { const u = new URL(url); const s = u.searchParams.get('season'); if (!s) return { ask: url, season: null }; u.searchParams.delete('season'); return { ask: u.toString(), season: s }; } catch { return { ask: url, season: null }; } };
+  const seasonOn = (url, season) => { if (!season) return url; try { const u = new URL(url); u.searchParams.set('season', season); return u.toString(); } catch { return url; } };
   async function readPage(url, referer = null) {
-    const site = siteFor(sites, url);
-    const res = site && site.fetch ? await site.fetch(url, { referer }, session) : await session.fetch(url, { referer });
-    if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
-    return discover({ html: res.body, url: res.url || url, profile: profileFor(url) });
+    const { ask, season } = seasonOff(url);
+    const site = siteFor(sites, ask);
+    const res = site && site.fetch ? await site.fetch(ask, { referer }, session) : await session.fetch(ask, { referer });
+    if (res.status >= 400) throw new Error(`${ask} answered ${res.status}`);
+    return discover({ html: res.body, url: seasonOn(res.url || ask, season), profile: profileFor(ask) });
   }
 
   /* One embedded player opened: what it plays, as a contribution for
@@ -85,7 +92,14 @@ export function createLapka({ session = createSession(), profiles = [], extracto
           const episodes = got.episodes.map(e => ({ ...e, sourceUrl: e.sourceUrl || pageUrl,
             dubs: (e.dubs || []).map(d => ({ ...d, sources: d.sources.map(src => ({ player: player.id, extractor: x.name, ...src })) })) }));
           const dubs = new Set(episodes.flatMap(e => e.dubs.map(d => d.name)));
-          return { player, extractor: x.name, unfolded: { episodes: episodes.length, dubs: dubs.size }, contribution: { origin: `extract:${x.name}`, episodes } };
+          const contribution = { origin: `extract:${x.name}`, episodes };
+          /* every season in one player: this page is the season shown, the
+             others are the same address with ?season=N, parts of the franchise */
+          if (got.seasons && got.seasons.length > 1 && got.season) {
+            const at = n => { const u = new URL(pageUrl); u.searchParams.set('season', String(n)); return u.toString(); };
+            contribution.series = { season: got.season, franchise: got.seasons.map(n => ({ order: n, title: '', url: at(n), kind: 'tv', self: n === got.season })) };
+          }
+          return { player, extractor: x.name, unfolded: { episodes: episodes.length, dubs: dubs.size, seasons: got.seasons ? got.seasons.length : 0 }, contribution };
         }
       }
       /* the site's own player on a page that names no episode and lists

@@ -99,7 +99,7 @@ describe('the synthetic site', () => {
 describe('seasons', () => {
   test('the season in a title', async () => {
     const { seasonFromText } = await import('../core/discover/series.mjs');
-    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2], ['Богиня благословляет этот прекрасный мир 2', 2], ['Этот Замечательный Мир! 3 (OVA)', 3], ['Стальной алхимик 2003', null], ['Ван-Пис 1080p', null], ['Дни Сакамото [ТВ-1]', 1], ['One Piece TV-2', 2]])
+    for (const [t, n] of [['Ван-Пис 2 сезон', 2], ['Re:Zero Season 3', 3], ['Bleach 2nd season', 2], ['Наруто', null], ['Сериал Сезоны 2 сезон', 2], ['S2 · Финал', 2], ['Богиня благословляет этот прекрасный мир 2', 2], ['Этот Замечательный Мир! 3 (OVA)', 3], ['Стальной алхимик 2003', null], ['Ван-Пис 1080p', null], ['Дни Сакамото [ТВ-1]', 1], ['One Piece TV-2', 2], ['Сверхъестественное (сериал, 1-13,14,15 сезон)', null]])
       assert.equal(seasonFromText(t), n, t);
   });
   test('a series in two seasons: each page names the other, and knows which one it is', () => {
@@ -165,6 +165,20 @@ describe('players in script objects', () => {
     const r = discover({ html, url: 'https://site.test/5190-dni.html' });
     assert.deepEqual(r.players.map(p => p.url).sort(), ['https://kodikplayer.com/season/107274/899b7e/720p', 'https://kodikplayer.com/season/107290/f172c0/720p']);
     assert.equal(r.season, 1);
+  });
+});
+
+describe('a player as an element on the page', () => {
+  test('a <video-player> with its ids becomes an address of the player\'s own; the page\'s ?season goes along', () => {
+    const html = `<html><head><title>Шоу (сериал, 1-3 сезон) смотреть онлайн</title></head><body><h1>Шоу (сериал, 1-3 сезон)</h1>
+      <video-player id="p" data-publisher-id="15" data-title-id="178707" data-aggregator="kp"></video-player></body></html>`;
+    const r = discover({ html, url: 'https://site.test/142-show.html' });
+    assert.deepEqual(r.players.map(p => [p.url, p.kind]), [['https://player.cdnvideohub.com/embed?title_id=178707&pub=15&aggr=kp', 'element']]);
+    assert.equal(r.title.value, 'Шоу', 'the bracket that lists seasons is not part of the name');
+    assert.equal(r.season, null, 'a run of seasons in the name is not one season');
+    const two = discover({ html, url: 'https://site.test/142-show.html?season=2' });
+    assert.equal(two.players[0].url, 'https://player.cdnvideohub.com/embed?title_id=178707&pub=15&aggr=kp&season=2');
+    assert.equal(two.season, 2);
   });
 });
 

@@ -30,7 +30,22 @@ export function readEmbed(url) {
     episode: q.get('episode') ? Number(q.get('episode')) : null,
     season: q.get('season') ? Number(q.get('season')) : null,
     voice: q.get('dubbing_code') || q.get('voice') || null,
+    /* an address of the player's own, made from a <video-player> on a page, carries the ids too */
+    publisher: q.get('pub') ? Number(q.get('pub')) : null,
+    aggregator: q.get('aggr') || null,
   };
+}
+
+/* the playlist of a title, kept a minute: a series of fifteen seasons is looked at season by season, and the list is one */
+const playlists = new Map();
+async function playlistOf(session, ids, titleId, referer) {
+  const key = `${ids.publisher}/${titleId}/${ids.aggregator}`;
+  const had = playlists.get(key);
+  if (had && had.until > Date.now()) return had.list;
+  const q = new URLSearchParams({ pub: String(ids.publisher), id: String(titleId), aggr: ids.aggregator });
+  const list = await json(session, `${API}/player/sv/playlist?${q}`, referer);
+  playlists.set(key, { list, until: Date.now() + 60 * 1000 });
+  return list;
 }
 
 /* A wrapper page of a site's own that drops the <video-player> in
@@ -67,14 +82,45 @@ export default {
   name: 'cvh',
   match: url => { try { const u = new URL(url); return /cdnvideohub\.com$/i.test(u.hostname) || /iframeCVH\.html/i.test(u.pathname) || /\/cdn-iframe\//i.test(u.pathname); } catch { return false; } },
 
+  /* A title with several seasons, as one player holds it: the episodes of
+     one season, the one the address names or the first, every voice a dub,
+     each a source at that episode; and the seasons there are, for the
+     caller to name the others as parts. A single video unfolds to nothing. */
+  async unfold(embedUrl, { referer = null } = {}, session) {
+    const want = readEmbed(embedUrl);
+    if (!want.titleId || want.episode !== null) return null;
+    const ids = want.publisher && want.aggregator ? { publisher: want.publisher, aggregator: want.aggregator } : FALLBACK;
+    const base = new URL(embedUrl);
+    const list = await playlistOf(session, ids, want.titleId, base.origin + '/');
+    const items = ((list && list.items) || []).filter(i => i.vkId && Number.isInteger(Number(i.episode)));
+    if (!list || !list.isSerial || !items.length) return null;
+    const seasonOf = i => Number(i.season) || 1;
+    const seasons = [...new Set(items.map(seasonOf))].sort((a, b) => a - b);
+    const season = want.season !== null && seasons.includes(want.season) ? want.season : seasons[0];
+    const byEpisode = new Map();
+    for (const i of items.filter(i => seasonOf(i) === season)) {
+      const n = Number(i.episode);
+      if (!byEpisode.has(n)) byEpisode.set(n, new Map());
+      const voices = byEpisode.get(n), name = i.voiceStudio || 'Оригинал';
+      if (!voices.has(name)) voices.set(name, i);
+    }
+    const at = (n, voice) => { const u = new URL(embedUrl); u.searchParams.set('season', String(season)); u.searchParams.set('episode', String(n)); u.searchParams.set('voice', voice); return u.toString(); };
+    const episodes = [...byEpisode.entries()].sort((a, b) => a[0] - b[0]).map(([n, voices]) => ({
+      number: n,
+      dubs: [...voices.entries()].map(([name, i]) => ({ name, kind: /субтитр|sub/i.test(i.voiceType || '') ? 'sub' : 'dub', sources: [{ embedUrl: at(n, name) }] })),
+    }));
+    return { episodes, seasons, season };
+  },
+
   async extract(embedUrl, { referer = null } = {}, session) {
     let want = readEmbed(embedUrl);
     const base = new URL(embedUrl);
 
     /* the publisher and the aggregator from the embed's own script, once
-       per site; a wrapper page names them, and the title, in attributes */
-    let ids = FALLBACK;
-    try {
+       per site; a wrapper page names them, and the title, in attributes;
+       an address made from a <video-player> carries them itself */
+    let ids = want.publisher && want.aggregator ? { publisher: want.publisher, aggregator: want.aggregator } : FALLBACK;
+    if (!(want.publisher && want.aggregator)) try {
       const page = await session.fetch(embedUrl, { referer });
       const wrapped = !want.titleId ? readWrapper(page.body) : null;
       if (wrapped) { want = wrapped; ids = { publisher: wrapped.publisher || FALLBACK.publisher, aggregator: wrapped.aggregator || FALLBACK.aggregator }; }
@@ -87,8 +133,7 @@ export default {
     } catch { /* the fallback stands in */ }
     if (!want.titleId) throw new Error('no title on the embed');
 
-    const q = new URLSearchParams({ pub: String(ids.publisher), id: String(want.titleId), aggr: ids.aggregator });
-    const list = await json(session, `${API}/player/sv/playlist?${q}`, base.origin + '/');
+    const list = await playlistOf(session, ids, want.titleId, base.origin + '/');
     const items = (list && list.items) || [];
     if (!items.length) throw new Error('player answered without videos');
 
