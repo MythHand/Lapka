@@ -29,14 +29,12 @@ export async function writeConfig(patch) {
 
 /* Is this a folder Lapka can use: existing or creatable, writable. */
 /* The folder the user points at is theirs; Lapka keeps to a folder of
-   its own inside it, named Lapka, unless the one pointed at is that
-   already: named Lapka, or holding Lapka's own things from before under
-   whatever name. Nothing is ever renamed. */
+   its own inside it, named Lapka, unless the one pointed at is named so
+   already. The name is the sign: a Lapka folder is called Lapka.
+   Nothing is ever renamed. */
 export async function homeInside(dir) {
   const abs = path.resolve(String(dir || ''));
-  if (path.basename(abs).toLowerCase() === 'lapka') return abs;
-  try { await fsp.access(path.join(abs, '.lapka')); return abs; } catch { /* not a Lapka folder yet */ }
-  return path.join(abs, 'Lapka');
+  return path.basename(abs).toLowerCase() === 'lapka' ? abs : path.join(abs, 'Lapka');
 }
 
 export async function checkHome(dir) {

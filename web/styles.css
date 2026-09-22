@@ -1495,8 +1495,13 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   font:inherit; color:var(--tx-1); background:transparent; border:0; cursor:pointer;
   display:flex; align-items:center;
 }
-.skip__go{ padding:10px 16px; font-size:calc(14px + var(--fs)); font-weight:500; letter-spacing:var(--track); }
+.skip__go{ padding:10px 16px; font-size:calc(14px + var(--fs)); font-weight:500; letter-spacing:var(--track); position:relative; isolation:isolate; }
 .skip__go:hover{ background:var(--glass-hi); }
+/* skipping by itself: the button fills from left to right with the seconds left to answer, driven by the video's own clock */
+.skip__go.is-auto::before{
+  content:''; position:absolute; inset:0; z-index:-1; width:calc(var(--fill, 0) * 100%);
+  background:rgba(255,255,255,.18); transition:width .25s linear;
+}
 .skip__x{ padding:0 10px; border-left:1px solid var(--line); color:var(--tx-3); }
 .skip__x:hover{ color:var(--tx-1); background:var(--glass-hi); }
 .skip__x .ph{ width:14px; height:14px; fill:currentColor; }

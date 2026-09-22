@@ -316,6 +316,8 @@ const SETTINGS = [
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'hideUi', def: 'off', label: 'set.hideUi',
     opts: [['on', 'common.on'], ['off', 'common.off']] },
+  { key: 'autoSkip', def: 'off', label: 'set.autoSkip',
+    opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'font', def: 'fixel', label: 'set.font',
     opts: [['fixel', 'set.font.fixel'], ['inter', 'set.font.inter']] },
 ];
@@ -3733,7 +3735,22 @@ let posT = 0;
    While the time is inside a mark the button is there; press it and
    the mark is jumped over, dismiss it and it stays away for this
    mark of this episode, do nothing and it goes when the mark ends. */
+/* The plate over the picture while the time is inside a marked zone.
+   By hand: the button skips, the cross hides the plate for this zone.
+   By itself (the setting): the button reads Watch and fills from left
+   to right over six seconds of playing; unanswered, the zone is skipped;
+   Watch keeps this zone and this zone alone; the cross skips at once.
+   A zone answered either way is done for this episode: seeking back
+   into it shows no plate again. */
+const AUTO_SKIP_S = 6;
 let skipNow = null;
+function hideSkip() { skipNow = null; skipEl.hidden = true; }
+function doSkip(it, zone, done = false) {
+  seekTo(zone.stop);
+  flash(t('skip.' + zone.name));
+  if (done && it) it.skipHidden[zone.name] = true;
+  hideSkip();
+}
 function paintSkip() {
   const it = cur();
   const t0 = video.currentTime;
@@ -3742,22 +3759,35 @@ function paintSkip() {
     const m = it.marks[name];
     if (m && !it.skipHidden[name] && t0 >= m.start && t0 < m.stop - 1) { found = { name, ...m }; break; }
   }
-  if (!found) { if (skipNow) { skipNow = null; skipEl.hidden = true; } return; }
-  if (skipNow && skipNow.name === found.name) return;
+  if (!found) { if (skipNow) hideSkip(); return; }
+  if (skipNow && skipNow.name === found.name) {
+    if (skipNow.auto) {
+      const f = Math.min(1, Math.max(0, (t0 - skipNow.since) / skipNow.wait));
+      btnSkip.style.setProperty('--fill', f.toFixed(3));
+      if (f >= 1) doSkip(it, skipNow, true);
+    }
+    return;
+  }
   skipNow = found;
-  btnSkip.textContent = t('skip.' + found.name);
+  const auto = state.set.autoSkip === 'on';
+  if (auto) { skipNow.auto = true; skipNow.since = t0; skipNow.wait = Math.max(1, Math.min(AUTO_SKIP_S, found.stop - 1 - t0)); }
+  btnSkip.textContent = t(auto ? 'skip.watch' : 'skip.' + found.name);
+  btnSkip.classList.toggle('is-auto', auto);
+  btnSkip.style.setProperty('--fill', '0');
+  btnSkipHide.title = t(auto ? 'skip.now' : 'skip.hide');
   skipEl.hidden = false;
 }
 btnSkip.onclick = () => {
   if (!skipNow) return;
-  seekTo(skipNow.stop);
-  flash(t('skip.' + skipNow.name));
-  skipNow = null; skipEl.hidden = true;
+  const it = cur();
+  if (skipNow.auto) { if (it) it.skipHidden[skipNow.name] = true; hideSkip(); }   // watched: this zone stays
+  else doSkip(it, skipNow);
 };
 btnSkipHide.onclick = () => {
+  if (!skipNow) return;
   const it = cur();
-  if (it && skipNow) it.skipHidden[skipNow.name] = true;
-  skipNow = null; skipEl.hidden = true;
+  if (skipNow.auto) doSkip(it, skipNow, true);
+  else { if (it) it.skipHidden[skipNow.name] = true; hideSkip(); }
 };
 
 video.addEventListener('timeupdate', () => {

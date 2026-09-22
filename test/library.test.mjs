@@ -242,7 +242,7 @@ describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
     assert.equal((await post(`/api/home?path=${encodeURIComponent(path.join(other, 'inner'))}&move=1`)).status, 400);
     home = other;
   });
-  test('a folder pointed at gets a Lapka folder inside, unless it is one already', async () => {
+  test('a folder pointed at gets a Lapka folder inside, unless it is named Lapka', async () => {
     sideWrap = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-side-'));
     /* a folder of the user's own: Lapka keeps to a folder of its own inside it */
     const stuff = path.join(sideWrap, 'Stuff');
@@ -252,11 +252,11 @@ describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
     /* pointed at again, now that it holds Lapka's things, it is taken as it is */
     r = await (await post(`/api/home?path=${encodeURIComponent(path.join(stuff, 'Lapka'))}`)).json();
     assert.equal(r.home, path.join(stuff, 'Lapka'));
-    /* a folder named otherwise but holding Lapka's things is taken as it is too */
+    /* the name is the sign: a folder named otherwise gets a Lapka inside even when it holds Lapka's things */
     const odd = path.join(sideWrap, 'Odd');
     await fsp.mkdir(path.join(odd, '.lapka'), { recursive: true });
     r = await (await post(`/api/home?path=${encodeURIComponent(odd)}`)).json();
-    assert.equal(r.home, odd);
+    assert.equal(r.home, path.join(odd, 'Lapka'));
     /* back to a folder named Lapka, as the tests after this one expect */
     r = await (await post(`/api/home?path=${encodeURIComponent(home)}`)).json();
     assert.equal(r.home, home);
