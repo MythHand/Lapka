@@ -150,6 +150,10 @@ svg.ph{ fill:currentColor; stroke:none; }
 .rb--sm svg{ width:17px; height:17px; }
 /* the width switch shows the state, wide or narrow, one glyph at a time */
 #btnQueueWidth .ph{ display:none; }
+/* the settings: the paw of the seal, dim at rest, whole under the pointer; it presses through the seal's frames as the sheet opens */
+.rb--paw{ overflow:visible; color:var(--tx-1); opacity:.6; transition:opacity .15s; }
+.rb--paw:hover{ opacity:1; background:transparent; }
+.rb--paw .ico-paw{ width:38px; height:29px; flex:none; }
 #btnQueueWidth .ph--wide{ display:block; }
 .workspace.queue-narrow #btnQueueWidth .ph--wide{ display:none; }
 .workspace.queue-narrow #btnQueueWidth .ph--narrow{ display:block; }
@@ -534,8 +538,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 @starting-style{
   #audioMenu.open, #subsMenu.open, #qualityMenu.open, #pipMenu.open, #rateMenu.open{ opacity:0; transform:translateY(12px); }
 }
-/* downwards, for the gear menu, which sits at the top of the stage */
-.menu--down{ top:calc(100% + 10px); bottom:auto; }
 
 /* PiP and the chevron as one element: rounded on the outer edges only */
 .seg{ display:flex; align-items:stretch; border-radius:999px; }
@@ -859,8 +861,10 @@ svg.ph{ fill:currentColor; stroke:none; }
   box-shadow:0 1px 3px rgba(0,0,0,.45); display:none; pointer-events:none;
 }
 .item__thumb .pos{ height:2px; }
-.has-pos .pos{ display:block; }
+.has-pos .pos, .is-watched .pos{ display:block; }
 .pos i{ display:block; height:100%; width:calc(var(--pos, 0) * 100%); border-radius:inherit; background:#fff; }
+/* watched to the end: the bar is full; left in the middle again, the bar shows the middle */
+.is-watched:not(.has-pos) .pos i{ width:100%; }
 .tile::after{
   content:''; position:absolute; inset:0; border-radius:9px;
   box-shadow:inset 0 0 0 2px #fff; pointer-events:none;
@@ -874,6 +878,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   content:''; position:absolute; inset:0; border-radius:inherit;
   background:rgba(0,0,0,.55); opacity:0; transition:opacity var(--select); pointer-events:none;
 }
+.tile.is-watched::before{ opacity:.65; }
 .tile.active::before{ opacity:1; }
 /* shown by opacity, not display, so it fades in with the veil */
 .tile__eq{
@@ -950,6 +955,8 @@ svg.ph{ fill:currentColor; stroke:none; }
   content:""; position:absolute; inset:0; background:rgba(0,0,0,.55);
   opacity:0; transition:opacity var(--select);
 }
+/* watched to the end: the same veil, lighter; the name stays as it is */
+.item.is-watched .item__thumb::after{ opacity:.65; }
 .item.active .item__thumb::after{ opacity:1; }
 .item__eq{ position:relative; z-index:1; display:flex; gap:2.5px; align-items:center; height:14px; width:16px;
   opacity:0; transition:opacity var(--select); }
@@ -971,11 +978,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 
 .item__x{ flex:none; margin-top:2px; color:var(--tx-3); opacity:0; display:grid; place-items:center; padding:4px; border-radius:50%; }
 /* the cross that cancels a save: only on a row that has one, only under the pointer */
-.item__unsave{ flex:none; display:none; place-items:center; width:22px; height:22px; border-radius:50%; color:var(--tx-3); cursor:pointer; }
-.item.has-save .item__unsave{ display:grid; opacity:0; }
-.item.has-save:hover .item__unsave{ opacity:1; }
-.item__unsave:hover{ background:var(--glass-hi); color:var(--tx-1); }
-.item__unsave svg{ width:13px; height:13px; }
 .item:hover .item__x{ opacity:1; }
 .item__x:hover{ background:var(--glass-hi); color:var(--tx-1); }
 .item__x svg{ width:16px; height:16px; }
@@ -1176,12 +1178,33 @@ body.pip-body::before{ display:none; }
 .prep__cmd{
   margin-top:20px; padding:12px 14px; border-radius:var(--r-sm);
   background:rgba(0,0,0,.45); border:1px solid var(--line);
-  font-family:ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family:var(--mono); letter-spacing:0;
   font-size:calc(11.5px + var(--fs)); line-height:1.6; color:var(--tx-3);
-  overflow-wrap:anywhere; max-height:96px; overflow-y:auto;
+  /* the log: the newest line at the bottom, the oldest leaving at the top */
+  display:flex; flex-direction:column; justify-content:flex-end; overflow:hidden; max-height:calc(12 * 1.6em + 24px);
+  overflow-wrap:anywhere;
 }
 .prep__cmd:empty{ display:none; }
+.cmd__line{ white-space:pre-wrap; overflow-wrap:anywhere; }
+.cmd__line::before{ content:'› '; color:var(--tx-3); }
+.cmd__line:last-child{ color:var(--tx-1); }
+/* The wait for a link holds its shape from the first moment: a wider
+   sheet, the address on one line, three phases always there, and a log
+   ten lines tall whether it holds one line or ten, with a prompt at its
+   foot that blinks while the work goes on. */
+.prep--link .prep__box{ width:min(640px, 88%); }
+.prep--link .prep__name{ font-family:var(--mono); letter-spacing:0; font-size:calc(13px + var(--fs)); font-weight:400; color:var(--tx-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.prep--link .prep__file{ margin-bottom:18px; }
+.prep--link .prep__cmd, .prep--link .prep__cmd:empty{ display:flex; height:calc(11 * 1.6em + 24px); max-height:none; }
+.prep--link .prep__cmd::after{ content:'▮'; color:var(--tx-2); animation:prompt-blink 1s steps(2, start) infinite; }
+@keyframes prompt-blink{ 50%{ opacity:0; } }
+@media (prefers-reduced-motion: reduce){ .prep--link .prep__cmd::after{ animation:none; } }
+.step--wait{ color:var(--tx-3); }
+.step--wait .step__mark{ border-color:var(--line); }
+.step--skip{ color:var(--tx-3); }
+.step--skip .step__mark{ border-style:dashed; border-color:var(--line-2); }
 .prep__note{ margin-top:18px; font-size:calc(12px + var(--fs)); color:var(--tx-3); line-height:1.44; }
+.prep--link .prep__note{ display:none; }
 .stage.pip-mode .prep__note,
 .stage.pip-mode .prep__cmd,
 .stage.pip-mode .prep__head span:last-child{ display:none; }
@@ -1303,22 +1326,57 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 
    Anchoring to the gear. An absolutely positioned layer is measured
    from the padding box of its wrapper, and that wrapper has padding
-   20/36, which pushed the menu 36px to the right of the icon and 30px
-   below it, as if it had come loose. Those paddings are subtracted back
-   and a small one of our own is added: the right edge reaches slightly
-   past the icon, and the gap on top is 12px. */
+   20/36. The sheet stands to the left of the paw, its top edge level
+   with the button's, 12px away from it: the right offset counts from
+   the wrapper's right edge past the button and its padding. */
 .gear.menuwrap{ --gear-pad-x:36px; --gear-pad-y:20px; --gear-out:260ms; }
 .menu--gear{
-  top:calc(100% - var(--gear-pad-y) + 12px);
-  right:calc(var(--gear-pad-x) - 10px);
-  /* the keys as they were, the other two columns a quarter wider than the keys */
-  min-width:min(1058px, calc(100vw - 60px));
-  max-width:min(1058px, calc(100vw - 60px));
-  /* the height is the columns' own; the window alone caps it: the menu starts
-     72px from the top and keeps a 16px margin at the bottom, so a column
-     scrolls only when the window is too low for it */
-  max-height:calc(100vh - 88px);
+  top:var(--gear-pad-y); bottom:auto;
+  right:calc(100% - var(--gear-pad-x) + 24px);
+  /* four columns and the band of keys under them */
+  min-width:min(1236px, calc(100vw - 60px));
+  max-width:min(1236px, calc(100vw - 60px));
+  /* the height is the sheet's own; the window alone caps it, and then the
+     whole sheet scrolls, not a column of it */
+  max-height:calc(100vh - 44px);
+  overflow-y:auto;
 }
+/* The sheet: the state of the server, the interface, the player, the
+   storage, in four columns, the three on the right of one width; the
+   keys run under the first three, and the storage takes the whole
+   height beside them. The columns stretch to the tallest, so the line
+   on the left of each runs the full height whatever it holds; the band
+   has a line on its top. */
+/* The grid is the sheet's own, not its open state's: while the sheet
+   slides out, display is held by the transition but the class is gone,
+   and with the columns on the class the content collapsed into one
+   column before the sheet had left. */
+.menu--gear{
+  grid-template-columns:minmax(0,21fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
+  grid-template-areas:'left ui player place' 'keys keys keys place';
+  align-items:stretch;
+}
+.menu--gear.open{ display:grid; }
+.menu--gear .menu__col{ flex:none; min-width:0; overflow:visible; }
+.menu--gear .menu__col--left{ grid-area:left; }
+.menu--gear .menu__col--ui{ grid-area:ui; }
+.menu--gear .menu__col--player{ grid-area:player; }
+.menu--gear .menu__col--place{ grid-area:place; }
+.menu--gear .menu__band--keys{ grid-area:keys; }
+.menu--gear .menu__col--ui, .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin-left:7px; padding-left:7px; border-left:1px solid var(--line); }
+.menu--gear .menu__band--keys{ margin-top:6px; padding-top:4px; border-top:1px solid var(--line); }
+.menu--gear .menu__band--keys .menu__title{ padding-bottom:4px; }
+/* how Lapka is: a dot and a word, the way out under them. White is
+   running; amber breathes while the server is not answering; a ring is
+   stopped; grey is not known yet. */
+.status__head{ display:flex; align-items:center; gap:9px; }
+.status__dot{ flex:none; width:9px; height:9px; border-radius:50%; box-sizing:border-box; background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.12); }
+.status__dot.is-checking{ background:var(--tx-3); box-shadow:none; }
+.status__dot.is-down{ background:#e0a24a; box-shadow:0 0 0 3px rgba(224,162,74,.18); animation:status-breathe 1.4s ease-in-out infinite; }
+.status__dot.is-off{ background:transparent; border:2px solid var(--tx-3); box-shadow:none; }
+.status__dot.is-updating{ background:#e0a24a; box-shadow:0 0 0 3px rgba(224,162,74,.18); animation:status-breathe 1.4s ease-in-out infinite; }
+@keyframes status-breathe{ 50%{ opacity:.35; } }
+@media (prefers-reduced-motion: reduce){ .status__dot.is-down{ animation:none; } }
 /* Opening: the menu comes from the gear's side, sliding 60px left into
    place, fast at first and with no long crawl at the end, and the fade
    is over before the slide is. Closing goes back the same way: the slide
@@ -1346,17 +1404,23 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 @starting-style{
   .menu--gear.open{ opacity:0; transform:translateX(60px); }
 }
-.menu--gear .menu__col--keys{ flex:0 0 270px; }
-/* the middle column a fifth wider again than the third */
-.menu--gear .menu__col:not(.menu__col--keys){ flex:0 0 338px; }
-.menu--gear .menu__col:nth-child(2){ flex:0 0 406px; }
 
-/* the list of keyboard shortcuts */
+/* the list of keyboard shortcuts: three columns by meaning from the left
+   edge, each as wide as its words, a soft line between them; in a column
+   the words stand in a row of their own, close to their keys */
+.keys__grid{ display:flex; align-items:flex-start; }
+.keys__col{ display:grid; grid-template-columns:auto auto; column-gap:14px; align-items:baseline; flex:0 0 auto; }
+/* only the last column, with the longest phrases, gives way when the band runs short */
+.keys__col:last-child{ flex:0 1 auto; min-width:0; }
+.keys__col + .keys__col{ border-left:1px solid rgba(255,255,255,.07); margin-left:20px; padding-left:20px; }
+.keys__col .keys__row{ display:contents; }
+.keys__col .keys__caps, .keys__col .keys__what{ padding:2px 0; }
+.keys__col:first-child .keys__caps{ padding-left:12px; }
 .keys__row{
   display:flex; align-items:baseline; gap:10px;
-  padding:5px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
+  padding:2px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
 }
-.keys__caps{ flex:0 0 96px; display:flex; gap:4px; flex-wrap:wrap; }
+.keys__caps{ display:flex; gap:4px; white-space:nowrap; }
 .keys__caps kbd{
   min-width:20px; padding:2px 6px; border-radius:6px;
   border:1px solid var(--line-2); background:var(--glass-hi);
@@ -1427,10 +1491,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .menu--split .menu__col + .menu__col{
     margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line);
   }
-  .menu--gear .menu__col--keys{
-    order:1; margin:8px 0 0; padding:8px 0 0; border-top:1px solid var(--line);
-  }
-  .menu--gear .menu__col--keys + .menu__col{ margin:0; padding:0; border-top:0; }
+  /* the settings sheet in one column: the state and the interface, the player, the storage, the keys */
+  .stage:not(.pip-mode) .menu--gear{ min-width:0; width:min(420px, calc(100vw - 24px)); max-width:none; }
+  .menu--gear{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'ui' 'player' 'place' 'keys'; }
+  .menu--gear .menu__col--ui, .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line); }
+  .keys__grid{ flex-direction:column; gap:6px; }
+  .keys__col + .keys__col{ border-left:0; padding:6px 0 0; margin:0; border-top:1px solid rgba(255,255,255,.07); }
   .browser{ grid-template-columns:1fr; }
   .browser__places{ display:none; }
 }
@@ -1440,8 +1506,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .linkform{ display:flex; gap:8px; width:100%; max-width:560px; margin:0 auto; }
 
 /* ── skipping the opening or the ending ─────────────────────── */
+/* The plate over the picture: larger than a control, and lifted well
+   above the seek bar when the window has the height for it. */
 .skip{
-  position:absolute; right:22px; bottom:92px; z-index:5;
+  position:absolute; right:24px; bottom:96px; z-index:5;
   display:flex; align-items:stretch; border-radius:var(--r-md); overflow:hidden;
   background:var(--glass); border:1px solid var(--line-2); box-shadow:var(--shadow);
   backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
@@ -1451,11 +1519,17 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   font:inherit; color:var(--tx-1); background:transparent; border:0; cursor:pointer;
   display:flex; align-items:center;
 }
-.skip__go{ padding:10px 16px; font-size:calc(14px + var(--fs)); font-weight:500; letter-spacing:var(--track); }
+.skip__go{ padding:14px 22px; font-size:calc(16px + var(--fs)); font-weight:500; letter-spacing:var(--track); position:relative; isolation:isolate; }
+@media (min-height:700px){ .skip{ bottom:140px; } }
 .skip__go:hover{ background:var(--glass-hi); }
-.skip__x{ padding:0 10px; border-left:1px solid var(--line); color:var(--tx-3); }
+/* skipping by itself: the button fills from left to right with the seconds left to answer, driven by the video's own clock */
+.skip__go.is-auto::before{
+  content:''; position:absolute; inset:0; z-index:-1; width:calc(var(--fill, 0) * 100%);
+  background:rgba(255,255,255,.18); transition:width .25s linear;
+}
+.skip__x{ padding:0 14px; border-left:1px solid var(--line); color:var(--tx-3); }
 .skip__x:hover{ color:var(--tx-1); background:var(--glass-hi); }
-.skip__x .ph{ width:14px; height:14px; fill:currentColor; }
+.skip__x .ph{ width:16px; height:16px; fill:currentColor; }
 .stage.idle .skip{ opacity:.85; }
 
 /* ── the queue in seasons ───────────────────────────────────── */
@@ -1529,13 +1603,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .langs{ display:flex; flex-wrap:wrap; gap:6px; }
 .lang{
   font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2);
-  padding:6px 10px; border-radius:var(--ctl-r); border:1px solid var(--line-2); background:var(--glass-soft); cursor:pointer;
+  padding:5px 10px; border-radius:var(--ctl-r); border:1px solid var(--line-2); background:var(--glass-soft); cursor:pointer;
 }
 .lang:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
 .lang.sel{ color:var(--s-0); border-color:var(--tx-1); background:var(--tx-1); }
 
 /* ── the place: the folder and the cache ────────────────────── */
-.home__acts{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:6px; }
 .home__manual{ font:inherit; font-size:calc(12px + var(--fs)); color:var(--tx-3); background:none; border:0; cursor:pointer; text-decoration:underline; padding:4px 2px; }
 .home__manual:hover{ color:var(--tx-1); }
 
@@ -1581,8 +1654,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .btn--quiet{ color:var(--tx-3); border-color:transparent; background:transparent; }
 .btn--quiet:hover{ color:var(--tx-1); border-color:var(--line-2); background:var(--glass-soft); }
 .btn--quiet.is-armed{ color:#e0a24a; border-color:rgba(224,162,74,.5); background:rgba(224,162,74,.08); }
-/* the way out of Lapka, at the foot of the settings: heading, note, the guide, the button; quiet until armed */
-.menu__row--quit{ border-top:1px solid var(--line); }
+/* the way out of Lapka, under the state: note, the guide, the button; quiet until armed */
 .quit__note{ margin:0; }
 .quit__guide{ display:inline-block; align-self:flex-start; font-size:calc(12px + var(--fs)); color:var(--tx-3); text-decoration:underline; padding:2px 2px 4px; }
 .quit__guide:hover{ color:var(--tx-1); }
@@ -1654,10 +1726,25 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .qtag.sel{ color:var(--s-0); background:var(--tx-1); border-color:var(--tx-1); }
 .qtag--wait{ cursor:default; color:var(--tx-3); border-style:dashed; }
 
-/* ── the folder's buttons, each on a full line ── */
-.home__acts{ display:grid; grid-template-columns:1fr; gap:6px; }
-/* a button's text is never cut: the buttons stand one per line and take the height their words need */
-.home__acts .cache__clear{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
+/* ── the folder's two buttons side by side ── */
+.home__acts{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+/* a button's text is never cut: the buttons take the height their words need */
+.home__acts .cache__clear, .home__part .btn{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
+/* a part of the folder: what it is on the left, its way out on the right, quiet until armed */
+.home__part{ display:flex; align-items:center; gap:12px; }
+.home__part .home__what{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.home__part .home__why{ margin:0; min-height:0; }
+.home__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-2); font-variant-numeric:tabular-nums; }
+.home__part .btn{ flex:none; max-width:46%; }
+.home__manual{ align-self:center; }
+/* the update row: the button takes the width of the column, like the folder's */
+.upd .upd__btn{ width:100%; white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
+/* the steps of an update, where the button stood */
+.upd__log{ font-family:var(--mono); letter-spacing:0; font-size:calc(11.5px + var(--fs)); line-height:1.5; color:var(--tx-3); display:flex; flex-direction:column; }
+.upd__log:empty{ display:none; }
+.upd__log div::before{ content:'› '; }
+.upd__log div:last-child{ color:var(--tx-1); }
+.upd__note:empty{ display:none; }
 
 /* ── the busy line: in the middle of the picture, a spinner for an icon ── */
 /* in the middle of the picture: every busy line, and a question that must be seen */

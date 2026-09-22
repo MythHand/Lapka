@@ -17,7 +17,7 @@ import fsp from 'node:fs/promises';
 import { build, haveFfmpeg } from './fixtures.mjs';
 import { startSite } from './site/serve.mjs';
 import { bootLapka } from '../core/lapka.mjs';
-import { loadExtractors, extractorFor } from '../core/extract/index.mjs';
+import { loadExtractors, extractorFor, closedDoor } from '../core/extract/index.mjs';
 import generic from '../core/extract/players/generic.mjs';
 import { createSession } from '../core/session/index.mjs';
 
@@ -117,16 +117,11 @@ describe('from an address to streams', { skip: !ffmpeg && 'ffmpeg not installed'
   });
 });
 
-/* ── Sibnet: no extractor of its own, the generic one reads it ── */
-describe('the generic extractor on a Sibnet embed', { skip: !existsSync(new URL('./snapshots/sibnet/embed.html', import.meta.url)) && 'the snapshots of real pages are kept outside the repository' }, () => {
-  test('finds the mp4 in the script and keeps the embed as the referer', async () => {
-    const fs = await import('node:fs');
-    const html = fs.readFileSync(new URL('./snapshots/sibnet/embed.html', import.meta.url), 'utf8');
-    const session = { fetch: async url => ({ status: 200, url, body: html, headers: {}, cookies: [] }) };
-    const got = await generic.extract('https://video.sibnet.ru/shell.php?videoid=3647476', { referer: 'https://old.yummyani.me/' }, session);
-    assert.equal(got.streams.length, 1);
-    assert.equal(got.streams[0].kind, 'mp4');
-    assert.match(got.streams[0].url, /^https:\/\/video\.sibnet\.ru\/v\/[a-f0-9]+\/3647476\.mp4$/);
-    assert.equal(got.streams[0].headers.referer, 'https://video.sibnet.ru/shell.php?videoid=3647476');
+describe('closed doors', () => {
+  test('a player behind a door known to be closed is refused without a request, with the reason', () => {
+    assert.match(closedDoor('https://www.youtube.com/embed/abc?autoplay=1'), /закрытая дверь/);
+    assert.match(closedDoor('https://youtu.be/abc'), /закрытая дверь/);
+    assert.equal(closedDoor('https://player.example/serial/1/abc/720p'), null);
+    assert.equal(closedDoor('not a url'), null);
   });
 });

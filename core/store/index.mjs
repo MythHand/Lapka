@@ -129,7 +129,25 @@ export async function openStore({ home = defaultHome(), limitGb = 24 } = {}) {
     return { bytes: total, dropped };
   }
 
-  return { home, own, cache };
+  /* what the folder takes apart from the cache: the files kept and Lapka's own notes */
+  async function weigh(dir = home) {
+    let bytes = 0;
+    for (const d of await fsp.readdir(dir, { withFileTypes: true }).catch(() => [])) {
+      const p = path.join(dir, d.name);
+      if (p === cacheDir) continue;
+      if (d.isDirectory()) bytes += await weigh(p);
+      else if (d.isFile()) { try { bytes += (await fsp.stat(p)).size; } catch { /* gone */ } }
+    }
+    return bytes;
+  }
+  /* what Lapka learned about sites, dropped; the folder stays for what comes next */
+  async function forgetKnowledge() {
+    const dir = path.join(own, 'knowledge');
+    await fsp.rm(dir, { recursive: true, force: true });
+    await fsp.mkdir(dir, { recursive: true });
+  }
+
+  return { home, own, cache, weigh, forgetKnowledge };
 }
 
 export const exists = p => { try { fs.accessSync(p); return true; } catch { return false; } };

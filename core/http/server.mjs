@@ -21,6 +21,9 @@ import { Readable } from 'node:stream';
 import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
+import { homeInside } from '../store/config.mjs';
+import { VERSION, checkUpdate, runUpdate, restartAfterExit, installKind } from '../update.mjs';
+export { VERSION };
 
 const VENDOR = { 'hls.min.js': createRequire(import.meta.url).resolve('hls.js/dist/hls.min.js') };
 
@@ -79,8 +82,11 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
     try {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
-      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', home: store?.home || null });
-      if (req.method === 'GET' && p === '/api/home' && library) return json(res, 200, { home: store.home, series: (await library.list()).length, cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
+      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', version: VERSION, home: store?.home || null });
+      if (req.method === 'GET' && p === '/api/home' && library) {
+        const series = await library.list();
+        return json(res, 200, { home: store.home, series: series.length, files: series.reduce((n, s) => n + s.episodes.length, 0), filesBytes: series.reduce((n, s) => n + s.episodes.reduce((m, e) => m + (e.size || 0), 0), 0), bytes: await store.weigh(), notes: state ? state.notes() : 0, notesBytes: await store.weigh(store.own), cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
+      }
       if (req.method === 'GET' && VENDOR[p.slice('/vendor/'.length)] && p.startsWith('/vendor/')) {
         const file = VENDOR[p.slice('/vendor/'.length)];
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'max-age=86400' });
@@ -115,10 +121,40 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         catch (e) { return json(res, 500, { error: e.message }); }
       }
       if (ctx.quit && mutating && p === '/api/quit') { ctx.quit(); return json(res, 200, { ok: true }); }
+
+      /* Updating: GitHub is asked only here, on the button. The update itself
+         is a stream of steps like the live look; it starts with a one-time
+         token from a POST, so no page but Lapka's own can set it off. */
+      if (mutating && p === '/api/update/check') {
+        try { return json(res, 200, { ...(await checkUpdate()), kind: installKind() }); }
+        catch (e) { return json(res, 502, { error: e.message }); }
+      }
+      if (ctx.quit && mutating && p === '/api/update/start') {
+        const tag = url.searchParams.get('tag') || '';
+        ctx.updateToken = { token: Math.random().toString(36).slice(2) + Date.now().toString(36), tag, until: Date.now() + 60 * 1000 };
+        return json(res, 200, { token: ctx.updateToken.token });
+      }
+      if (ctx.quit && req.method === 'GET' && p === '/api/update/live') {
+        const t = ctx.updateToken;
+        if (!t || t.token !== url.searchParams.get('token') || t.until < Date.now()) return json(res, 403, { error: 'no such update' });
+        ctx.updateToken = null;
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', 'connection': 'keep-alive' });
+        const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+        try {
+          await runUpdate({ tag: t.tag, onStep: s => send('step', s) });
+          send('step', 'Перезапускаю Lapka');
+          send('done', { ok: true });
+          res.end();
+          restartAfterExit({ port: ctx.port });
+          ctx.quit();
+        } catch (e) { send('fail', { error: e.message }); res.end(); }
+        return;
+      }
       if (ctx.switchHome && mutating && p === '/api/home/pick') {
         try {
-          const chosen = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
-          if (!chosen) return json(res, 200, { cancelled: true });
+          const picked = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
+          if (!picked) return json(res, 200, { cancelled: true });
+          const chosen = await homeInside(picked);   // the page shows the folder that will be used
           /* not switched yet: the page asks whether to take the files along */
           const has = (await library.list()).length > 0;
           return json(res, 200, { ok: true, chosen, hasContent: has, from: store.home });
@@ -154,6 +190,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const known = lapka.series(seriesId);
         const dir = known ? library.seriesDir(known) : ((await library.list()).find(x => x.id === seriesId) || {}).dir || null;
         return json(res, 200, { cancelled: await saver.cancelFor({ seriesId, episodes, dir }) });
+      }
+      /* the saved files, all of them: the saves under way go first, then the series folders */
+      if (library && mutating && p === '/api/library/clear') {
+        if (saver) await saver.cancelAll();
+        return json(res, 200, await library.clear());
+      }
+      /* the notes: positions, watched marks, dub choices, what was learned about sites */
+      if (state && mutating && p === '/api/state/forget') {
+        state.forget();
+        await store.forgetKnowledge();
+        return json(res, 200, { ok: true });
       }
       if (library && mutating && p === '/api/library/delete') {
         const seriesId = url.searchParams.get('series') || '', episodes = (url.searchParams.get('episodes') || '').split(',').filter(Boolean);
@@ -195,7 +242,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (state && req.method === 'GET' && p === '/api/state') return json(res, 200, state.get());
       if (state && mutating && p === '/api/state/position') {
         const q = url.searchParams;
-        state.setPosition(q.get('series'), Number(q.get('episode')), q.get('dub'), q.has('t') ? Number(q.get('t')) : null);
+        state.setPosition(q.get('series'), Number(q.get('episode')), q.get('dub'), q.has('t') ? Number(q.get('t')) : null, Number(q.get('d')) || 0);
+        return json(res, 200, { ok: true });
+      }
+      if (state && mutating && p === '/api/state/watched') {
+        const q = url.searchParams;
+        state.setWatched(q.get('series'), Number(q.get('episode')), q.get('on') !== '0');
         return json(res, 200, { ok: true });
       }
       if (state && mutating && p === '/api/state/dub') {
@@ -233,6 +285,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         } catch (e) {
           return json(res, e.code || 500, { error: e.message });
         }
+      }
+      /* the same look, told as it goes: a stream of events, a step each, then the answer */
+      if (req.method === 'GET' && p === '/api/look/live') {
+        const target = url.searchParams.get('url');
+        if (!/^https?:\/\//i.test(target || '')) return json(res, 400, { error: 'url must be http(s)' });
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', 'connection': 'keep-alive' });
+        const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
+        const t0 = Date.now();
+        try { const looked = await lapka.look(target, { onStep: s => send('step', s) }); send('done', { ...looked, ms: Date.now() - t0 }); }
+        catch (e) { send('fail', { error: e.message }); }
+        return res.end();
       }
       if (req.method === 'GET' && p === '/api/look') {
         const target = url.searchParams.get('url');

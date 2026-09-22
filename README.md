@@ -33,16 +33,27 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
 
 ## What it does
 
-- **Queue.** The episodes of every season, film and spin-off of a franchise, in the order they came out.
+- **Queue.** The episodes of every season, film and spin-off of a franchise, in the order they came
+  out, even when the site keeps every season in one player.
 - **Dubs.** Switched on the fly, without a reload; the choice is kept for the whole series.
 - **Quality.** Any variant a source offers, the levels inside one stream included.
 - **Subtitles.** As a track of their own, when the source offers them; their look is adjustable.
-- **Resume.** From where you stopped, for every episode and dub.
+- **Openings.** A skip button when the site knows the timings; by itself too, with six seconds to
+  say Watch.
+- **Resume.** From where you stopped, for every episode and dub; an episode watched to the end is
+  marked, and the frame shows where you stopped.
 - **Saving.** An episode as one file in your folder, with the chosen dub and the subtitles inside.
   Saves go in a queue, one after another: a pause holds an episode where it got to and continues
   from there, a waiting one can be made the current one, any can be cancelled, and saved files can
   be deleted from the library right in the player. A save that was cut short is finished on its own.
+  The quality a group is saved in: the best, as played, or the nearest to a named one.
 - **Sources.** Several players per episode; a dead source gives way to a live one by itself.
+- **Log.** While a page is read, the reading is shown step by step: what was found, which players
+  opened, which parts of the franchise gathered.
+- **Folder.** The saved videos, Lapka's notes and the cache are seen in the settings with their
+  sizes and cleared each on its own.
+- **Updating.** From the settings: the version checked on GitHub at a button, Lapka updated and
+  started again by itself, for a cloned folder and for a downloaded ZIP alike.
 - **A window of its own.** Picture-in-picture, the extended one included, with the controls right in the window.
 - **Ten interface languages.**
 
@@ -55,8 +66,9 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
 The page reading is one general mechanism, not code written for particular
 sites: Lapka looks for players, episode lists and dubs by the way a page is
 built. Tested on: aniliberty.top, old.yummyani.me, jut-su.net, animego.me,
-anidubonline.ru, gogoanime.by, jkanime.net, newdeaf.co. Other sites built the
-same way mostly open too. Sites with DRM, and sites that deliberately lock
+anidubonline.ru, gogoanime.by, jkanime.net, newdeaf.co, yummyanime.tv,
+ani-media.online, domanime.ru, lordserials.fan. Other sites built the same way
+mostly open too. Sites with DRM, and sites that deliberately lock
 their players, Lapka does not break into.
 
 ## Running it
@@ -80,15 +92,15 @@ Or without the terminal: `start.command` on macOS and `start.bat` on Windows
 open by a double click, `./start.sh` on Linux. Each checks Node.js, installs
 what is missing the first time, starts Lapka in the background and opens it
 in the browser; that window can then be closed, Lapka keeps running. To stop
-it: `stop.command`, `stop.bat` or `./stop.sh`, or the "Quit Lapka" button at
-the foot of the settings (the gear). To update: `update.command`, `update.bat`
-or `./update.sh` pulls the newest version into the same folder (not a second
-`git clone`: git refuses to write into a folder that exists) and starts Lapka
-again if it was running.
+it: `stop.command`, `stop.bat` or `./stop.sh`, or the "Quit Lapka" button in
+the settings (the paw in the top right corner). To update: in the settings, the
+"Version" row → "Check for an update" → "Update to v…", and Lapka fetches,
+installs and starts itself again; or `update.command`, `update.bat`, `./update.sh`
+(not a second `git clone`: git refuses to write into a folder that exists).
 
-![Settings: shortcuts, language and player, the Lapka folder, cache, the quality to save in](docs/media/setting.png)
+![Settings: the state and the version, the interface, the player, the storage with the folder, the saved videos, the notes and the cache, the shortcuts](docs/media/setting.png)
 
-Lapka's files go into the folder you choose in the settings (the gear →
+Lapka's files go into the folder you choose in the settings (the paw →
 "Lapka folder"). Until the first choice it is `.dev/home` inside the project
 folder. The `LAPKA_HOME` environment variable forces a folder, `PORT` changes
 the port.
@@ -107,15 +119,22 @@ needs for an exact answer is there.
 
 ## Development
 
-- `npm run dev` — Lapka on 8800 and the synthetic test site on 8801.
+How to start Lapka is said in the two sections above: "Running it" is the
+developer's start from a clone (`git clone`, `npm install`, `npm start`), "If you
+are not a developer" is the ZIP install with a launcher. This section is neither:
+it is the tooling for working on Lapka's code, not needed for watching.
+
+- `npm run dev` — Lapka on 8800 and the synthetic test site on 8801: a stand-in
+  "anime site" from `test/site` that the generic reading of pages is checked
+  against. Its clips are made with ffmpeg; without it only Lapka starts.
   `SITE_SLOW_MS=3000 npm run site` slows the synthetic site's files down, for
   trying pauses and the save queue by hand.
 - `npm test` — all tests. `npm run check` — the static check of the front end.
-  The tests of real sites run on snapshots of their pages, which are kept outside the
-  repository; without them those tests report themselves as skipped.
+  The tests of real sites are kept outside the repository together with the snapshots
+  of their pages.
 - The map of the core and the contracts of its blocks: [core/README.md](core/README.md).
 
-![npm test: 165 tests pass](docs/media/tests.png)
+![npm test: 95 tests pass](docs/media/tests.png)
 
 ## Boundaries
 

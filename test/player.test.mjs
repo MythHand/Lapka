@@ -332,8 +332,8 @@ describe('the interface holds together', { skip }, () => {
     ok(r, 'ui'); assert.deepEqual(r.errors, []);
     assert.deepEqual(r.uneven, []);
     assert.equal(r.langs, 10);
-    assert.equal(r.cols, 3);
-    assert.equal(r.placeCol, true, 'the folder and the cache share the third column');
+    assert.equal(r.cols, 4);
+    assert.equal(r.placeCol, true, 'the folder and the cache share the storage column');
     assert.equal(r.drag, true, 'reordering by drag is off by default');
     assert.equal(r.lang, 'ru');
     assert.equal(r.ruTitle, 'Вставьте ссылку');

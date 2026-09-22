@@ -11,7 +11,7 @@
 import { createSession } from './session/index.mjs';
 import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
 import { playerId } from './discover/players.mjs';
-import { loadExtractors, extractorFor } from './extract/index.mjs';
+import { loadExtractors, extractorFor, closedDoor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
 import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS, dubKey } from './catalog/index.mjs';
@@ -42,11 +42,18 @@ export function createLapka({ session = createSession(), profiles = [], extracto
      episode that lives in a fragment answered only to a script's
      request, wrapped in JSON. The reading of what comes back stays
      general. */
+  /* "?season=N" on a page's address is Lapka's own word for one season of
+     a page that holds them all in one player: the site is not asked with
+     it (a site answers such an address with a redirect to the bare one),
+     and the reading keeps it on the address it was given. */
+  const seasonOff = url => { try { const u = new URL(url); const s = u.searchParams.get('season'); if (!s) return { ask: url, season: null }; u.searchParams.delete('season'); return { ask: u.toString(), season: s }; } catch { return { ask: url, season: null }; } };
+  const seasonOn = (url, season) => { if (!season) return url; try { const u = new URL(url); u.searchParams.set('season', season); return u.toString(); } catch { return url; } };
   async function readPage(url, referer = null) {
-    const site = siteFor(sites, url);
-    const res = site && site.fetch ? await site.fetch(url, { referer }, session) : await session.fetch(url, { referer });
-    if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
-    return discover({ html: res.body, url: res.url || url, profile: profileFor(url) });
+    const { ask, season } = seasonOff(url);
+    const site = siteFor(sites, ask);
+    const res = site && site.fetch ? await site.fetch(ask, { referer }, session) : await session.fetch(ask, { referer });
+    if (res.status >= 400) throw new Error(`${ask} answered ${res.status}`);
+    return discover({ html: res.body, url: seasonOn(res.url || ask, season), profile: profileFor(ask) });
   }
 
   /* One embedded player opened: what it plays, as a contribution for
@@ -72,6 +79,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       try { const url = await followDeferred(player.url, pageUrl); player = { ...player, url, id: playerId(url, pageUrl), kind: 'iframe', followed: true }; }
       catch (e) { return { player, error: e.message }; }
     }
+    const shut = closedDoor(player.url);
+    if (shut) return { player, error: shut };
     const x = extractorFor(extractors, player.url);
     if (!x) return { player, error: 'no extractor' };
     try {
@@ -83,7 +92,14 @@ export function createLapka({ session = createSession(), profiles = [], extracto
           const episodes = got.episodes.map(e => ({ ...e, sourceUrl: e.sourceUrl || pageUrl,
             dubs: (e.dubs || []).map(d => ({ ...d, sources: d.sources.map(src => ({ player: player.id, extractor: x.name, ...src })) })) }));
           const dubs = new Set(episodes.flatMap(e => e.dubs.map(d => d.name)));
-          return { player, extractor: x.name, unfolded: { episodes: episodes.length, dubs: dubs.size }, contribution: { origin: `extract:${x.name}`, episodes } };
+          const contribution = { origin: `extract:${x.name}`, episodes };
+          /* every season in one player: this page is the season shown, the
+             others are the same address with ?season=N, parts of the franchise */
+          if (got.seasons && got.seasons.length > 1 && got.season) {
+            const at = n => { const u = new URL(pageUrl); u.searchParams.set('season', String(n)); return u.toString(); };
+            contribution.series = { season: got.season, franchise: got.seasons.map(n => ({ order: n, title: '', url: at(n), kind: 'tv', self: n === got.season })) };
+          }
+          return { player, extractor: x.name, unfolded: { episodes: episodes.length, dubs: dubs.size, seasons: got.seasons ? got.seasons.length : 0 }, contribution };
         }
       }
       /* the site's own player on a page that names no episode and lists
@@ -121,10 +137,30 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   }
 
   /* The players of one episode page, opened, into the series. */
-  async function openPlayers(series, report) {
+  async function openPlayers(series, report, { onStep = () => {} } = {}) {
     const number = report.episode.value;
     const embeds = report.players.filter(p => !p.stream);
-    const results = await Promise.all(embeds.map(p => openPlayer(p, number, report.url)));
+    if (embeds.length) { onStep({ phase: 'players', n: embeds.length }); onStep(`Открываю ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}`); }
+    /* each player is said as it answers, not when the last one has */
+    const said = r => r.error ? `${r.player.id}: ${r.error}`
+      : r.unfolded ? `${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`
+      : `${r.player.id}: потоки есть`;
+    /* Embeds a player can unfold hold the whole series each: one such
+       embed per player is opened first, and the rest of that player's are
+       opened only when it did not unfold (a page lists one Kodik season
+       embed per dub, sixteen of them, and any one of them names them all). */
+    const open = p => openPlayer(p, number, report.url).then(r => { onStep(said(r)); return r; });
+    const unfolding = p => !!extractorFor(extractors, p.url)?.unfold;
+    const firstOf = new Map();
+    const heads = [], tails = [];
+    for (const p of embeds) {
+      const x = unfolding(p) ? extractorFor(extractors, p.url).name : null;
+      if (x && firstOf.has(x)) tails.push(p); else { if (x) firstOf.set(x, p); heads.push(p); }
+    }
+    const results = await Promise.all(heads.map(open));
+    const rest = tails.filter(p => { const x = extractorFor(extractors, p.url).name; const first = results.find(r => r.player === firstOf.get(x)); return !(first && first.unfolded); });
+    if (rest.length) results.push(...await Promise.all(rest.map(open)));
+    for (const p of tails) if (!results.some(r => r.player === p)) results.push({ player: p, extractor: extractorFor(extractors, p.url).name, error: null, same: true });
     const opened = [];
     for (const r of results) {
       opened.push({ player: r.player.id, url: r.player.url, extractor: r.extractor || null, error: r.error || null, unfolded: r.unfolded || null,
@@ -138,9 +174,11 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     }
     const steps = [];
     if (embeds.length) {
+      const same = results.filter(r => r.same).length, asked = embeds.length - same;
       const ok = results.filter(r => r.contribution).length;
-      steps.push(ok === embeds.length ? `Открыла ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}, потоки есть`
-        : `Открыла ${ok} из ${embeds.length} ${plural(embeds.length, 'плеера', 'плееров', 'плееров')}`);
+      steps.push((ok === asked ? `Открыла ${asked} ${plural(asked, 'плеер', 'плеера', 'плееров')}, потоки есть`
+        : `Открыла ${ok} из ${asked} ${plural(asked, 'плеера', 'плееров', 'плееров')}`)
+        + (same ? `; ещё ${same} ${plural(same, 'ссылка ведёт', 'ссылки ведут', 'ссылок ведут')} в тот же плеер` : ''));
       for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
       for (const r of results) if (r.unfolded) steps.push(`${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`);
     }
@@ -313,9 +351,13 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   }
 
   /* One address in, a catalog and the reports behind it out. */
-  async function look(url) {
+  async function look(url, { onStep = () => {} } = {}) {
     const reports = [];
+    const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+    onStep({ phase: 'page' });
+    onStep(`Читаю страницу ${host}`);
     const first = await readPage(url);
+    for (const s of first.steps) onStep(s);
     reports.push(first);
 
     /* a site Lapka knows through its API adds what the page cannot say */
@@ -353,7 +395,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
        or one its extractor can unfold */
     const whole = first.players.some(p => p.kind === 'deferred' || extractorFor(extractors, p.url)?.unfold);
     if (first.kind === 'episode' && (number !== null || whole)) {
-      const got = await openPlayers(series, first);
+      const got = await openPlayers(series, first, { onStep });
       opened = got.opened; steps.push(...got.steps);
     }
 

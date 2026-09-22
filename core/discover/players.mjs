@@ -23,6 +23,8 @@ const EMBED_ATTRS = ['data-embed', 'data-src', 'data-url', 'data-iframe', 'data-
 const SCRIPT_URL_KEYS = ['remote', 'url', 'src', 'embed', 'link', 'file', 'iframe', 'code'];
 const SCRIPT_NAME_KEYS = ['server', 'name', 'title', 'player', 'host', 'provider'];
 const SCRIPT_DUB_KEYS = ['dub', 'dubbing', 'translation', 'voice', 'audio', 'language'];
+/* hosts that are players by name: an address of theirs in a script needs no label beside it to count */
+const PLAYER_HOST = /kodik|aniboom|alloha|sibnet|cdnvideohub|streamtape|mp4upload|streamwish|filemoon|dood|vidhide|mixdrop|vk\.com|ok\.ru/i;
 /* data-src is how images load lazily too: on a picture element, or
    one that calls itself a picture, or with a picture's address, it is
    an image; on a frame, a video or a switch item it is a player */
@@ -110,6 +112,18 @@ export function findPlayers(doc, url, { profile } = {}) {
 
   /* what is on the page right now */
   for (const f of doc.querySelectorAll('iframe')) add(abs(f.getAttribute('src') || f.getAttribute('data-src')), 'iframe', 'iframe');
+  /* a player dropped in as an element with its ids in attributes: the
+     CVH <video-player>. It gets an address of the player's own carrying
+     them, which its extractor reads; the page's own ?season=N goes along,
+     the way a page holding every season in one player is looked at */
+  for (const el of doc.querySelectorAll('video-player[data-title-id]')) {
+    const q = new URLSearchParams({ title_id: el.getAttribute('data-title-id') });
+    if (el.getAttribute('data-publisher-id')) q.set('pub', el.getAttribute('data-publisher-id'));
+    if (el.getAttribute('data-aggregator')) q.set('aggr', el.getAttribute('data-aggregator'));
+    let season = null; try { season = Number(new URL(url).searchParams.get('season')) || null; } catch { /* no address */ }
+    if (season) q.set('season', String(season));
+    add('https://player.cdnvideohub.com/embed?' + q, 'element', 'video-player');
+  }
   for (const v of doc.querySelectorAll('video')) {
     add(abs(v.getAttribute('src') || v.getAttribute('data-src')), 'video', 'video');
     for (const s of v.querySelectorAll('source')) add(abs(s.getAttribute('src')), 'video', 'video source');
@@ -136,7 +150,8 @@ export function findPlayers(doc, url, { profile } = {}) {
       if (!embed) continue;
       const name = SCRIPT_NAME_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v.trim());
       const dub = SCRIPT_DUB_KEYS.map(k => o[k]).find(v => typeof v === 'string' && v.trim());
-      if (!name && !dub) continue;
+      /* no name beside it: still a player when the host is one ({"link":"//kodikplayer.com/season/…","list":[1,2,3]}) */
+      if (!name && !dub) { let host = ''; try { host = new URL(embed).hostname; } catch { /* not an address */ } if (PLAYER_HOST.test(host)) add(embed, 'script', 'script object'); continue; }
       fromScripts.push({ embed, name: name ? clean(name) : null, dub: dub ? clean(dub) : null });
     }
   }

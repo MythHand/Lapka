@@ -76,6 +76,16 @@ export function openLibrary(home) {
       return { removed, dir: s.dir };
     },
 
+    /* every series folder Lapka keeps, taken off the disk with all it holds */
+    async clear() {
+      let removed = 0, series = 0;
+      for (const s of await this.list()) {
+        await fsp.rm(s.dir, { recursive: true, force: true }).catch(() => {});
+        removed += s.episodes.length; series++;
+      }
+      return { removed, series };
+    },
+
     /* every pinned episode on disk, by series */
     async list() {
       const out = new Map();

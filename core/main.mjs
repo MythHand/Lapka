@@ -9,7 +9,7 @@ import { openLibrary } from './store/library.mjs';
 import { createDelivery } from './deliver/index.mjs';
 import { createSaver } from './deliver/save.mjs';
 import { createSession } from './session/index.mjs';
-import { readConfig, writeConfig, checkHome } from './store/config.mjs';
+import { readConfig, writeConfig, checkHome, homeInside } from './store/config.mjs';
 
 export const PORT = Number(process.env.PORT) || 8800;
 export const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -58,7 +58,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   ctx.lapka = await bootLapka({ session, delivery });
   /* the folder can change while running: the user picks another one */
   ctx.switchHome = async (dir, { move = false } = {}) => {
-    const check = await checkHome(dir);
+    const check = await checkHome(await homeInside(dir));
     if (!check.ok) throw Object.assign(new Error(check.why), { code: 400 });
     const old = ctx.state;
     const from = ctx.home;
@@ -70,6 +70,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     return check;
   };
   const server = await startServer({ port, webDir, ctx });
+  ctx.port = server.port || port;   // the one really listened on, for starting again after an update
   /* saves cut short last time are taken up again, a moment after start, unless switched off */
   ctx.resumeSaves = () => (ctx.state.setting('autoResume') === 'off' ? Promise.resolve([]) : ctx.saver.resume(ctx.lapka));
   /* A save cut short is taken up again while Lapka runs: a moment

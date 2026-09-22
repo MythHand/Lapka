@@ -33,10 +33,14 @@ export function discover({ html, url, profile = null }) {
   const seriesUrl = findSeriesUrl(doc, url, probableSeries);
   const current = findCurrentEpisode(doc, url);
   const ownSeason = seasonFromText(title[0]?.value || '') ?? seasonFromUrl(url);
-  /* season links first; without them, a block the site heads as the franchise */
+  /* A block the site heads as the franchise is the site's own word,
+     with years, films and specials in it; links that only name seasons
+     are an inference from the text. The block wins when it knows at
+     least as many parts, else the season links. */
   const bySeasons = findFranchise(doc, url, ownSeason, title[0]?.value || '');
   const self = findSelf(doc);
-  const franchise = bySeasons.length ? bySeasons : franchiseFromBlock(doc, url, title[0]?.value || '', self);
+  const byBlock = franchiseFromBlock(doc, url, title[0]?.value || '', self);
+  const franchise = byBlock.length && byBlock.length >= bySeasons.length ? byBlock : bySeasons;
 
   /* No list of episodes, but the page says how many there are: the
      others are the same address with the other numbers. On an episode
@@ -115,7 +119,11 @@ export function discover({ html, url, profile = null }) {
     cover: { value: cover[0]?.value || null, candidates: cover },
     seriesUrl: { value: kind === 'episode' ? seriesUrl[0]?.value || null : null, candidates: seriesUrl },
     episode: { value: kind === 'episode' ? sure?.value ?? null : null, candidates: current },
-    season: ownSeason ?? (franchise.find(f => f.self)?.order ?? null),
+    /* a place in a list of seasons is a season; a place in a block ordered
+       by year, with films and specials in it, is not, save one thing: the
+       page that nothing numbers and that is the earliest series of its
+       franchise is the first season, the one sites leave unnumbered */
+    season: ownSeason ?? (franchise === bySeasons ? franchise.find(f => f.self)?.order ?? null : firstSeason(franchise)),
     year: self.year ?? tidy.year, kind_: self.kind,
     franchise,
     episodes,
@@ -180,6 +188,12 @@ function plural(n, one, few, many) {
    this page every player the page named a dub for, plus a stream that
    sits right on the page. A player the page did not name a dub for is
    not guessed at; it waits in the report for an extractor. */
+function firstSeason(franchise) {
+  const self = franchise.find(f => f.self);
+  if (!self || self.kind !== 'tv') return null;
+  return franchise.find(f => f.kind === 'tv') === self ? 1 : null;
+}
+
 export function toContribution(report, { origin = 'discover:page' } = {}) {
   const c = { origin, series: {}, episodes: [] };
   if (report.title.value) c.series.title = report.title.value;

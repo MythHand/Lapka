@@ -308,6 +308,14 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return n;
   }
 
+  /* every save there is, cancelled: the jobs in any state and every record left by earlier runs */
+  async function cancelAll() {
+    let n = 0;
+    for (const job of [...jobs.values()]) if (['queued', 'working', 'paused', 'error'].includes(job.state)) { await cancel(job.id); n++; }
+    if (state) for (const key of Object.keys(state.saves())) { state.clearSave(key); n++; }
+    return n;
+  }
+
   function pauseAll() {
     held = true;
     const out = [];
@@ -347,5 +355,5 @@ export function createSaver({ delivery, cache, library, state = null }) {
     return resuming;
   }
 
-  return { save, start, promote, pause, pauseAll, cancel, cancelFor, resume, job: id => jobs.get(id) || null, jobs, keyOf };
+  return { save, start, promote, pause, pauseAll, cancel, cancelFor, cancelAll, resume, job: id => jobs.get(id) || null, jobs, keyOf };
 }
