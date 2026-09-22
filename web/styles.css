@@ -1484,8 +1484,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .linkform{ display:flex; gap:8px; width:100%; max-width:560px; margin:0 auto; }
 
 /* ── skipping the opening or the ending ─────────────────────── */
+/* The plate over the picture: larger than a control, and lifted well
+   above the seek bar when the window has the height for it. */
 .skip{
-  position:absolute; right:22px; bottom:92px; z-index:5;
+  position:absolute; right:24px; bottom:96px; z-index:5;
   display:flex; align-items:stretch; border-radius:var(--r-md); overflow:hidden;
   background:var(--glass); border:1px solid var(--line-2); box-shadow:var(--shadow);
   backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
@@ -1495,16 +1497,17 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   font:inherit; color:var(--tx-1); background:transparent; border:0; cursor:pointer;
   display:flex; align-items:center;
 }
-.skip__go{ padding:10px 16px; font-size:calc(14px + var(--fs)); font-weight:500; letter-spacing:var(--track); position:relative; isolation:isolate; }
+.skip__go{ padding:14px 22px; font-size:calc(16px + var(--fs)); font-weight:500; letter-spacing:var(--track); position:relative; isolation:isolate; }
+@media (min-height:700px){ .skip{ bottom:140px; } }
 .skip__go:hover{ background:var(--glass-hi); }
 /* skipping by itself: the button fills from left to right with the seconds left to answer, driven by the video's own clock */
 .skip__go.is-auto::before{
   content:''; position:absolute; inset:0; z-index:-1; width:calc(var(--fill, 0) * 100%);
   background:rgba(255,255,255,.18); transition:width .25s linear;
 }
-.skip__x{ padding:0 10px; border-left:1px solid var(--line); color:var(--tx-3); }
+.skip__x{ padding:0 14px; border-left:1px solid var(--line); color:var(--tx-3); }
 .skip__x:hover{ color:var(--tx-1); background:var(--glass-hi); }
-.skip__x .ph{ width:14px; height:14px; fill:currentColor; }
+.skip__x .ph{ width:16px; height:16px; fill:currentColor; }
 .stage.idle .skip{ opacity:.85; }
 
 /* ── the queue in seasons ───────────────────────────────────── */
