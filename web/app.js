@@ -1745,20 +1745,23 @@ function segRow(menu, label, current, opts, pick) {
   const lab = document.createElement('span');
   lab.className = 'menu__rowlabel';
   lab.textContent = label;
-  const group = document.createElement('div');
-  group.className = 'seg2';
-  for (const [val, text] of opts) {
+  /* a null among the options starts a second line of buttons; the choice is one across both */
+  const groups = [], all = [];
+  let group = null;
+  for (const opt of opts) {
+    if (!opt || !group) { group = document.createElement('div'); group.className = 'seg2'; groups.push(group); if (!opt) continue; }
+    const [val, text] = opt;
     const b = document.createElement('button');
     b.textContent = text;
     b.className = current === val ? 'sel' : '';
     b.onclick = ev => {
       ev.stopPropagation();
-      for (const x of group.children) x.classList.toggle('sel', x === b);
+      for (const x of all) x.classList.toggle('sel', x === b);
       pick(val);
     };
-    group.append(b);
+    group.append(b); all.push(b);
   }
-  line.append(lab, group);
+  line.append(lab, ...groups);
   menu.append(line);
 }
 
@@ -2046,85 +2049,34 @@ function homeRow(col) {
    narrow strip, one word per row; keys need one of their own, because a
    caption next to a key reads only when both are on the same line. The
    widths live in menu--gear, this is the content alone. */
+/* ── the settings ─────────────────────────────────────────────
+   One sheet, three columns and a band: the state of the server with
+   the way out and the interface on the left, the player in the middle,
+   the storage on the right, the keys along the bottom. The server is
+   asked how it is while the sheet is open. */
+let serverState = 'checking';         // up | down | off | checking
+async function checkServer() {
+  if (serverState === 'off') return paintStatus();
+  try { await api('/api/ping'); serverState = 'up'; } catch (_) { serverState = 'down'; }
+  paintStatus();
+}
+function paintStatus() {
+  const row = gearMenu.querySelector('.status');
+  if (!row) return;
+  row.querySelector('.status__dot').className = 'status__dot is-' + serverState;
+  row.querySelector('.status__label').textContent = t('set.status.' + serverState);
+}
+setInterval(() => { if (gearMenu.classList.contains('open')) checkServer(); }, 4000);
+
 function buildGearMenu() {
   gearMenu.replaceChildren();
-  gearMenu.classList.add('menu--split', 'menu--gear');
 
-  const keys = document.createElement('div');
-  keys.className = 'menu__col menu__col--keys';
-  menuTitle(keys, t('keys.head'));
-  for (const [caps, key] of KEYS_UI) {
-    const row = document.createElement('div');
-    row.className = 'keys__row';
-    const box = document.createElement('span');
-    box.className = 'keys__caps';
-    for (const c of caps) {
-      const k = document.createElement('kbd');
-      k.textContent = c;
-      box.append(k);
-    }
-    const what = document.createElement('span');
-    what.className = 'keys__what';
-    what.textContent = t(key);
-    row.append(box, what);
-    keys.append(row);
-  }
-
-  const opts = document.createElement('div');
-  opts.className = 'menu__col';
-  menuTitle(opts, t('set.head'));
-  /* the language first: chips as wide as their names */
-  const langRow = document.createElement('div');
-  langRow.className = 'menu__row';
-  const langLab = document.createElement('span');
-  langLab.className = 'menu__rowlabel';
-  langLab.textContent = t('set.lang');
-  const chips = document.createElement('div');
-  chips.className = 'langs';
-  for (const [code, name] of LANG_LIST) {
-    const b = document.createElement('button');
-    b.className = 'lang' + (code === lang ? ' sel' : '');
-    b.textContent = name;
-    b.onclick = ev => {
-      ev.stopPropagation();
-      setLang(code);                    // repaints everything and closes the menus
-      buildGearMenu();
-      gearMenu.classList.add('open');   // but the settings stay open
-    };
-    chips.append(b);
-  }
-  langRow.append(langLab, chips);
-  opts.append(langRow);
-  for (const row of SETTINGS) {
-    segRow(opts, t(row.label), state.set[row.key],
-           row.opts.map(([val, key]) => [val, t(key)]), val => {
-      state.set[row.key] = val;
-      try { localStorage.setItem('lapka.' + row.key, val); } catch (_) {}
-      applySettings();
-    });
-  }
-  const place = document.createElement('div');
-  place.className = 'menu__col menu__col--place';
-  menuTitle(place, t('set.place'));
-  homeRow(place);
-  cacheRow(place);
-  /* how episodes are saved */
-  const saveQ = state.remote.settings?.saveQuality || 'auto';
-  segRow(place, t('set.saveQuality'), saveQ, [['auto', t('quality.auto')], ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], val => {
-    state.remote.settings = { ...(state.remote.settings || {}), saveQuality: val };
-    post('/api/state/setting?k=saveQuality&v=' + val).catch(() => {});
-  });
-  switchRow(place, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
-    state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
-    post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
-  });
-  /* the way out: a block like the others, with its heading, what it is and why, the
-     guide on GitHub in the reader's language, and the button; the first click only arms it */
-  const quitRow = document.createElement('div');
-  quitRow.className = 'menu__row menu__row--quit';
-  const quitHead = document.createElement('span');
-  quitHead.className = 'menu__rowlabel';
-  quitHead.textContent = t('set.quitHead');
+  /* ─ left: how Lapka is, the way out, the interface ─ */
+  const left = document.createElement('div');
+  left.className = 'menu__col menu__col--left';
+  const status = document.createElement('div');
+  status.className = 'menu__row status';
+  status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div>';
   const quitNote = document.createElement('div');
   quitNote.className = 'cache__note quit__note';
   quitNote.textContent = t('set.quitNote');
@@ -2145,14 +2097,96 @@ function buildGearMenu() {
       return;
     }
     try { await post('/api/quit'); } catch (_) {}
+    serverState = 'off';
     closeMenus();
     video.pause();
     showNotice(t('notice.quit'), { mid: true });
   };
-  quitRow.append(quitHead, quitNote, quitGuide, quit);
-  place.append(quitRow);
+  status.append(quitNote, quitGuide, quit);
+  left.append(status);
+  paintStatus(); checkServer();
 
-  gearMenu.append(keys, opts, place);
+  menuTitle(left, t('set.iface'));
+  const iface = SETTINGS.filter(r => r.key === 'queueMode' || r.key === 'font');
+  const settingRow = (col, row) => segRow(col, t(row.label), state.set[row.key],
+    row.opts.map(([val, key]) => [val, t(key)]), val => {
+      state.set[row.key] = val;
+      try { localStorage.setItem('lapka.' + row.key, val); } catch (_) {}
+      applySettings();
+    });
+  settingRow(left, iface.find(r => r.key === 'queueMode'));
+  /* the language: chips as wide as their names */
+  const langRow = document.createElement('div');
+  langRow.className = 'menu__row';
+  const langLab = document.createElement('span');
+  langLab.className = 'menu__rowlabel';
+  langLab.textContent = t('set.lang');
+  const chips = document.createElement('div');
+  chips.className = 'langs';
+  for (const [code, name] of LANG_LIST) {
+    const b = document.createElement('button');
+    b.className = 'lang' + (code === lang ? ' sel' : '');
+    b.textContent = name;
+    b.onclick = ev => {
+      ev.stopPropagation();
+      setLang(code);                    // repaints everything and closes the menus
+      buildGearMenu();
+      gearMenu.classList.add('open');   // but the settings stay open
+    };
+    chips.append(b);
+  }
+  langRow.append(langLab, chips);
+  left.append(langRow);
+  settingRow(left, iface.find(r => r.key === 'font'));
+
+  /* ─ middle: the player ─ */
+  const player = document.createElement('div');
+  player.className = 'menu__col menu__col--player';
+  menuTitle(player, t('set.head'));
+  for (const row of SETTINGS) if (!iface.includes(row)) settingRow(player, row);
+  /* the quality a group is saved in: the best there is, the one playing, or the nearest to a named one */
+  segRow(player, t('set.saveQuality'), saveQualityWanted(),
+         [['max', t('quality.max')], ['played', t('quality.played')], null, ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], val => {
+    state.remote.settings = { ...(state.remote.settings || {}), saveQuality: val };
+    post('/api/state/setting?k=saveQuality&v=' + val).catch(() => {});
+  });
+  switchRow(player, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
+    state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
+    post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
+  });
+
+  /* ─ right: the storage ─ */
+  const place = document.createElement('div');
+  place.className = 'menu__col menu__col--place';
+  menuTitle(place, t('set.place'));
+  homeRow(place);
+  cacheRow(place);
+
+  /* ─ the band: the keys, in columns across the whole width ─ */
+  const keys = document.createElement('div');
+  keys.className = 'menu__band menu__band--keys';
+  menuTitle(keys, t('keys.head'));
+  const grid = document.createElement('div');
+  grid.className = 'keys__grid';
+  for (const [caps, key] of KEYS_UI) {
+    const row = document.createElement('div');
+    row.className = 'keys__row';
+    const box = document.createElement('span');
+    box.className = 'keys__caps';
+    for (const c of caps) {
+      const k = document.createElement('kbd');
+      k.textContent = c;
+      box.append(k);
+    }
+    const what = document.createElement('span');
+    what.className = 'keys__what';
+    what.textContent = t(key);
+    row.append(box, what);
+    grid.append(row);
+  }
+  keys.append(grid);
+
+  gearMenu.append(left, player, place, keys);
 }
 
 btnGear.onclick = e => {
@@ -2610,11 +2644,22 @@ document.addEventListener('click', e => { if (!e.target.closest('#saveMenu') && 
 
 /* the stream of a named quality, for taking a save up again the way it was started */
 const streamOfQuality = (it, quality) => (quality && (saveQualities(it).find(o => o.label === quality) || {}).stream) || null;
+/* What a group is saved in. 'max' is the best there is; 'played' is what
+   the player has for the episode, or its own preference before it has
+   anything; a named quality takes the nearest one offered, the higher
+   on a tie. The old 'auto' meant the best. */
+const saveQualityWanted = () => ({ auto: 'max' })[state.remote.settings?.saveQuality] || state.remote.settings?.saveQuality || 'max';
 const streamToSave = it => {
-  const want = state.remote.settings?.saveQuality || 'auto';
+  const want = saveQualityWanted();
   const opts = saveQualities(it);
-  const same = want !== 'auto' && opts.find(o => o.label === want);
-  return (same || opts[0] || {}).stream || it.stream;
+  if (!opts.length) return it.stream;
+  const target = want === 'max' ? 0
+               : want === 'played' ? qualityNum((it.stream && it.stream.quality) || (state.quality !== 'auto' ? state.quality : ''))
+               : qualityNum(want);
+  if (!target) return opts[0].stream;
+  const named = opts.filter(o => qualityNum(o.label));
+  if (!named.length) return opts[0].stream;
+  return named.sort((a, b) => Math.abs(qualityNum(a.label) - target) - Math.abs(qualityNum(b.label) - target) || qualityNum(b.label) - qualityNum(a.label))[0].stream;
 };
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

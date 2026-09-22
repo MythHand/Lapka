@@ -150,6 +150,9 @@ svg.ph{ fill:currentColor; stroke:none; }
 .rb--sm svg{ width:17px; height:17px; }
 /* the width switch shows the state, wide or narrow, one glyph at a time */
 #btnQueueWidth .ph{ display:none; }
+/* the settings: the paw of the seal, drawn larger than the round button it sits on */
+.rb--paw{ overflow:visible; color:var(--tx-1); }
+.rb--paw .ico-paw{ width:50px; height:38px; flex:none; }
 #btnQueueWidth .ph--wide{ display:block; }
 .workspace.queue-narrow #btnQueueWidth .ph--wide{ display:none; }
 .workspace.queue-narrow #btnQueueWidth .ph--narrow{ display:block; }
@@ -1303,22 +1306,49 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 
    Anchoring to the gear. An absolutely positioned layer is measured
    from the padding box of its wrapper, and that wrapper has padding
-   20/36, which pushed the menu 36px to the right of the icon and 30px
-   below it, as if it had come loose. Those paddings are subtracted back
-   and a small one of our own is added: the right edge reaches slightly
-   past the icon, and the gap on top is 12px. */
+   20/36. The sheet stands to the left of the paw, its top edge level
+   with the button's, 12px away from it: the right offset counts from
+   the wrapper's right edge past the button and its padding. */
 .gear.menuwrap{ --gear-pad-x:36px; --gear-pad-y:20px; --gear-out:260ms; }
 .menu--gear{
-  top:calc(100% - var(--gear-pad-y) + 12px);
-  right:calc(var(--gear-pad-x) - 10px);
-  /* the keys as they were, the other two columns a quarter wider than the keys */
-  min-width:min(1058px, calc(100vw - 60px));
-  max-width:min(1058px, calc(100vw - 60px));
-  /* the height is the columns' own; the window alone caps it: the menu starts
-     72px from the top and keeps a 16px margin at the bottom, so a column
-     scrolls only when the window is too low for it */
-  max-height:calc(100vh - 88px);
+  top:var(--gear-pad-y); bottom:auto;
+  right:calc(100% - var(--gear-pad-x) + 12px);
+  /* three columns and the band of keys under them */
+  min-width:min(1034px, calc(100vw - 60px));
+  max-width:min(1034px, calc(100vw - 60px));
+  /* the height is the sheet's own; the window alone caps it, and then the
+     whole sheet scrolls, not a column of it */
+  max-height:calc(100vh - 44px);
+  overflow-y:auto;
 }
+/* The sheet: the left column holds the state and the interface, the
+   middle the player, the right the storage, and the keys run along the
+   bottom across all three. The columns are divided by a line on their
+   left, the band by one on its top. */
+.menu--gear.open{
+  display:grid;
+  grid-template-columns:minmax(0,330px) minmax(0,330px) minmax(0,344px);
+  grid-template-areas:'left player place' 'keys keys keys';
+  align-items:start;
+}
+.menu--gear .menu__col{ flex:none; min-width:0; overflow:visible; }
+.menu--gear .menu__col--left{ grid-area:left; }
+.menu--gear .menu__col--player{ grid-area:player; }
+.menu--gear .menu__col--place{ grid-area:place; }
+.menu--gear .menu__band--keys{ grid-area:keys; }
+.menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin-left:7px; padding-left:7px; border-left:1px solid var(--line); }
+.menu--gear .menu__band--keys{ margin-top:6px; padding-top:4px; border-top:1px solid var(--line); }
+.menu--gear .menu__band--keys .menu__title{ padding-bottom:4px; }
+/* how Lapka is: a dot and a word, the way out under them. White is
+   running; amber breathes while the server is not answering; a ring is
+   stopped; grey is not known yet. */
+.status__head{ display:flex; align-items:center; gap:9px; }
+.status__dot{ flex:none; width:9px; height:9px; border-radius:50%; box-sizing:border-box; background:#fff; box-shadow:0 0 0 3px rgba(255,255,255,.12); }
+.status__dot.is-checking{ background:var(--tx-3); box-shadow:none; }
+.status__dot.is-down{ background:#e0a24a; box-shadow:0 0 0 3px rgba(224,162,74,.18); animation:status-breathe 1.4s ease-in-out infinite; }
+.status__dot.is-off{ background:transparent; border:2px solid var(--tx-3); box-shadow:none; }
+@keyframes status-breathe{ 50%{ opacity:.35; } }
+@media (prefers-reduced-motion: reduce){ .status__dot.is-down{ animation:none; } }
 /* Opening: the menu comes from the gear's side, sliding 60px left into
    place, fast at first and with no long crawl at the end, and the fade
    is over before the slide is. Closing goes back the same way: the slide
@@ -1346,17 +1376,14 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 @starting-style{
   .menu--gear.open{ opacity:0; transform:translateX(60px); }
 }
-.menu--gear .menu__col--keys{ flex:0 0 270px; }
-/* the middle column a fifth wider again than the third */
-.menu--gear .menu__col:not(.menu__col--keys){ flex:0 0 338px; }
-.menu--gear .menu__col:nth-child(2){ flex:0 0 406px; }
 
-/* the list of keyboard shortcuts */
+/* the list of keyboard shortcuts: read down the columns, three of them across the band */
+.keys__grid{ display:grid; grid-auto-flow:column; grid-template-rows:repeat(5, auto); column-gap:8px; }
 .keys__row{
   display:flex; align-items:baseline; gap:10px;
-  padding:5px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
+  padding:2px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
 }
-.keys__caps{ flex:0 0 96px; display:flex; gap:4px; flex-wrap:wrap; }
+.keys__caps{ flex:0 0 84px; display:flex; gap:4px; flex-wrap:wrap; }
 .keys__caps kbd{
   min-width:20px; padding:2px 6px; border-radius:6px;
   border:1px solid var(--line-2); background:var(--glass-hi);
@@ -1427,10 +1454,11 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .menu--split .menu__col + .menu__col{
     margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line);
   }
-  .menu--gear .menu__col--keys{
-    order:1; margin:8px 0 0; padding:8px 0 0; border-top:1px solid var(--line);
-  }
-  .menu--gear .menu__col--keys + .menu__col{ margin:0; padding:0; border-top:0; }
+  /* the settings sheet in one column: the state and the interface, the player, the storage, the keys */
+  .stage:not(.pip-mode) .menu--gear{ min-width:0; width:min(420px, calc(100vw - 24px)); max-width:none; }
+  .menu--gear.open{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'player' 'place' 'keys'; }
+  .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line); }
+  .keys__grid{ grid-template-rows:repeat(7, auto); }
   .browser{ grid-template-columns:1fr; }
   .browser__places{ display:none; }
 }
@@ -1529,7 +1557,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .langs{ display:flex; flex-wrap:wrap; gap:6px; }
 .lang{
   font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2);
-  padding:6px 10px; border-radius:var(--ctl-r); border:1px solid var(--line-2); background:var(--glass-soft); cursor:pointer;
+  padding:5px 10px; border-radius:var(--ctl-r); border:1px solid var(--line-2); background:var(--glass-soft); cursor:pointer;
 }
 .lang:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
 .lang.sel{ color:var(--s-0); border-color:var(--tx-1); background:var(--tx-1); }
@@ -1581,8 +1609,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .btn--quiet{ color:var(--tx-3); border-color:transparent; background:transparent; }
 .btn--quiet:hover{ color:var(--tx-1); border-color:var(--line-2); background:var(--glass-soft); }
 .btn--quiet.is-armed{ color:#e0a24a; border-color:rgba(224,162,74,.5); background:rgba(224,162,74,.08); }
-/* the way out of Lapka, at the foot of the settings: heading, note, the guide, the button; quiet until armed */
-.menu__row--quit{ border-top:1px solid var(--line); }
+/* the way out of Lapka, under the state: note, the guide, the button; quiet until armed */
 .quit__note{ margin:0; }
 .quit__guide{ display:inline-block; align-self:flex-start; font-size:calc(12px + var(--fs)); color:var(--tx-3); text-decoration:underline; padding:2px 2px 4px; }
 .quit__guide:hover{ color:var(--tx-1); }
