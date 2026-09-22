@@ -150,13 +150,10 @@ svg.ph{ fill:currentColor; stroke:none; }
 .rb--sm svg{ width:17px; height:17px; }
 /* the width switch shows the state, wide or narrow, one glyph at a time */
 #btnQueueWidth .ph{ display:none; }
-/* the settings: the paw of the seal, dim at rest, whole under the pointer, pressed once as the sheet opens */
+/* the settings: the paw of the seal, dim at rest, whole under the pointer; it presses through the seal's frames as the sheet opens */
 .rb--paw{ overflow:visible; color:var(--tx-1); opacity:.6; transition:opacity .15s; }
 .rb--paw:hover{ opacity:1; background:transparent; }
 .rb--paw .ico-paw{ width:38px; height:29px; flex:none; }
-.rb--paw.is-pressed .ico-paw{ animation:paw-press .34s cubic-bezier(.3,.7,.4,1); }
-@keyframes paw-press{ 45%{ transform:scale(.82); } }
-@media (prefers-reduced-motion: reduce){ .rb--paw.is-pressed .ico-paw{ animation:none; } }
 #btnQueueWidth .ph--wide{ display:block; }
 .workspace.queue-narrow #btnQueueWidth .ph--wide{ display:none; }
 .workspace.queue-narrow #btnQueueWidth .ph--narrow{ display:block; }
@@ -541,8 +538,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 @starting-style{
   #audioMenu.open, #subsMenu.open, #qualityMenu.open, #pipMenu.open, #rateMenu.open{ opacity:0; transform:translateY(12px); }
 }
-/* downwards, for the gear menu, which sits at the top of the stage */
-.menu--down{ top:calc(100% + 10px); bottom:auto; }
 
 /* PiP and the chevron as one element: rounded on the outer edges only */
 .seg{ display:flex; align-items:stretch; border-radius:999px; }
@@ -1326,14 +1321,15 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   overflow-y:auto;
 }
 /* The sheet: the state of the server, the interface, the player, the
-   storage, in four columns, and the keys along the bottom across them
-   all. The columns stretch to the tallest, so the line on the left of
-   each runs the full height of the row whatever it holds; the band has
-   a line on its top. */
+   storage, in four columns, the three on the right of one width; the
+   keys run under the first three, and the storage takes the whole
+   height beside them. The columns stretch to the tallest, so the line
+   on the left of each runs the full height whatever it holds; the band
+   has a line on its top. */
 .menu--gear.open{
   display:grid;
-  grid-template-columns:minmax(0,21fr) minmax(0,34fr) minmax(0,30fr) minmax(0,33fr);
-  grid-template-areas:'left ui player place' 'keys keys keys keys';
+  grid-template-columns:minmax(0,21fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
+  grid-template-areas:'left ui player place' 'keys keys keys place';
   align-items:stretch;
 }
 .menu--gear .menu__col{ flex:none; min-width:0; overflow:visible; }
@@ -1383,14 +1379,22 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .menu--gear.open{ opacity:0; transform:translateX(60px); }
 }
 
-/* the list of keyboard shortcuts: three columns by meaning, a soft line between them */
-.keys__grid{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:28px; }
-.keys__col + .keys__col{ border-left:1px solid rgba(255,255,255,.07); padding-left:28px; margin-left:-14px; }
+/* the list of keyboard shortcuts: three columns by meaning from the left
+   edge, each as wide as its words, a soft line between them; in a column
+   the words stand in a row of their own, close to their keys */
+.keys__grid{ display:flex; align-items:flex-start; }
+.keys__col{ display:grid; grid-template-columns:auto auto; column-gap:14px; align-items:baseline; flex:0 0 auto; }
+/* only the last column, with the longest phrases, gives way when the band runs short */
+.keys__col:last-child{ flex:0 1 auto; min-width:0; }
+.keys__col + .keys__col{ border-left:1px solid rgba(255,255,255,.07); margin-left:20px; padding-left:20px; }
+.keys__col .keys__row{ display:contents; }
+.keys__col .keys__caps, .keys__col .keys__what{ padding:2px 0; }
+.keys__col:first-child .keys__caps{ padding-left:12px; }
 .keys__row{
   display:flex; align-items:baseline; gap:10px;
   padding:2px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
 }
-.keys__caps{ flex:0 0 100px; display:flex; gap:4px; flex-wrap:wrap; }
+.keys__caps{ display:flex; gap:4px; white-space:nowrap; }
 .keys__caps kbd{
   min-width:20px; padding:2px 6px; border-radius:6px;
   border:1px solid var(--line-2); background:var(--glass-hi);
@@ -1465,7 +1469,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .stage:not(.pip-mode) .menu--gear{ min-width:0; width:min(420px, calc(100vw - 24px)); max-width:none; }
   .menu--gear.open{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'ui' 'player' 'place' 'keys'; }
   .menu--gear .menu__col--ui, .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line); }
-  .keys__grid{ grid-template-columns:minmax(0,1fr); row-gap:6px; }
+  .keys__grid{ flex-direction:column; gap:6px; }
   .keys__col + .keys__col{ border-left:0; padding:6px 0 0; margin:0; border-top:1px solid rgba(255,255,255,.07); }
   .browser{ grid-template-columns:1fr; }
   .browser__places{ display:none; }
@@ -1691,10 +1695,11 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ── the folder's two buttons side by side ── */
 .home__acts{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 /* a button's text is never cut: the buttons take the height their words need */
-.home__acts .cache__clear, .home__quiet .btn{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
-/* the two clearings of the folder in a row of their own: equal, quiet until armed */
-.home__quiet{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }
-.home__quiet .btn{ padding-left:8px; padding-right:8px; }
+.home__acts .cache__clear, .home__part .btn{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
+/* a part of the folder: what it is on the left, its way out on the right, quiet until armed */
+.home__part{ display:flex; align-items:center; gap:12px; }
+.home__part .home__what{ flex:1; min-width:0; margin:0; }
+.home__part .btn{ flex:none; max-width:46%; }
 .home__manual{ align-self:center; }
 
 /* ── the busy line: in the middle of the picture, a spinner for an icon ── */

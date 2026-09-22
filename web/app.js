@@ -717,9 +717,41 @@ const BANNER = `██         ▄████▄   ██████▄   █�
 ███████   ██    ██  ██        ██   ▀█▄  ██    ██`;
 const bannerEl = $('#banner');
 if (bannerEl) bannerEl.textContent = BANNER;
+/* A frame of the seal as rectangles, for the places that cannot hold
+   text: the favicon and the settings button. A cell is a square of
+   two half-blocks; the paw is 18 cells wide and 7 tall, centred in a
+   32-unit box. */
+const stillPaw = matchMedia('(prefers-reduced-motion: reduce)');
+function pawPath(frame, box = 32) {
+  const rows = frame.split('\n'), cols = Math.max(...rows.map(r => r.length));
+  const u = box / (cols + 5), x0 = (box - cols * u) / 2, y0 = (box - rows.length * 2 * u) / 2;
+  const f = n => n.toFixed(2);
+  let d = '';
+  rows.forEach((row, r) => [...row].forEach((c, k) => {
+    if (c === ' ') return;
+    const x = x0 + k * u, y = y0 + r * 2 * u;
+    if (c === '█') d += `M${f(x)} ${f(y)}h${f(u)}v${f(2 * u)}h-${f(u)}z `;
+    else if (c === '▄') d += `M${f(x)} ${f(y + u)}h${f(u)}v${f(u)}h-${f(u)}z `;
+    else if (c === '▀') d += `M${f(x)} ${f(y)}h${f(u)}v${f(u)}h-${f(u)}z `;
+  }));
+  return d.trim();
+}
+const PAW_PATHS = PAW_FRAMES.map(f => pawPath(f));
+const PAW_ORDER = [...PAW_FRAMES.keys(), ...[...PAW_FRAMES.keys()].reverse().slice(1)];
+/* the settings button presses like the seal: through the frames and back, once */
+const pawIcon = btnGear.querySelector('.ico-paw path');
+if (pawIcon) pawIcon.setAttribute('d', PAW_PATHS[0]);
+let pawPressT = null;
+function pressGearPaw() {
+  if (!pawIcon || stillPaw.matches) return;
+  clearTimeout(pawPressT);
+  let i = 0;
+  const tick = () => { pawIcon.setAttribute('d', PAW_PATHS[PAW_ORDER[i]]); if (++i < PAW_ORDER.length) pawPressT = setTimeout(tick, i === PAW_FRAMES.length ? 260 : 90); };
+  tick();
+}
+
 /* every paw on the page (the mark, the queue's about) presses together */
 const paws = () => [...document.querySelectorAll('.paw')].filter(el => el.offsetParent !== null);
-const stillPaw = matchMedia('(prefers-reduced-motion: reduce)');
 function pressPaws() {
   const els = paws();
   if (stillPaw.matches || !els.length) return;
@@ -1957,24 +1989,29 @@ function cacheRow(col) {
    each by a quiet button that asks on the first click and acts on the
    second. */
 function homeRow(col) {
+  /* the folder: where, how much in all, the way to another one */
   const line = document.createElement('div');
   line.className = 'menu__row';
   line.innerHTML =
-    '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__size">…</span></div>' +
+    '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__size"></span></div>' +
     '<div class="home__path"></div>' +
     '<div class="home__acts"><button class="cache__clear home__open"></button><button class="cache__clear home__pick"></button></div>' +
     '<button class="home__manual"></button>' +
     '<form class="home__form" hidden><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
     '<div class="cache__note home__note"></div>';
-  const clean = document.createElement('div');
-  clean.className = 'menu__row';
-  clean.innerHTML =
-    '<span class="menu__rowlabel"></span>' +
-    '<div class="home__quiet"><button class="btn btn--quiet home__files"></button><button class="btn btn--quiet home__notes"></button></div>';
-  col.append(line, clean);
-  const q = s => line.querySelector(s) || clean.querySelector(s);
+  /* the two kinds of things of Lapka's own in it, each said what it is, with its own way out */
+  const part = (cls) => {
+    const row = document.createElement('div');
+    row.className = 'menu__row';
+    row.innerHTML = `<span class="menu__rowlabel"></span><div class="home__part"><div class="cache__note home__what"></div><button class="btn btn--quiet ${cls}"></button></div>`;
+    return row;
+  };
+  const videos = part('home__files'), notes = part('home__notes');
+  col.append(line, videos, notes);
+  const q = s => line.querySelector(s);
   q('.menu__rowlabel').textContent = t('set.home');
-  clean.querySelector('.menu__rowlabel').textContent = t('set.homeClean');
+  videos.querySelector('.menu__rowlabel').textContent = t('set.homeVideos');
+  notes.querySelector('.menu__rowlabel').textContent = t('set.homeNotesHead');
   q('.home__open').textContent = t('set.homeOpen');
   q('.home__pick').textContent = t('set.homePick');
   q('.home__manual').textContent = t('set.homeManual');
@@ -1982,22 +2019,25 @@ function homeRow(col) {
   q('.home__in').placeholder = t('set.homePlaceholder');
 
   let d = null;          // the last answer from the server
-  const files = q('.home__files'), notes = q('.home__notes');
+  const files = videos.querySelector('.home__files'), forget = notes.querySelector('.home__notes');
   const paint = answer => {
     d = answer;
     q('.home__path').textContent = d.home;
-    q('.home__size').textContent = fmtSize(d.bytes || 0);
+    /* the folder in all: the files, the notes and the cache together */
+    q('.home__size').textContent = fmtSize((d.bytes || 0) + ((d.cache && d.cache.bytes) || 0));
     q('.home__pick').hidden = !d.canPick;
     q('.home__open').hidden = !d.canOpen;
     q('.home__note').textContent = d.canPick ? '' : t('set.homeHint');
     if (!d.canPick) { q('.home__form').hidden = false; q('.home__manual').hidden = true; }
-    files.disabled = !d.files; notes.disabled = !d.notes;
+    videos.querySelector('.home__what').textContent = t('set.homeVideosNote', { n: d.files, size: fmtSize(d.filesBytes || 0) });
+    notes.querySelector('.home__what').textContent = t('set.homeNotesNote', { n: d.notes });
+    files.disabled = !d.files; forget.disabled = !d.notes;
     paintQuiet();
   };
   const paintQuiet = () => {
     if (!d) return;
-    files.textContent = files.classList.contains('is-armed') ? t('pop.deleteSure', { n: d.files }) : t('set.homeFiles');
-    notes.textContent = notes.classList.contains('is-armed') ? t('set.homeNotesSure') : t('set.homeNotes');
+    files.textContent = files.classList.contains('is-armed') ? t('pop.deleteSure', { n: d.files }) : t('set.homeDelete');
+    forget.textContent = forget.classList.contains('is-armed') ? t('set.homeNotesSure') : t('set.homeDelete');
   };
   const reload = () => askHome().then(changed => { if (changed || !d) paint(known.home); })
     .catch(() => { if (!d) { q('.home__path').textContent = '—'; q('.home__size').textContent = ''; } });
@@ -2021,7 +2061,7 @@ function homeRow(col) {
     toast(t('toast.deleted', { n: r.removed }));
     loadLibrary();                       // the rows lose their saved marks
   });
-  notes.onclick = arm(notes, async () => {
+  forget.onclick = arm(forget, async () => {
     await post('/api/state/forget');
     state.positions = {}; state.watched = {};
     if (state.remote) state.remote.dubs = {};
@@ -2066,8 +2106,7 @@ function homeRow(col) {
   });
   /* typing in the field must not seek the video */
   q('.home__in').addEventListener('keydown', ev => ev.stopPropagation());
-  line.addEventListener('click', ev => ev.stopPropagation());
-  clean.addEventListener('click', ev => ev.stopPropagation());
+  for (const el of [line, videos, notes]) el.addEventListener('click', ev => ev.stopPropagation());
 }
 
 /* Three columns: keys, settings, languages. Languages need only a
@@ -2228,9 +2267,8 @@ btnGear.onclick = e => {
   closeMenus(gearMenu);
   const opening = !gearMenu.classList.contains('open');
   gearMenu.classList.toggle('open');
-  if (opening) { btnGear.classList.remove('is-pressed'); void btnGear.offsetWidth; btnGear.classList.add('is-pressed'); }
+  if (opening) pressGearPaw();
 };
-btnGear.addEventListener('animationend', () => btnGear.classList.remove('is-pressed'));
 
 btnSubs.onclick = e => {
   e.stopPropagation();
@@ -3837,8 +3875,8 @@ function syncStatus() {
    the favicon shows it, the same dark coin as before with a different
    mark inside. */
 const FAV = {
-  /* the paw of the seal, the first frame, drawn as rectangles: white on the black plate */
-  idle:  '<path d="M11.84 7.68h1.39v1.39h-1.39z M13.23 7.68h1.39v1.39h-1.39z M17.39 7.68h1.39v1.39h-1.39z M18.77 7.68h1.39v1.39h-1.39z M9.07 9.07h1.39v2.77h-1.39z M10.45 9.07h1.39v2.77h-1.39z M11.84 9.07h1.39v2.77h-1.39z M13.23 9.07h1.39v2.77h-1.39z M17.39 9.07h1.39v2.77h-1.39z M18.77 9.07h1.39v2.77h-1.39z M20.16 9.07h1.39v2.77h-1.39z M21.55 9.07h1.39v2.77h-1.39z M4.91 13.23h1.39v1.39h-1.39z M6.29 13.23h1.39v1.39h-1.39z M11.84 11.84h1.39v1.39h-1.39z M13.23 11.84h1.39v1.39h-1.39z M17.39 11.84h1.39v1.39h-1.39z M18.77 11.84h1.39v1.39h-1.39z M24.32 13.23h1.39v1.39h-1.39z M25.71 13.23h1.39v1.39h-1.39z M3.52 14.61h1.39v2.77h-1.39z M4.91 14.61h1.39v2.77h-1.39z M6.29 14.61h1.39v2.77h-1.39z M7.68 14.61h1.39v2.77h-1.39z M22.93 14.61h1.39v2.77h-1.39z M24.32 14.61h1.39v2.77h-1.39z M25.71 14.61h1.39v2.77h-1.39z M27.09 14.61h1.39v2.77h-1.39z M4.91 17.39h1.39v1.39h-1.39z M6.29 17.39h1.39v1.39h-1.39z M11.84 18.77h1.39v1.39h-1.39z M13.23 17.39h1.39v2.77h-1.39z M14.61 17.39h1.39v2.77h-1.39z M16 17.39h1.39v2.77h-1.39z M17.39 17.39h1.39v2.77h-1.39z M18.77 18.77h1.39v1.39h-1.39z M24.32 17.39h1.39v1.39h-1.39z M25.71 17.39h1.39v1.39h-1.39z M10.45 20.16h1.39v2.77h-1.39z M11.84 20.16h1.39v2.77h-1.39z M13.23 20.16h1.39v2.77h-1.39z M14.61 20.16h1.39v2.77h-1.39z M16 20.16h1.39v2.77h-1.39z M17.39 20.16h1.39v2.77h-1.39z M18.77 20.16h1.39v2.77h-1.39z M20.16 20.16h1.39v2.77h-1.39z M11.84 22.93h1.39v1.39h-1.39z M13.23 22.93h1.39v2.77h-1.39z M14.61 22.93h1.39v2.77h-1.39z M16 22.93h1.39v2.77h-1.39z M17.39 22.93h1.39v2.77h-1.39z M18.77 22.93h1.39v1.39h-1.39z" fill="#fff" shape-rendering="crispEdges"/>',
+  /* the paw of the seal, the first frame, as rectangles: white on the black plate */
+  idle:  `<path d="${PAW_PATHS[0]}" fill="#fff" shape-rendering="crispEdges"/>`,
   play:  `<path d="M12.8 9.3 23 16l-10.2 6.7z" fill="#fff"/>`,
   pause: `<path d="M11.6 9.4h3.3v13.2h-3.3zM17.1 9.4h3.3v13.2h-3.3z" fill="#fff"/>`,
   busy:  `<path d="M10.3 8.8h11.4v2.3l-4.6 4.9 4.6 4.9v2.3H10.3v-2.3l4.6-4.9-4.6-4.9z" fill="#fff"/>`,

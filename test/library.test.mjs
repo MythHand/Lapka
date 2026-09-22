@@ -166,6 +166,7 @@ describe('clearing the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () 
     const h = await (await get('/api/home')).json();
     assert.ok(h.files >= 1, `files ${h.files}`);
     assert.ok(h.bytes > 0, 'the saved files weigh something');
+    assert.ok(h.filesBytes > 0 && h.filesBytes <= h.bytes, 'the files weigh part of the folder');
     const cacheBytes = h.cache.bytes;
     const disk = await weighDir(home, path.join(home, '.lapka', 'cache'));
     assert.equal(h.bytes, disk, 'the weight is the folder without the cache');
