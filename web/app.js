@@ -540,9 +540,9 @@ function fmtLong(s) {
   const p = n => String(n).padStart(2, '0');
   return `${Math.floor(s / 3600)}:${p(Math.floor(s % 3600 / 60))}:${p(s % 60)}`;
 }
-const fmtSize = b => b >= 1073741824
-  ? t('units.gb', { n: (b / 1073741824).toFixed(1) })
-  : t('units.mb', { n: Math.round(b / 1048576) });
+const fmtSize = b => b >= 1073741824 ? t('units.gb', { n: (b / 1073741824).toFixed(1) })
+                   : b >= 1048576 ? t('units.mb', { n: Math.round(b / 1048576) })
+                   : t('units.kb', { n: Math.round(b / 1024) });
 
 let toastT;
 function toast(msg) {
@@ -2003,7 +2003,7 @@ function homeRow(col) {
   const part = (cls) => {
     const row = document.createElement('div');
     row.className = 'menu__row';
-    row.innerHTML = `<span class="menu__rowlabel"></span><div class="home__part"><div class="cache__note home__what"></div><button class="btn btn--quiet ${cls}"></button></div>`;
+    row.innerHTML = `<span class="menu__rowlabel"></span><div class="home__part"><div class="home__what"><div class="cache__note home__why"></div><div class="home__count"></div></div><button class="btn btn--quiet ${cls}"></button></div>`;
     return row;
   };
   const videos = part('home__files'), notes = part('home__notes');
@@ -2029,8 +2029,10 @@ function homeRow(col) {
     q('.home__open').hidden = !d.canOpen;
     q('.home__note').textContent = d.canPick ? '' : t('set.homeHint');
     if (!d.canPick) { q('.home__form').hidden = false; q('.home__manual').hidden = true; }
-    videos.querySelector('.home__what').textContent = t('set.homeVideosNote', { n: d.files, size: fmtSize(d.filesBytes || 0) });
-    notes.querySelector('.home__what').textContent = t('set.homeNotesNote', { n: d.notes });
+    videos.querySelector('.home__why').textContent = t('set.homeVideosNote');
+    videos.querySelector('.home__count').textContent = t('set.homeVideosCount', { n: d.files, size: fmtSize(d.filesBytes || 0) });
+    notes.querySelector('.home__why').textContent = t('set.homeNotesNote');
+    notes.querySelector('.home__count').textContent = t('set.homeNotesCount', { n: d.notes, size: fmtSize(d.notesBytes || 0) });
     files.disabled = !d.files; forget.disabled = !d.notes;
     paintQuiet();
   };

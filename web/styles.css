@@ -1326,12 +1326,16 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    height beside them. The columns stretch to the tallest, so the line
    on the left of each runs the full height whatever it holds; the band
    has a line on its top. */
-.menu--gear.open{
-  display:grid;
+/* The grid is the sheet's own, not its open state's: while the sheet
+   slides out, display is held by the transition but the class is gone,
+   and with the columns on the class the content collapsed into one
+   column before the sheet had left. */
+.menu--gear{
   grid-template-columns:minmax(0,21fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
   grid-template-areas:'left ui player place' 'keys keys keys place';
   align-items:stretch;
 }
+.menu--gear.open{ display:grid; }
 .menu--gear .menu__col{ flex:none; min-width:0; overflow:visible; }
 .menu--gear .menu__col--left{ grid-area:left; }
 .menu--gear .menu__col--ui{ grid-area:ui; }
@@ -1467,7 +1471,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   }
   /* the settings sheet in one column: the state and the interface, the player, the storage, the keys */
   .stage:not(.pip-mode) .menu--gear{ min-width:0; width:min(420px, calc(100vw - 24px)); max-width:none; }
-  .menu--gear.open{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'ui' 'player' 'place' 'keys'; }
+  .menu--gear{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'ui' 'player' 'place' 'keys'; }
   .menu--gear .menu__col--ui, .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line); }
   .keys__grid{ flex-direction:column; gap:6px; }
   .keys__col + .keys__col{ border-left:0; padding:6px 0 0; margin:0; border-top:1px solid rgba(255,255,255,.07); }
@@ -1698,7 +1702,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .home__acts .cache__clear, .home__part .btn{ white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
 /* a part of the folder: what it is on the left, its way out on the right, quiet until armed */
 .home__part{ display:flex; align-items:center; gap:12px; }
-.home__part .home__what{ flex:1; min-width:0; margin:0; }
+.home__part .home__what{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.home__part .home__why{ margin:0; min-height:0; }
+.home__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-2); font-variant-numeric:tabular-nums; }
 .home__part .btn{ flex:none; max-width:46%; }
 .home__manual{ align-self:center; }
 

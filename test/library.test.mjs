@@ -167,6 +167,7 @@ describe('clearing the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () 
     assert.ok(h.files >= 1, `files ${h.files}`);
     assert.ok(h.bytes > 0, 'the saved files weigh something');
     assert.ok(h.filesBytes > 0 && h.filesBytes <= h.bytes, 'the files weigh part of the folder');
+    assert.ok(h.notesBytes >= 0 && h.filesBytes + h.notesBytes <= h.bytes, 'the files and the notes are part of the folder, with the covers and the sidecars');
     const cacheBytes = h.cache.bytes;
     const disk = await weighDir(home, path.join(home, '.lapka', 'cache'));
     assert.equal(h.bytes, disk, 'the weight is the folder without the cache');
