@@ -139,6 +139,14 @@ describe('the page\'s own word', () => {
     const tv = discover({ html: html.replace('<title>Герой: Фильм смотреть аниме фильм онлайн</title>', '<title>Герой 2 сезон смотреть аниме сериал онлайн</title>').replace('<h1>Герой: Фильм</h1>', '<h1>Герой 2 сезон</h1>'), url: 'https://site.test/2-geroj-2.html' });
     assert.equal(tv.kind_, 'tv');
     assert.equal(tv.season, 2);
+    /* the years written as dates beside each link, in a plain list under the heading */
+    const dated = `<html><head><title>Герой 2 сезон смотреть аниме сериал онлайн</title></head><body><h1>Герой 2 сезон</h1>
+      <h2>Франшиза аниме Герой 2 сезон 👇</h2><a href="/franchise/geroj/">Полный порядок просмотра: 3 части</a>
+      <ul><li><a href="/1-geroj.html">Герой</a><time datetime="21 декабря 2015"> — <i>5 октября 2015</i></time></li>
+      <li><a href="/2-geroj-2.html">Герой 2 сезон</a><time> — <i>10 апреля 2019</i></time></li>
+      <li><a href="/3-geroj-ova.html">Герой OVA</a><time> — <i>2020-03-27</i></time></li></ul></body></html>`;
+    const d = discover({ html: dated, url: 'https://site.test/2-geroj-2.html' });
+    assert.deepEqual(d.franchise.map(f => [f.order, f.title, f.year, f.self]), [[1, 'Герой', 2015, false], [2, 'Герой 2 сезон', 2019, true], [3, 'Герой OVA', 2020, false]]);
     assert.deepEqual(r.franchise.map(f => [f.order, f.title, f.year, f.kind, f.self]), [
       [1, 'Герой', 2016, 'tv', false], [2, 'Герой 2 сезон', 2017, 'tv', false], [3, 'Герой OVA', 2018, 'ova', false], [4, 'Герой: Фильм', 2024, 'movie', true],
     ]);

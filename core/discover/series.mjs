@@ -252,6 +252,19 @@ export function findFranchise(doc, url, ownSeason = null, title = '') {
    otherwise. */
 const FRANCHISE_HEAD = /^(франшиза|все части|порядок просмотра|хронология|связанн|franchise|watch order|related)/i;
 const YEAR = /^\s*((?:19|20)\d{2})\s*$/;
+/* The year of a part, as a leaf of the block writes it: a bare year, or a
+   date ("5 октября 2015", "2015-10-05", "05.10.2015", "Oct 5, 2015"), or
+   the datetime of a <time>. Nothing looser: a count that happens to look
+   like a year is not a year. */
+const DATE_LEAF = /^\s*(?:\d{1,2}\s+\p{L}+\.?\s+((?:19|20)\d{2})|\p{L}+\.?\s+\d{1,2},?\s+((?:19|20)\d{2})|((?:19|20)\d{2})-\d{2}-\d{2}|\d{2}\.\d{2}\.((?:19|20)\d{2}))\s*(?:г\.)?\s*$/u;
+function yearOfLeaf(el) {
+  const text = el.textContent || '';
+  let m = YEAR.exec(text); if (m) return Number(m[1]);
+  m = DATE_LEAF.exec(text); if (m) return Number(m[1] || m[2] || m[3] || m[4]);
+  const dt = el.tagName === 'TIME' ? el.getAttribute('datetime') || '' : '';
+  m = /((?:19|20)\d{2})/.exec(dt); if (m && dt.length <= 24) return Number(m[1]);
+  return null;
+}
 const kindOfName = name => /фильм|movie|film/i.test(name) ? 'movie' : /\b(ova|ona)\b/i.test(name) ? 'ova' : /спешл|special/i.test(name) ? 'special' : 'tv';
 export function franchiseFromBlock(doc, url, title = '', own = {}) {
   const page = (() => { try { const u = new URL(url); return u.origin + u.pathname.replace(/\/+$/, ''); } catch { return url; } })();
@@ -265,7 +278,7 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
          The year may sit a few levels below the item ("Сериал / 2024"
          under the name): the item is the nearest ancestor of the year
          that holds one link, or none. */
-      const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && YEAR.test(el.textContent || ''));
+      const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && yearOfLeaf(el) !== null);
       if (!years.length) continue;
       const items = [];
       const yearsIn = el => years.filter(y => el.contains(y)).length;
@@ -290,7 +303,7 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
         if (!name) continue;
         const href = a ? [...hrefs][0] : null;
         if (a && !href) continue;
-        items.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : null, href, year: Number(YEAR.exec(y.textContent)[1]), kind: kindOfName(name) });
+        items.push({ title: name, url: a ? new URL(a.getAttribute('href'), url).toString() : null, href, year: yearOfLeaf(y), kind: kindOfName(name) });
       }
       if (!items.length) continue;
       /* this page: the item linking to it; else the one item without a
