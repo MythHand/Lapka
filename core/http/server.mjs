@@ -80,7 +80,10 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
       if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', home: store?.home || null });
-      if (req.method === 'GET' && p === '/api/home' && library) return json(res, 200, { home: store.home, series: (await library.list()).length, cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
+      if (req.method === 'GET' && p === '/api/home' && library) {
+        const series = await library.list();
+        return json(res, 200, { home: store.home, series: series.length, files: series.reduce((n, s) => n + s.episodes.length, 0), bytes: await store.weigh(), notes: state ? state.notes() : 0, cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
+      }
       if (req.method === 'GET' && VENDOR[p.slice('/vendor/'.length)] && p.startsWith('/vendor/')) {
         const file = VENDOR[p.slice('/vendor/'.length)];
         res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'max-age=86400' });
@@ -154,6 +157,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const known = lapka.series(seriesId);
         const dir = known ? library.seriesDir(known) : ((await library.list()).find(x => x.id === seriesId) || {}).dir || null;
         return json(res, 200, { cancelled: await saver.cancelFor({ seriesId, episodes, dir }) });
+      }
+      /* the saved files, all of them: the saves under way go first, then the series folders */
+      if (library && mutating && p === '/api/library/clear') {
+        if (saver) await saver.cancelAll();
+        return json(res, 200, await library.clear());
+      }
+      /* the notes: positions, watched marks, dub choices, what was learned about sites */
+      if (state && mutating && p === '/api/state/forget') {
+        state.forget();
+        await store.forgetKnowledge();
+        return json(res, 200, { ok: true });
       }
       if (library && mutating && p === '/api/library/delete') {
         const seriesId = url.searchParams.get('series') || '', episodes = (url.searchParams.get('episodes') || '').split(',').filter(Boolean);

@@ -1930,16 +1930,22 @@ function cacheRow(col) {
 }
 
 /* ── the Lapka folder ───────────────────────────────────────────
-   Where everything is kept. Shown as it is; a new path typed here is
-   created if it does not exist and taken into use at once. */
+   Where everything is kept, and what it weighs apart from the cache:
+   the files saved and Lapka's notes. The path is shown as it is; a new
+   path typed here is created if it does not exist and taken into use at
+   once. Three kinds of things live in the folder and each is cleared on
+   its own: the cache in its row, the saved files and the notes here,
+   each by a quiet button that asks on the first click and acts on the
+   second. */
 function homeRow(col) {
   const line = document.createElement('div');
   line.className = 'menu__row';
   line.innerHTML =
-    '<div class="cache__head"><span class="menu__rowlabel"></span></div>' +
+    '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__size">…</span></div>' +
     '<div class="home__path"></div>' +
     '<div class="home__acts"><button class="cache__clear home__open"></button><button class="cache__clear home__pick"></button><button class="home__manual"></button></div>' +
     '<form class="home__form" hidden><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
+    '<div class="home__quiet"><button class="btn btn--quiet home__files"></button><button class="btn btn--quiet home__notes"></button></div>' +
     '<div class="cache__note home__note"></div>';
   col.append(line);
   const q = s => line.querySelector(s);
@@ -1949,14 +1955,53 @@ function homeRow(col) {
   q('.home__manual').textContent = t('set.homeManual');
   q('.home__go').textContent = t('set.homeChange');
   q('.home__in').placeholder = t('set.homePlaceholder');
-  const paint = d => {
+
+  let d = null;          // the last answer from the server
+  const files = q('.home__files'), notes = q('.home__notes');
+  const paint = answer => {
+    d = answer;
     q('.home__path').textContent = d.home;
+    q('.home__size').textContent = fmtSize(d.bytes || 0);
     q('.home__pick').hidden = !d.canPick;
     q('.home__open').hidden = !d.canOpen;
     q('.home__note').textContent = d.canPick ? '' : t('set.homeHint');
     if (!d.canPick) { q('.home__form').hidden = false; q('.home__manual').hidden = true; }
+    files.disabled = !d.files; notes.disabled = !d.notes;
+    paintQuiet();
   };
-  fetch('/api/home').then(r => r.json()).then(paint).catch(() => { q('.home__path').textContent = '—'; });
+  const paintQuiet = () => {
+    if (!d) return;
+    files.textContent = files.classList.contains('is-armed') ? t('pop.deleteSure', { n: d.files }) : t('set.homeFiles') + (d.files ? ` · ${d.files}` : '');
+    notes.textContent = notes.classList.contains('is-armed') ? t('set.homeNotesSure') : t('set.homeNotes');
+  };
+  const reload = () => fetch('/api/home').then(r => r.json()).then(paint).catch(() => { q('.home__path').textContent = '—'; q('.home__size').textContent = ''; });
+  reload();
+
+  /* the first click asks, the second acts; the question goes away on its own */
+  const arm = (b, run) => async ev => {
+    ev.stopPropagation();
+    if (b.classList.contains('is-armed')) {
+      b.classList.remove('is-armed'); b.disabled = true;
+      try { await run(); } catch (e) { toast(t('toast.homeFail', { why: e.message })); }
+      await reload();
+      return;
+    }
+    b.classList.add('is-armed'); paintQuiet();
+    clearTimeout(b._arm); b._arm = setTimeout(() => { b.classList.remove('is-armed'); paintQuiet(); }, 4000);
+  };
+  files.onclick = arm(files, async () => {
+    const r = await post('/api/library/clear');
+    toast(t('toast.deleted', { n: r.removed }));
+    loadLibrary();                       // the rows lose their saved marks
+  });
+  notes.onclick = arm(notes, async () => {
+    await post('/api/state/forget');
+    state.positions = {}; state.watched = {};
+    if (state.remote) state.remote.dubs = {};
+    paintMeta();                         // the bars and the veils go
+    toast(t('toast.forgot'));
+  });
+
   const took = r => {
     toast(t(r.created ? 'toast.homeCreated' : 'toast.homeSet', { path: r.home }));
     buildGearMenu(); gearMenu.classList.add('open');

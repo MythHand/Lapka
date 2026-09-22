@@ -160,6 +160,65 @@ describe('the state', () => {
   });
 });
 
+/* ── the folder weighed and cleared, the notes forgotten ── */
+describe('clearing the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  test('the home answer weighs the folder without the cache and counts the files and the notes', async () => {
+    const h = await (await get('/api/home')).json();
+    assert.ok(h.files >= 1, `files ${h.files}`);
+    assert.ok(h.bytes > 0, 'the saved files weigh something');
+    const cacheBytes = h.cache.bytes;
+    const disk = await weighDir(home, path.join(home, '.lapka', 'cache'));
+    assert.equal(h.bytes, disk, 'the weight is the folder without the cache');
+    assert.ok(cacheBytes >= 0);
+    assert.equal((await post('/api/state/position?series=w1&episode=1&dub=x&t=40&d=100')).status, 200);
+    assert.equal((await post('/api/state/watched?series=w1&episode=2')).status, 200);
+    assert.ok((await (await get('/api/home')).json()).notes >= 2, 'the notes are counted');
+  });
+  test('forgetting drops positions, watched marks and dub choices, keeps the settings and the files', async () => {
+    assert.equal((await post('/api/state/setting?k=autoResume&v=on')).status, 200);
+    const filesBefore = (await (await get('/api/home')).json()).files;
+    assert.equal((await post('/api/state/forget')).status, 200);
+    const st = await (await get('/api/state')).json();
+    assert.deepEqual([st.positions, st.watched, st.dubs], [{}, {}, {}]);
+    assert.equal(st.settings.autoResume, 'on');
+    const h = await (await get('/api/home')).json();
+    assert.equal(h.notes, 0);
+    assert.equal(h.files, filesBefore, 'the files stay');
+    await fsp.access(path.join(home, '.lapka', 'knowledge'));
+  });
+  test('clearing the saved files empties the library and leaves the cache and the state', async () => {
+    /* a record of a save cut short, as if from an earlier run: it goes with the files */
+    lapka.state.setSave('gone/1/x', { seriesUrl: site.base + '/s/nope/', seriesId: 'gone', episode: 1, dubKey: 'x', quality: 'auto' });
+    const r = await (await post('/api/library/clear')).json();
+    assert.ok(r.removed >= 1 && r.series >= 1, `removed ${r.removed} in ${r.series}`);
+    const lib = await (await get('/api/library')).json();
+    assert.equal(lib.series.length, 0);
+    assert.equal(Object.keys(lapka.state.saves()).length, 0, 'the save records are gone');
+    const h = await (await get('/api/home')).json();
+    assert.equal(h.files, 0);
+    await lapka.state.flush();
+    await fsp.access(path.join(home, '.lapka', 'state.json'), undefined);
+    /* the moving test below needs something to move: one series is saved again */
+    const look = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/select/ep-1')}`)).json();
+    const al = look.series.episodes.find(e => e.number === 1).dubs.find(d => d.key === 'anilibria');
+    const hls = al.sources.find(s => s.player === 'embed/beta').streams[0];
+    const job = await (await post(`/api/save?stream=${hls.id}`)).json();
+    for (let i = 0; i < 200; i++) { const j = await (await get(`/api/save/${job.id}`)).json(); if (j.state === 'done') break; await new Promise(r => setTimeout(r, 50)); }
+    assert.ok((await (await get('/api/library')).json()).series.length >= 1, 'saved again');
+  });
+});
+
+async function weighDir(dir, skip) {
+  let bytes = 0;
+  for (const d of await fsp.readdir(dir, { withFileTypes: true })) {
+    const p = path.join(dir, d.name);
+    if (p === skip) continue;
+    if (d.isDirectory()) bytes += await weighDir(p, skip);
+    else bytes += (await fsp.stat(p)).size;
+  }
+  return bytes;
+}
+
 /* ── the folder moves with its files ── */
 describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
   test('the series folders and Lapka\'s own things go along, the old folder is emptied and removed', async () => {

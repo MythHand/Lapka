@@ -58,6 +58,9 @@ export async function openState(own) {
     setSave(key, rec) { data.saves[key] = { ...(data.saves[key] || {}), ...rec, at: Date.now() }; soon(); },
     clearSave(key) { delete data.saves[key]; soon(); },
     setSetting(k, v) { if (v === undefined) delete data.settings[k]; else data.settings[k] = v; soon(); },
+    /* what was noted about watching: positions, watched marks, dub choices. Settings and save records stay. */
+    notes() { return Object.keys(data.positions).length + Object.keys(data.watched).length + Object.keys(data.dubs).length; },
+    forget() { data.positions = {}; data.watched = {}; data.dubs = {}; soon(); },
     flush,
     close: async () => { if (timer) await flush(); else if (writing) await writing; },
   };
