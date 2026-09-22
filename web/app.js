@@ -399,17 +399,21 @@ const posKey = it => {
   const dub = it.dub ? it.dub.key : state.dubKey;
   return it && it.seriesId && dub ? `${it.seriesId}/${it.number}/${dub}` : null;
 };
+/* The row is painted on every tick, so its bar keeps step with the
+   player's; the server is told every few seconds and on a stop. */
 const posTimers = {};
-function markPos(it, sec) {
+function markPos(it, sec, send = true) {
   const k = posKey(it);
   if (!k || !isFinite(sec)) return;
   const d = duration();
   const gone = sec < POS_MIN || (d && sec > d - POS_TAIL);
   if (gone) delete state.positions[k]; else state.positions[k] = Math.round(sec);
   if (d > POS_TAIL && sec > d - POS_TAIL) markWatched(it);   // the last minute: the episode is finished
-  clearTimeout(posTimers[k]);
-  const [series, episode, dub] = k.split('/');
-  posTimers[k] = setTimeout(() => post(`/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec)}`).catch(() => {}), 800);
+  if (send) {
+    clearTimeout(posTimers[k]);
+    const [series, episode, dub] = k.split('/');
+    posTimers[k] = setTimeout(() => post(`/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec)}`).catch(() => {}), 800);
+  }
   for (const li of queueList.children) {
     const x = byId(li.dataset.id);
     if (x === it) paintPos(li, x);
@@ -432,7 +436,7 @@ function markWatched(it) {
 /* Where watching stopped, drawn as a bar on the episode's frame, in the
    rows and in the tiles alike. Only what the player would return to is
    drawn: the first half minute and the last minute are not kept. A
-   watched episode keeps a full bar and a quieter name; left in the
+   watched episode keeps a full bar and a veiled frame; left in the
    middle again, its bar shows the middle. */
 function paintPos(li, it) {
   const k = posKey(it);
@@ -3583,11 +3587,11 @@ btnSkipHide.onclick = () => {
 
 video.addEventListener('timeupdate', () => {
   paintSeek(); updatePositionState(); paintSkip();
-  const now = Date.now();
-  if (now - posT < 5000) return;
-  posT = now;
   const it = cur();
-  if (it && !video.paused) markPos(it, video.currentTime);
+  if (!it || video.paused) return;
+  const now = Date.now(), send = now - posT >= 5000;
+  if (send) posT = now;
+  markPos(it, video.currentTime, send);
 });
 video.addEventListener('progress', paintSeek);
 video.addEventListener('seeked', () => { state.seekPreview = null; paintSeek(); });

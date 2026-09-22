@@ -876,6 +876,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   content:''; position:absolute; inset:0; border-radius:inherit;
   background:rgba(0,0,0,.55); opacity:0; transition:opacity var(--select); pointer-events:none;
 }
+.tile.is-watched::before{ opacity:.65; }
 .tile.active::before{ opacity:1; }
 /* shown by opacity, not display, so it fades in with the veil */
 .tile__eq{
@@ -928,7 +929,6 @@ svg.ph{ fill:currentColor; stroke:none; }
   font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3);
   min-width:0;
 }
-.item.is-watched .item__name{ color:var(--tx-3); }
 .item.active .item__name{ color:#fff; }
 .item__meta b{ font-weight:400; color:var(--tx-2); }
 /* duration and size have a fixed width so the columns do not dance */
@@ -953,6 +953,8 @@ svg.ph{ fill:currentColor; stroke:none; }
   content:""; position:absolute; inset:0; background:rgba(0,0,0,.55);
   opacity:0; transition:opacity var(--select);
 }
+/* watched to the end: the same veil, lighter; the name stays as it is */
+.item.is-watched .item__thumb::after{ opacity:.65; }
 .item.active .item__thumb::after{ opacity:1; }
 .item__eq{ position:relative; z-index:1; display:flex; gap:2.5px; align-items:center; height:14px; width:16px;
   opacity:0; transition:opacity var(--select); }
