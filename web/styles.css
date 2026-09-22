@@ -976,11 +976,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 
 .item__x{ flex:none; margin-top:2px; color:var(--tx-3); opacity:0; display:grid; place-items:center; padding:4px; border-radius:50%; }
 /* the cross that cancels a save: only on a row that has one, only under the pointer */
-.item__unsave{ flex:none; display:none; place-items:center; width:22px; height:22px; border-radius:50%; color:var(--tx-3); cursor:pointer; }
-.item.has-save .item__unsave{ display:grid; opacity:0; }
-.item.has-save:hover .item__unsave{ opacity:1; }
-.item__unsave:hover{ background:var(--glass-hi); color:var(--tx-1); }
-.item__unsave svg{ width:13px; height:13px; }
 .item:hover .item__x{ opacity:1; }
 .item__x:hover{ background:var(--glass-hi); color:var(--tx-1); }
 .item__x svg{ width:16px; height:16px; }

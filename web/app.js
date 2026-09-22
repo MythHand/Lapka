@@ -2476,7 +2476,6 @@ function rowFor(it) {
     `<span class="item__grip">${phSvg(PH.grip)}</span>` +
     `<span class="item__thumb"><span class="item__eq"><i></i><i></i><i></i></span><span class="pos"><i></i></span></span>` +
     `<span class="item__body"><span class="item__name"></span><span class="item__meta"></span></span>` +
-    `<span class="item__unsave" title="${t('queue.cancelSave')}">${phSvg(PH.x)}</span>` +
     `<span class="item__save">${phSvg(PH.download)}</span>` +
     `<span class="item__x" title="${t('queue.remove')}">${phSvg(PH.x)}</span>`;
   li.querySelector('.item__name').textContent = it.name;
@@ -2559,7 +2558,6 @@ queueList.addEventListener('click', e => {
   const it = byId(li.dataset.id);
   if (!it) return;
   if (e.target.closest('.item__x')) return removeItem(it);
-  if (e.target.closest('.item__unsave')) return cancelSaves([it]);
   if (e.target.closest('.item__save')) return saveMarkClick(it, e.target.closest('.item__save'));
   playItem(it, true, false);
 });
@@ -2705,7 +2703,6 @@ function paintSaveButton(btn, it) {
   const saved = isSaved(it);
   if (saved && it.save && it.save.st !== 'queued') it.save = null;   // the file is in the library: the job's last word does not matter
   const sv = it.save;
-  const li = btn.closest('.item'); if (li) li.classList.toggle('has-save', !!sv);
   const saving = isSaving(it), paused = isPaused(it), failed = isFailed(it), queued = isQueued(it);
   btn.classList.toggle('is-saved', saved && !saving && !paused && !failed && !queued);
   btn.classList.toggle('is-saving', saving);
