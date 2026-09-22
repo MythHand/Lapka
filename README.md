@@ -134,7 +134,7 @@ it is the tooling for working on Lapka's code, not needed for watching.
   repository; without them those tests report themselves as skipped.
 - The map of the core and the contracts of its blocks: [core/README.md](core/README.md).
 
-![npm test: 165 tests pass](docs/media/tests.png)
+![npm test: 181 tests pass](docs/media/tests.png)
 
 ## Boundaries
 
