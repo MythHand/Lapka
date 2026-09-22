@@ -202,8 +202,9 @@ describe('clearing the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () 
     const look = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/select/ep-1')}`)).json();
     const al = look.series.episodes.find(e => e.number === 1).dubs.find(d => d.key === 'anilibria');
     const hls = al.sources.find(s => s.player === 'embed/beta').streams[0];
-    const job = await (await post(`/api/save?stream=${hls.id}`)).json();
-    for (let i = 0; i < 200; i++) { const j = await (await get(`/api/save/${job.id}`)).json(); if (j.state === 'done') break; await new Promise(r => setTimeout(r, 50)); }
+    let job = await (await post(`/api/save?stream=${hls.id}`)).json();
+    for (let i = 0; i < 600 && (job.state === 'working' || job.state === 'queued'); i++) { await new Promise(r => setTimeout(r, 100)); job = await (await get(`/api/save/${job.id}`)).json(); }
+    assert.equal(job.state, 'done', job.error);
     assert.ok((await (await get('/api/library')).json()).series.length >= 1, 'saved again');
   });
 });

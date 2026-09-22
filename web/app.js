@@ -1793,20 +1793,25 @@ function applySettings() {
 /* Key caps are not translated: they are in Latin letters on the
    keyboard anyway, and "Leertaste" instead of Space would have to be
    hunted for. */
+/* three columns by meaning: moving through the episode, sound and the next one, the window */
 const KEYS_UI = [
-  [['Space', 'K'],   'keys.play'],
-  [['←', '→'],       'keys.seek5'],
-  [['⇧ ←', '⇧ →'],   'keys.seek1'],
-  [['J', 'L'],       'keys.seek10'],
-  [['↑', '↓'],       'keys.volume'],
-  [['0–9'],          'keys.jump'],
-  [['Home', 'End'],  'keys.edges'],
-  [['B', 'N'],       'keys.nextPrev'],
-  [['M'],            'keys.mute'],
-  [['P'],            'keys.pip'],
-  [['F'],            'keys.full'],
-  [['Q'],            'keys.queue'],
-  [['Esc'],          'keys.esc'],
+  [
+    [['Space', 'K'],   'keys.play'],
+    [['←', '→'],       'keys.seek5'],
+    [['⇧ ←', '⇧ →'],   'keys.seek1'],
+    [['J', 'L'],       'keys.seek10'],
+    [['0–9'],          'keys.jump'],
+    [['Home', 'End'],  'keys.edges'],
+  ], [
+    [['↑', '↓'],       'keys.volume'],
+    [['M'],            'keys.mute'],
+    [['B', 'N'],       'keys.nextPrev'],
+  ], [
+    [['P'],            'keys.pip'],
+    [['F'],            'keys.full'],
+    [['Q'],            'keys.queue'],
+    [['Esc'],          'keys.esc'],
+  ],
 ];
 
 /* ── the cache row ───────────────────────────────────────────
@@ -1834,6 +1839,16 @@ function playingKey() {
 }
 
 const GB = 1024 ** 3;
+
+/* What the server said last about the cache and the folder, kept, so
+   the sheet is drawn whole the moment it opens and never waits for an
+   answer under the eye; each opening asks again in the background and
+   repaints only when something changed. The first answers are fetched
+   at boot. */
+const known = { home: null, cache: null };
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const askHome = () => api('/api/home').then(d => { const changed = !same(known.home, d); known.home = d; return changed; });
+const askCache = () => api('/api/cache').then(d => { const changed = !same(known.cache, d); known.cache = d; return changed; });
 
 function cacheRow(col) {
   const line = document.createElement('div');
@@ -1879,10 +1894,11 @@ function cacheRow(col) {
                      : d.free == null ? '' : t('set.cacheFree', { size: fmtSize(d.free) });
     clear.disabled = !d.files;
   };
-  const take = answer => { d = answer; limitGb = Math.round(d.limit / GB); paint(); };
+  const take = answer => { d = answer; known.cache = answer; limitGb = Math.round(d.limit / GB); paint(); };
 
-  fetch('/api/cache').then(r => r.json()).then(take)
-    .catch(() => { size.textContent = t('set.cacheFail'); });
+  if (known.cache) take(known.cache);
+  askCache().then(changed => { if (changed || !d) take(known.cache); })
+    .catch(() => { if (!d) size.textContent = t('set.cacheFail'); });
 
   const gbAt = ratio => Math.min(hiGb(), Math.max(loGb(), Math.round(ratio * scale() / GB)));
   let sent = null;
@@ -1946,13 +1962,19 @@ function homeRow(col) {
   line.innerHTML =
     '<div class="cache__head"><span class="menu__rowlabel"></span><span class="cache__size home__size">…</span></div>' +
     '<div class="home__path"></div>' +
-    '<div class="home__acts"><button class="cache__clear home__open"></button><button class="cache__clear home__pick"></button><button class="home__manual"></button></div>' +
+    '<div class="home__acts"><button class="cache__clear home__open"></button><button class="cache__clear home__pick"></button></div>' +
+    '<button class="home__manual"></button>' +
     '<form class="home__form" hidden><input class="linkform__in home__in" spellcheck="false"><button type="submit" class="cache__clear home__go"></button></form>' +
-    '<div class="home__quiet"><button class="btn btn--quiet home__files"></button><button class="btn btn--quiet home__notes"></button></div>' +
     '<div class="cache__note home__note"></div>';
-  col.append(line);
-  const q = s => line.querySelector(s);
+  const clean = document.createElement('div');
+  clean.className = 'menu__row';
+  clean.innerHTML =
+    '<span class="menu__rowlabel"></span>' +
+    '<div class="home__quiet"><button class="btn btn--quiet home__files"></button><button class="btn btn--quiet home__notes"></button></div>';
+  col.append(line, clean);
+  const q = s => line.querySelector(s) || clean.querySelector(s);
   q('.menu__rowlabel').textContent = t('set.home');
+  clean.querySelector('.menu__rowlabel').textContent = t('set.homeClean');
   q('.home__open').textContent = t('set.homeOpen');
   q('.home__pick').textContent = t('set.homePick');
   q('.home__manual').textContent = t('set.homeManual');
@@ -1974,10 +1996,12 @@ function homeRow(col) {
   };
   const paintQuiet = () => {
     if (!d) return;
-    files.textContent = files.classList.contains('is-armed') ? t('pop.deleteSure', { n: d.files }) : t('set.homeFiles') + (d.files ? ` · ${d.files}` : '');
+    files.textContent = files.classList.contains('is-armed') ? t('pop.deleteSure', { n: d.files }) : t('set.homeFiles');
     notes.textContent = notes.classList.contains('is-armed') ? t('set.homeNotesSure') : t('set.homeNotes');
   };
-  const reload = () => fetch('/api/home').then(r => r.json()).then(paint).catch(() => { q('.home__path').textContent = '—'; q('.home__size').textContent = ''; });
+  const reload = () => askHome().then(changed => { if (changed || !d) paint(known.home); })
+    .catch(() => { if (!d) { q('.home__path').textContent = '—'; q('.home__size').textContent = ''; } });
+  if (known.home) paint(known.home);
   reload();
 
   /* the first click asks, the second acts; the question goes away on its own */
@@ -2043,6 +2067,7 @@ function homeRow(col) {
   /* typing in the field must not seek the video */
   q('.home__in').addEventListener('keydown', ev => ev.stopPropagation());
   line.addEventListener('click', ev => ev.stopPropagation());
+  clean.addEventListener('click', ev => ev.stopPropagation());
 }
 
 /* Three columns: keys, settings, languages. Languages need only a
@@ -2106,7 +2131,10 @@ function buildGearMenu() {
   left.append(status);
   paintStatus(); checkServer();
 
-  menuTitle(left, t('set.iface'));
+  /* ─ second: the interface ─ */
+  const ui = document.createElement('div');
+  ui.className = 'menu__col menu__col--ui';
+  menuTitle(ui, t('set.iface'));
   const iface = SETTINGS.filter(r => r.key === 'queueMode' || r.key === 'font');
   const settingRow = (col, row) => segRow(col, t(row.label), state.set[row.key],
     row.opts.map(([val, key]) => [val, t(key)]), val => {
@@ -2114,7 +2142,7 @@ function buildGearMenu() {
       try { localStorage.setItem('lapka.' + row.key, val); } catch (_) {}
       applySettings();
     });
-  settingRow(left, iface.find(r => r.key === 'queueMode'));
+  settingRow(ui, iface.find(r => r.key === 'queueMode'));
   /* the language: chips as wide as their names */
   const langRow = document.createElement('div');
   langRow.className = 'menu__row';
@@ -2136,8 +2164,8 @@ function buildGearMenu() {
     chips.append(b);
   }
   langRow.append(langLab, chips);
-  left.append(langRow);
-  settingRow(left, iface.find(r => r.key === 'font'));
+  ui.append(langRow);
+  settingRow(ui, iface.find(r => r.key === 'font'));
 
   /* ─ middle: the player ─ */
   const player = document.createElement('div');
@@ -2168,33 +2196,41 @@ function buildGearMenu() {
   menuTitle(keys, t('keys.head'));
   const grid = document.createElement('div');
   grid.className = 'keys__grid';
-  for (const [caps, key] of KEYS_UI) {
-    const row = document.createElement('div');
-    row.className = 'keys__row';
-    const box = document.createElement('span');
-    box.className = 'keys__caps';
-    for (const c of caps) {
-      const k = document.createElement('kbd');
-      k.textContent = c;
-      box.append(k);
+  for (const group of KEYS_UI) {
+    const col = document.createElement('div');
+    col.className = 'keys__col';
+    for (const [caps, key] of group) {
+      const row = document.createElement('div');
+      row.className = 'keys__row';
+      const box = document.createElement('span');
+      box.className = 'keys__caps';
+      for (const c of caps) {
+        const k = document.createElement('kbd');
+        k.textContent = c;
+        box.append(k);
+      }
+      const what = document.createElement('span');
+      what.className = 'keys__what';
+      what.textContent = t(key);
+      row.append(box, what);
+      col.append(row);
     }
-    const what = document.createElement('span');
-    what.className = 'keys__what';
-    what.textContent = t(key);
-    row.append(box, what);
-    grid.append(row);
+    grid.append(col);
   }
   keys.append(grid);
 
-  gearMenu.append(left, player, place, keys);
+  gearMenu.append(left, ui, player, place, keys);
 }
 
 btnGear.onclick = e => {
   e.stopPropagation();
   buildGearMenu();
   closeMenus(gearMenu);
+  const opening = !gearMenu.classList.contains('open');
   gearMenu.classList.toggle('open');
+  if (opening) { btnGear.classList.remove('is-pressed'); void btnGear.offsetWidth; btnGear.classList.add('is-pressed'); }
 };
+btnGear.addEventListener('animationend', () => btnGear.classList.remove('is-pressed'));
 
 btnSubs.onclick = e => {
   e.stopPropagation();
@@ -3985,6 +4021,8 @@ document.addEventListener('keyup', e => {
     state.remote = st;
     for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = { t: v.t, d: v.d || 0 };
     for (const k of Object.keys(st.watched || {})) state.watched[k] = true;
+    /* the settings sheet is drawn from these the moment it first opens */
+    askHome().catch(() => {}); askCache().catch(() => {}); checkServer();
   } catch (_) { /* the server may be starting */ }
 
   sessionReady = true;
