@@ -33,16 +33,27 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
 
 ## What it does
 
-- **Queue.** The episodes of every season, film and spin-off of a franchise, in the order they came out.
+- **Queue.** The episodes of every season, film and spin-off of a franchise, in the order they came
+  out, even when the site keeps every season in one player.
 - **Dubs.** Switched on the fly, without a reload; the choice is kept for the whole series.
 - **Quality.** Any variant a source offers, the levels inside one stream included.
 - **Subtitles.** As a track of their own, when the source offers them; their look is adjustable.
-- **Resume.** From where you stopped, for every episode and dub.
+- **Openings.** A skip button when the site knows the timings; by itself too, with six seconds to
+  say Watch.
+- **Resume.** From where you stopped, for every episode and dub; an episode watched to the end is
+  marked, and the frame shows where you stopped.
 - **Saving.** An episode as one file in your folder, with the chosen dub and the subtitles inside.
   Saves go in a queue, one after another: a pause holds an episode where it got to and continues
   from there, a waiting one can be made the current one, any can be cancelled, and saved files can
   be deleted from the library right in the player. A save that was cut short is finished on its own.
+  The quality a group is saved in: the best, as played, or the nearest to a named one.
 - **Sources.** Several players per episode; a dead source gives way to a live one by itself.
+- **Log.** While a page is read, the reading is shown step by step: what was found, which players
+  opened, which parts of the franchise gathered.
+- **Folder.** The saved videos, Lapka's notes and the cache are seen in the settings with their
+  sizes and cleared each on its own.
+- **Updating.** From the settings: the version checked on GitHub at a button, Lapka updated and
+  started again by itself, for a cloned folder and for a downloaded ZIP alike.
 - **A window of its own.** Picture-in-picture, the extended one included, with the controls right in the window.
 - **Ten interface languages.**
 
@@ -55,8 +66,9 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
 The page reading is one general mechanism, not code written for particular
 sites: Lapka looks for players, episode lists and dubs by the way a page is
 built. Tested on: aniliberty.top, old.yummyani.me, jut-su.net, animego.me,
-anidubonline.ru, gogoanime.by, jkanime.net, newdeaf.co. Other sites built the
-same way mostly open too. Sites with DRM, and sites that deliberately lock
+anidubonline.ru, gogoanime.by, jkanime.net, newdeaf.co, yummyanime.tv,
+ani-media.online, domanime.ru, lordserials.fan. Other sites built the same way
+mostly open too. Sites with DRM, and sites that deliberately lock
 their players, Lapka does not break into.
 
 ## Running it
