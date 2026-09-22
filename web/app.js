@@ -399,12 +399,18 @@ const posKey = it => {
   const dub = it.dub ? it.dub.key : state.dubKey;
   return it && it.seriesId && dub ? `${it.seriesId}/${it.number}/${dub}` : null;
 };
-/* The row is painted on every tick, so its bar keeps step with the
+/* The item whose media the video holds. A position belongs to it and
+   to nothing else: the row chosen runs ahead of the video while a start
+   is on, and the video's time is nobody's from the moment the media
+   before is let go until the next one has its metadata.
+
+   The row is painted on every tick, so its bar keeps step with the
    player's; the server is told every few seconds and on a stop. */
+let loaded = null;
 const posTimers = {};
 function markPos(it, sec, send = true) {
   const k = posKey(it);
-  if (!k || !isFinite(sec)) return;
+  if (!k || it !== loaded || !isFinite(sec)) return;
   const d = duration();
   const gone = sec < POS_MIN || (d && sec > d - POS_TAIL);
   if (gone) delete state.positions[k]; else state.positions[k] = Math.round(sec);
@@ -632,6 +638,8 @@ const post = path => api(path, { method: 'POST', headers: { 'x-lapka': '1' } });
    source, otherwise the previous episode is heard behind the overlay */
 let hls = null;
 function stopPlayback() {
+  if (loaded) markPos(loaded, video.currentTime);   // where it was left
+  loaded = null;
   if (hls) { hls.destroy(); hls = null; }
   if (!video.getAttribute('src')) return;
   video.pause();
@@ -1036,6 +1044,8 @@ let playToken = 0;
    under the pointer, and scrolling would move it away from there */
 async function playItem(it, autoplay = true, glide = true) {
   if (!it) return;
+  if (loaded) markPos(loaded, video.currentTime);   // where the episode before was left
+  loaded = null;
   state.current = it;
   state.seekPreview = null;
   if (dubsInfo && (dubsInfo.seriesId !== it.seriesId || dubsInfo.episode !== it.number)) dubsInfo = null;
@@ -1100,12 +1110,13 @@ async function playItem(it, autoplay = true, glide = true) {
    interrupted start, and the play button shows the state anyway. */
 function loadSource(it, src, token, onMeta, play) {
   it.loadedSrc = src.play;
+  loaded = null;
   attachSource(src);
   sayLoading(it);
   const reveal = fadeIn();
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
-  video.addEventListener('loadedmetadata', () => { if (token === playToken) onMeta(); }, { once: true });
+  video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); } }, { once: true });
   if (play) video.play().catch(() => {});
 }
 
@@ -3549,8 +3560,7 @@ video.addEventListener('pause', () => {
   /* At the end of a file the browser sends pause BEFORE ended, and that
      is not a stop the user asked for. The ended handler decides. */
   if (video.ended) return;
-  const it = cur();
-  if (it) markPos(it, video.currentTime);
+  if (loaded) markPos(loaded, video.currentTime);
   deckShow(true);
 });
 let posT = 0;
@@ -3587,11 +3597,10 @@ btnSkipHide.onclick = () => {
 
 video.addEventListener('timeupdate', () => {
   paintSeek(); updatePositionState(); paintSkip();
-  const it = cur();
-  if (!it || video.paused) return;
+  if (!loaded || video.paused) return;
   const now = Date.now(), send = now - posT >= 5000;
   if (send) posT = now;
-  markPos(it, video.currentTime, send);
+  markPos(loaded, video.currentTime, send);
 });
 video.addEventListener('progress', paintSeek);
 video.addEventListener('seeked', () => { state.seekPreview = null; paintSeek(); });
@@ -3627,7 +3636,7 @@ video.addEventListener('waiting', () => { const it = cur(); if (it && it.loadedS
 video.addEventListener('canplay', () => { clearTimeout(stallT); hideNotice('busy'); });
 video.addEventListener('timeupdate', () => { if (noticeKind === 'busy' && !video.paused && video.readyState >= 3) hideNotice('busy'); });   // the picture moves: nothing is waiting
 video.addEventListener('ended', () => {
-  markWatched(cur());              // however short the episode was
+  markWatched(loaded);             // however short the episode was
   /* looping one file works even with autoplay off: it is a mode set
      explicitly, not an automatic decision */
   const advancing = state.loop === 'one' || state.autoplay;
@@ -3906,8 +3915,7 @@ function paintModeHint() {
 }
 
 window.addEventListener('beforeunload', () => {
-  const it = cur();
-  if (it && video.currentTime) markPos(it, video.currentTime);
+  if (loaded && video.currentTime) markPos(loaded, video.currentTime);
   if (state.pipWin) state.pipWin.close();
 });
 
