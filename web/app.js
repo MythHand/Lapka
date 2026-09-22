@@ -2217,12 +2217,17 @@ async function checkServer() {
 const shortVersion = v => v ? 'v' + String(v) : '';
 
 /* ── the update ────────────────────────────────────────────────
-   One row: the version as a heading, then a button that asks GitHub
-   once, then either the word that this is the latest or the button to
-   update; pressed, the button gives way to the steps as the server
-   tells them, Lapka restarts itself, and when it answers again with the
-   new version the row asks to reload the page. The state outlives the
-   sheet, which is rebuilt on every opening. */
+   One row: the version as a heading, a word about the state under it,
+   and one button the width of the column that does the next thing:
+     idle        —                          [Check for an update]
+     checking    —                          [Checking…] (disabled)
+     latest      "the latest"               [Check again]
+     newer       "v1.1.0 is available"      [Update to v1.1.0]
+     updating    the steps, one per line    (no button: nothing to press)
+     restarting  "starting again…"          (no button)
+     done        "updated to v1.1.0"        [Reload the page]
+     failed      what went wrong            [Check again]
+   The state outlives the sheet, which is rebuilt on every opening. */
 const update = { phase: 'idle', latest: null, tag: null, why: '', steps: [] };
 function paintUpdate() {
   const row = gearMenu.querySelector('.upd');
@@ -2234,12 +2239,12 @@ function paintUpdate() {
   log.replaceChildren();
   switch (update.phase) {
     case 'checking': show('', t('upd.checking'), { disabled: true }); break;
-    case 'latest': show(t('upd.latest'), ''); break;
-    case 'newer': show('', t('upd.to', { v })); break;
+    case 'latest': show(t('upd.latest'), t('upd.again')); break;
+    case 'newer': show(t('upd.available', { v }), t('upd.to', { v })); break;
     case 'updating': show('', ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = s; log.append(d); } break;
     case 'restarting': show(t('upd.waiting'), ''); break;
     case 'done': show(t('upd.done', { v }), t('upd.reload')); break;
-    case 'failed': show(t('upd.failed', { why: update.why }), t('upd.check')); break;
+    case 'failed': show(t('upd.failed', { why: update.why }), t('upd.again')); break;
     default: show('', t('upd.check'));
   }
 }
@@ -2328,7 +2333,7 @@ function buildGearMenu() {
   /* the version, and the way to the next one: asked for on the button, never on its own */
   const upd = document.createElement('div');
   upd.className = 'menu__row upd';
-  upd.innerHTML = '<span class="menu__rowlabel upd__head"></span><div class="home__part"><div class="home__what"><div class="cache__note upd__note"></div><div class="upd__log"></div></div><button class="btn btn--quiet upd__btn"></button></div>';
+  upd.innerHTML = '<span class="menu__rowlabel upd__head"></span><div class="cache__note upd__note"></div><div class="upd__log"></div><button class="cache__clear upd__btn"></button>';
   upd.querySelector('.upd__btn').onclick = ev => { ev.stopPropagation(); updateClick(); };
   upd.addEventListener('click', ev => ev.stopPropagation());
   left.append(upd);

@@ -80,11 +80,11 @@ Or without the terminal: `start.command` on macOS and `start.bat` on Windows
 open by a double click, `./start.sh` on Linux. Each checks Node.js, installs
 what is missing the first time, starts Lapka in the background and opens it
 in the browser; that window can then be closed, Lapka keeps running. To stop
-it: `stop.command`, `stop.bat` or `./stop.sh`, or the "Quit Lapka" button at
-the foot of the settings (the gear). To update: `update.command`, `update.bat`
-or `./update.sh` pulls the newest version into the same folder (not a second
-`git clone`: git refuses to write into a folder that exists) and starts Lapka
-again if it was running.
+it: `stop.command`, `stop.bat` or `./stop.sh`, or the "Quit Lapka" button in
+the settings (the paw in the top right corner). To update: in the settings, the
+"Version" row → "Check for an update" → "Update to v…", and Lapka fetches,
+installs and starts itself again; or `update.command`, `update.bat`, `./update.sh`
+(not a second `git clone`: git refuses to write into a folder that exists).
 
 ![Settings: shortcuts, language and player, the Lapka folder, cache, the quality to save in](docs/media/setting.png)
 
@@ -107,7 +107,13 @@ needs for an exact answer is there.
 
 ## Development
 
-- `npm run dev` — Lapka on 8800 and the synthetic test site on 8801 (the site's clips are made with ffmpeg; without it only Lapka starts).
+Nothing in this section is needed for watching: the ordinary start is described
+above, under "Running it", and in the guide. This is what is needed to work on
+Lapka itself.
+
+- `npm run dev` — Lapka on 8800 and the synthetic test site on 8801: a stand-in
+  "anime site" from `test/site` that the generic reading of pages is checked
+  against. Its clips are made with ffmpeg; without it only Lapka starts.
   `SITE_SLOW_MS=3000 npm run site` slows the synthetic site's files down, for
   trying pauses and the save queue by hand.
 - `npm test` — all tests. `npm run check` — the static check of the front end.

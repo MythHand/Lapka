@@ -1736,6 +1736,8 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .home__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-2); font-variant-numeric:tabular-nums; }
 .home__part .btn{ flex:none; max-width:46%; }
 .home__manual{ align-self:center; }
+/* the update row: the button takes the width of the column, like the folder's */
+.upd .upd__btn{ width:100%; white-space:normal; height:auto; min-height:var(--ctl-h); line-height:1.3; padding-top:6px; padding-bottom:6px; }
 /* the steps of an update, where the button stood */
 .upd__log{ font-family:var(--mono); letter-spacing:0; font-size:calc(11.5px + var(--fs)); line-height:1.5; color:var(--tx-3); display:flex; flex-direction:column; }
 .upd__log:empty{ display:none; }
