@@ -3,16 +3,12 @@ rem Lapka on Windows: double-click. Checks Node, installs what is missing
 rem the first time, starts Lapka in a window of its own, minimised, and
 rem opens it in the browser. This window can be closed afterwards; the
 rem minimised Lapka window stays in the taskbar: closing it, or stop.bat,
-rem or the Quit button in the settings stops Lapka.
-rem
-rem Plainly, no PowerShell and no hidden process: a batch file that spawns
-rem a hidden network process through PowerShell is what behaviour-based
-rem antivirus looks for, and Kaspersky flagged the earlier launcher so.
+rem or the Quit button in the settings stops Lapka. Plainly: Lapka's own
+rem window, no helper process in between.
 setlocal
 cd /d "%~dp0"
 if "%PORT%"=="" set PORT=8800
 set URL=http://127.0.0.1:%PORT%
-if not exist .dev mkdir .dev
 
 curl -fs %URL%/api/ping >nul 2>nul && (echo Lapka is already running at %URL% & start "" %URL% & exit /b 0)
 
