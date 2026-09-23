@@ -28,24 +28,28 @@ export function systemConfigDir() {
 }
 export const CONFIG_FILE = process.env.LAPKA_CONFIG || path.join(systemConfigDir(), 'config.json');
 
-export async function readConfig() {
-  try { return JSON.parse(await fsp.readFile(CONFIG_FILE, 'utf8')) || {}; } catch { /* not there */ }
+const readJson = async file => { try { const v = JSON.parse(await fsp.readFile(file, 'utf8')); return v && typeof v === 'object' ? v : null; } catch { return null; } };
+const writeJson = async (file, data) => {
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.writeFile(file + '.part', JSON.stringify(data, null, 1));
+  await fsp.rename(file + '.part', file);
+};
+
+/* the files are parameters so a test can play the carry-over on files of its own */
+export async function readConfig({ file = CONFIG_FILE, oldFile = process.env.LAPKA_CONFIG ? null : OLD_CONFIG_FILE } = {}) {
+  const cur = await readJson(file);
+  if (cur) return cur;
   /* the old place, once: what was there goes to the system's place and stays there */
-  if (!process.env.LAPKA_CONFIG && OLD_CONFIG_FILE !== CONFIG_FILE) {
-    try {
-      const old = JSON.parse(await fsp.readFile(OLD_CONFIG_FILE, 'utf8')) || {};
-      if (old && typeof old === 'object' && Object.keys(old).length) { await writeConfig(old); return old; }
-    } catch { /* nothing old either */ }
+  if (oldFile && oldFile !== file) {
+    const old = await readJson(oldFile);
+    if (old && Object.keys(old).length) { await writeJson(file, old); return old; }
   }
   return {};
 }
 
-export async function writeConfig(patch) {
-  const cur = await readConfig();
-  const next = { ...cur, ...patch };
-  await fsp.mkdir(path.dirname(CONFIG_FILE), { recursive: true });
-  await fsp.writeFile(CONFIG_FILE + '.part', JSON.stringify(next, null, 1));
-  await fsp.rename(CONFIG_FILE + '.part', CONFIG_FILE);
+export async function writeConfig(patch, { file = CONFIG_FILE, oldFile } = {}) {
+  const next = { ...(await readConfig({ file, oldFile })), ...patch };
+  await writeJson(file, next);
   return next;
 }
 

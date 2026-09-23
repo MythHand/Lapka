@@ -45,3 +45,23 @@ describe('how Lapka got here', () => {
     await assert.rejects(checkNpm({ fetch: async () => ({ ok: false, status: 404 }), name: 'lapka' }), /404/);
   });
 });
+
+describe('the old place, carried over once', () => {
+  test('a settings file found only in the old .dev place is written to the new one and read from there after', async () => {
+    const { readConfig } = await import('../core/store/config.mjs');
+    const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-cfg-'));
+    const oldFile = path.join(tmp, 'dev', 'config.json'), file = path.join(tmp, 'sys', 'Lapka', 'config.json');
+    await fsp.mkdir(path.dirname(oldFile), { recursive: true });
+    await fsp.writeFile(oldFile, JSON.stringify({ home: '/somewhere/Lapka' }));
+    const t0 = Date.now();
+    const got = await Promise.race([readConfig({ file, oldFile }), new Promise(r => setTimeout(() => r('hung'), 3000))]);
+    assert.notEqual(got, 'hung', 'reading the settings ends');
+    assert.equal(got.home, '/somewhere/Lapka');
+    assert.equal(JSON.parse(await fsp.readFile(file, 'utf8')).home, '/somewhere/Lapka', 'written to the new place');
+    await fsp.rm(oldFile);
+    assert.equal((await readConfig({ file, oldFile })).home, '/somewhere/Lapka', 'read from the new place once the old is gone');
+    assert.deepEqual(await readConfig({ file: path.join(tmp, 'none.json'), oldFile: path.join(tmp, 'none-old.json') }), {}, 'nothing anywhere is an empty setting');
+    assert.ok(Date.now() - t0 < 3000);
+    await fsp.rm(tmp, { recursive: true, force: true });
+  });
+});
