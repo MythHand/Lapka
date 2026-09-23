@@ -2882,25 +2882,91 @@ function saveMarkClick(it, btn) {
   if (sv && (sv.st === 'paused' || sv.st === 'failed')) return enqueueSaves([it]);
   return offerSave(it, btn);
 }
+/* The save of one row: which dub, in which quality. Built as the dub
+   menu is: a row per dub, the qualities it can be saved in as tags on
+   the right, the dub playing first (first is the whole mark: the player
+   shows it already), the rest in their order. A tag saves the dub in
+   that quality; the row saves it in the quality the settings prefer.
+   What each dub offers is asked of the server once per episode, levels
+   of adaptive streams included; the dub playing shows what this page
+   already knows at once, a dub whose sources are not open yet shows a
+   waiting tag, and the window is drawn again when the answer comes.
+   No "auto": a file is saved in one quality, so an adaptive stream is
+   offered as its levels, and one of unknown height by what it is. */
+let saveInfo = null;   // { key, dubs }: what the server says the dubs of the row being saved can be saved in
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
-  const opts = saveQualities(it);
-  if (opts.length < 2) return enqueueSaves([it], opts[0] && opts[0].stream);
+  /* one dub, one stream of a known quality: nothing to choose */
+  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], it.streams[0]);
+  const key = `${it.seriesId}/${it.number}`;
+  if (!saveInfo || saveInfo.key !== key) {
+    saveInfo = { key, dubs: null };
+    const ask = q => api(`/api/dubs?series=${it.seriesId}&episode=${it.number}${q}`)
+      .then(d => { if (saveInfo && saveInfo.key === key) { saveInfo.dubs = d.dubs; if (!saveMenu.hidden && saveMenu.dataset.key === key) buildSaveMenu(it); } })
+      .catch(() => {});
+    ask(''); ask('&open=1');
+  }
+  saveMenu.dataset.key = key;
+  saveMenu.anchor = btn.getBoundingClientRect();
+  saveMenu.hidden = false;
+  buildSaveMenu(it);
+}
+/* the qualities this page knows of the dub playing, before the server has said */
+const tagsFromStreams = streams => {
+  const out = new Map();
+  for (const st of [...(streams || [])].sort((a, b) => streamRank(b) - streamRank(a))) {
+    const label = st.quality || st.kind.toUpperCase();
+    if (!out.has(label)) out.set(label, { id: st.id, quality: st.quality || null, kind: st.kind, player: st.player, level: false });
+  }
+  return [...out.values()];
+};
+/* the tag the settings would pick: the best, the one played, or the nearest to a named quality */
+function preferredTag(it, qs) {
+  const want = saveQualityWanted();
+  const target = want === 'max' ? 0
+               : want === 'played' ? qualityNum((it.stream && it.stream.quality) || (state.quality !== 'auto' ? state.quality : ''))
+               : qualityNum(want);
+  const named = qs.filter(q => qualityNum(q.quality));
+  if (!target || !named.length) return qs[0];
+  return [...named].sort((a, b) => Math.abs(qualityNum(a.quality) - target) - Math.abs(qualityNum(b.quality) - target) || qualityNum(b.quality) - qualityNum(a.quality))[0];
+}
+function buildSaveMenu(it) {
   saveMenu.replaceChildren();
   menuTitle(saveMenu, t('queue.saveAs'));
-  for (const o of opts) {
+  const known = saveInfo && saveInfo.key === `${it.seriesId}/${it.number}` ? saveInfo.dubs : null;
+  const nowKey = it.dub ? it.dub.key : state.dubKey;
+  const dubs = known || (it.dubs || []).map(d => ({ key: d.key, name: d.name, qualities: [], unopened: d.alive, alive: d.alive }));
+  const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
+  for (const d of rows) {
+    const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
     const b = document.createElement('button');
-    b.className = 'menu__item';
-    b.innerHTML = `<span class="menu__tick"></span><span class="menu__body"><span class="menu__main"></span><span class="menu__sub"></span></span>`;
-    b.querySelector('.menu__main').textContent = o.label;
-    b.querySelector('.menu__sub').textContent = [o.stream.player, o.stream.kind.toUpperCase()].filter(Boolean).join(' · ');
-    b.onclick = ev => { ev.stopPropagation(); saveMenu.hidden = true; enqueueSaves([it], o.stream); };
+    b.className = 'menu__item menu__item--dub';
+    b.innerHTML = '<span class="menu__body"><span class="menu__main"></span></span><span class="menu__tags"></span>';
+    b.querySelector('.menu__main').textContent = d.name;
+    const tags = b.querySelector('.menu__tags');
+    const pick = q => { saveMenu.hidden = true; enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); };
+    for (const q of qs) {
+      const tg = document.createElement('span');
+      tg.className = 'qtag';
+      tg.textContent = q.quality || q.kind.toUpperCase();
+      tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
+      tg.onclick = ev => { ev.stopPropagation(); pick(q); };
+      tags.append(tg);
+    }
+    if (!qs.length) {
+      const w = document.createElement('span');
+      w.className = 'qtag qtag--wait';
+      w.textContent = d.unopened || !known ? '…' : t('audio.dead');
+      tags.append(w);
+      b.disabled = true;
+    } else b.onclick = ev => { ev.stopPropagation(); pick(preferredTag(it, qs)); };
     saveMenu.append(b);
   }
-  const r = btn.getBoundingClientRect();
-  saveMenu.hidden = false;
-  saveMenu.style.top = Math.min(r.bottom + 6, window.innerHeight - saveMenu.offsetHeight - 8) + 'px';
-  saveMenu.style.left = Math.max(8, Math.min(r.right - saveMenu.offsetWidth, window.innerWidth - saveMenu.offsetWidth - 8)) + 'px';
+  const r = saveMenu.anchor;
+  if (r) {
+    saveMenu.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - saveMenu.offsetHeight - 8)) + 'px';
+    saveMenu.style.left = Math.max(8, Math.min(r.right - saveMenu.offsetWidth, window.innerWidth - saveMenu.offsetWidth - 8)) + 'px';
+  }
 }
 document.addEventListener('click', e => { if (!e.target.closest('#saveMenu') && !e.target.closest('.item__save')) saveMenu.hidden = true; });
 
@@ -2974,7 +3040,7 @@ async function watchSaves() {
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job) }; active = true; }
+    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job), pick: job.streamId ? { id: job.streamId, level: job.level || null } : null }; active = true; }
     else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
     else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
     else if (it.save) { if (it.save.jobId) finished = true; it.save = null; }   // its job is gone without a record: the file is in the library
@@ -3288,7 +3354,9 @@ function enqueueSaves(items, stream = null, { first = false } = {}) {
     if (isSaved(it) || isSaving(it) || isQueued(it)) continue;
     const before = it.save || {};
     it.saveStream = stream || null;
-    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
+    /* what was picked stays with the row: a pause and a resume keep the dub and the quality */
+    const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
+    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, pick, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
     if (first) saveQueue.unshift(it); else saveQueue.push(it);
   }
   paintSaved();
@@ -3308,29 +3376,31 @@ async function openSaves() {
 async function submitSave(it, stream = null) {
   const before = it.save || {};
   const quality = stream ? (stream.quality || null) : before.quality || null;
+  const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
   const first = !!before.first;
   it.pauseWanted = false;
-  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality }; paintSaved();
+  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved();
   try {
     if (!it.stream) await resolveItem(it);
-    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality }; paintSaved(); return; }
-    const st = stream || streamOfQuality(it, quality) || streamToSave(it);
+    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved(); return; }
+    const st = stream || pick || streamOfQuality(it, quality) || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
-    let job = await post('/api/save?stream=' + st.id + (first ? '&first=1' : ''));
+    let job = await post('/api/save?stream=' + st.id + (st.level ? '&level=' + st.level : '') + (first ? '&first=1' : ''));
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     it.save = jobState(job, quality); paintSaved();
   } catch (e) {
-    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality }; paintSaved();
+    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
   }
 }
 /* a server job as the row's state */
 function jobState(job, quality = null) {
   const q = jobQuality(job) || quality;
-  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q };
-  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q };
+  const pick = job.streamId ? { id: job.streamId, level: job.level || null } : null;
+  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, pick };
+  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, pick };
   if (job.state === 'done') return null;
-  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q };
+  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q, pick };
 }
 
 /* rows taken out of this page's line go back to what they were before they were asked */

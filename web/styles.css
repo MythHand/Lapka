@@ -1701,6 +1701,11 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ── the small menu by a row's save button ──────────────────── */
 .menu--float{ position:fixed; bottom:auto; right:auto; z-index:60; min-width:200px; display:block; }
 .menu--float[hidden]{ display:none; }
+/* the save window: a row per dub with its qualities as tags; room for both */
+#saveMenu{ min-width:320px; max-width:min(560px, calc(100vw - 16px)); max-height:min(72vh, calc(100vh - 16px)); overflow:auto; }
+#saveMenu .menu__item--dub{ gap:14px; }
+#saveMenu .menu__tags{ max-width:none; }
+#saveMenu .menu__item:disabled .qtag--wait{ cursor:default; }
 
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
 /* the field keeps the width a bare input has, plus forty pixels; the footer's row is as it was */
