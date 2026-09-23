@@ -54,6 +54,20 @@ then, in a new terminal, `nvm install --lts`.
 
 `node -v` again, to be sure.
 
+## The shortest way: npx
+
+With Node.js in place (step 1), Lapka starts with one command in the terminal,
+with no download and no project folder:
+
+```bash
+npx -y @mythhand/lapka
+```
+
+npx fetches Lapka into its own cache, starts it and opens it in the browser. The
+next start with the same command takes the new version, when there is one. To
+stop: Ctrl+C in that terminal, or the "Quit Lapka" button in the settings. Steps
+2–4 are not needed then; go on to step 5.
+
 ## Step 2. Download Lapka
 
 Without git: on https://github.com/MythHand/Lapka press the green **Code**
@@ -117,8 +131,10 @@ the terminal or simply close the terminal window.
 
 In the player: the paw at the top right → "Lapka folder" → "Choose another
 folder". The system's folder dialog opens. Saved episodes and Lapka's own files
-go there. If you never choose a folder, the files pile up in `.dev/home` inside
-the Lapka folder.
+go there. The choice itself is kept where the system keeps a program's settings
+(`~/Library/Application Support/Lapka` on macOS, `%APPDATA%\Lapka` on Windows,
+`~/.config/lapka` on Linux), so it is one and the same whatever way Lapka is
+started.
 
 On Linux the system dialog needs the `zenity` program; without it the path can
 be typed by hand through the "type a path instead" link in the same menu.

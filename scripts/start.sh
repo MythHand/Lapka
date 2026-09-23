@@ -31,7 +31,7 @@ fi
 command -v ffmpeg >/dev/null 2>&1 || say "ffmpeg is not installed: watching works, saving episodes to a file will not. See docs/INSTALL.md."
 
 say "Starting Lapka at $URL …"
-PORT="$PORT" nohup node core/main.mjs >"$LOG" 2>&1 &
+PORT="$PORT" LAPKA_NO_OPEN=1 nohup node core/main.mjs >"$LOG" 2>&1 &
 echo $! >"$PIDFILE"
 disown 2>/dev/null
 

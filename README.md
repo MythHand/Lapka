@@ -102,8 +102,13 @@ installs and starts itself again; or `update.command`, `update.bat`, `./update.s
 
 Lapka's files go into the folder you choose in the settings (the paw →
 "Lapka folder"). Until the first choice it is `.dev/home` inside the project
-folder. The `LAPKA_HOME` environment variable forces a folder, `PORT` changes
-the port.
+folder. The choice itself is kept in the user's system settings folder, one for
+every way of starting. The `LAPKA_HOME` environment variable forces a folder,
+`PORT` changes the port.
+
+Or with no folder at all, when Node.js is there: `npx -y @mythhand/lapka`
+fetches Lapka into the npm cache, starts it and opens it in the browser; the
+next such start takes the new version by itself.
 
 ## If you are not a developer
 

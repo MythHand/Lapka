@@ -2241,6 +2241,7 @@ function paintUpdate() {
     case 'checking': show('', t('upd.checking'), { disabled: true }); break;
     case 'latest': show(t('upd.latest'), t('upd.again')); break;
     case 'newer': show(t('upd.available', { v }), t('upd.to', { v })); break;
+    case 'npx': show(t('upd.npx', { v }), t('upd.again')); break;
     case 'updating': show(t('upd.updating', { v }), ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = s; log.append(d); } break;
     case 'restarting': show(t('upd.waiting'), ''); break;
     case 'done': show(t('upd.done', { v }), t('upd.reload')); break;
@@ -2255,8 +2256,8 @@ async function updateClick() {
   update.phase = 'checking'; paintUpdate();
   try {
     const r = await post('/api/update/check');
-    update.latest = r.latest; update.tag = r.tag;
-    update.phase = r.newer ? 'newer' : 'latest';
+    update.latest = r.latest; update.tag = r.tag; update.kind = r.kind;
+    update.phase = r.newer ? (r.kind === 'npx' ? 'npx' : 'newer') : 'latest';
   } catch (e) { update.phase = 'failed'; update.why = e.message; }
   paintUpdate();
 }

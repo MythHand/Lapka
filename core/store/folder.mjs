@@ -46,6 +46,14 @@ export async function pickFolder({ prompt = 'Lapka', start = null } = {}) {
 }
 
 /* the folder, shown in the file manager */
+/* an address opened in the person's browser, the way the launchers do it */
+export async function openUrl(url) {
+  if (process.platform === 'darwin') return run('open', [url], 10000);
+  if (process.platform === 'win32') return run('cmd', ['/c', 'start', '', url], 10000).catch(() => {});
+  if (process.platform === 'linux' && has('xdg-open')) return run('xdg-open', [url], 10000);
+  throw new Error('no browser opener on this system');
+}
+
 export async function openFolder(dir) {
   if (process.platform === 'darwin') return run('open', [dir], 10000);
   if (process.platform === 'win32') return run('explorer', [dir], 10000).catch(() => {});   // explorer exits 1 even when it opened

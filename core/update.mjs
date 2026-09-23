@@ -62,7 +62,21 @@ export async function checkUpdate({ fetch = globalThis.fetch, repo = REPO, curre
   return { current, latest, tag, url, newer: !!latest && compareVersions(latest, current) > 0 };
 }
 
-export function installKind(root = ROOT) { return fs.existsSync(path.join(root, '.git')) ? 'git' : 'zip'; }
+/* How this Lapka got here: a clone (git), an archive (zip), or the npm
+   cache that npx runs from (npx). The npx cache is not a place to update:
+   the next `npx` takes the newest by itself. */
+export function installKind(root = ROOT) {
+  if (fs.existsSync(path.join(root, '.git'))) return 'git';
+  if (/[\\/]_npx[\\/]|[\\/]node_modules[\\/]/.test(root)) return 'npx';
+  return 'zip';
+}
+/* the newest version on npm, for a Lapka that runs from there */
+export async function checkNpm({ fetch = globalThis.fetch, name = pkg.name, current = VERSION } = {}) {
+  const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name).replace('%40', '@')}/latest`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`npm answered ${res.status}`);
+  const latest = String((await res.json()).version || '') || null;
+  return { current, latest, tag: latest ? 'v' + latest : null, url: `https://www.npmjs.com/package/${name}`, newer: !!latest && compareVersions(latest, current) > 0 };
+}
 
 /* Brings the folder to the version tagged, telling each step; leaves the
    process running for the caller to restart. */
