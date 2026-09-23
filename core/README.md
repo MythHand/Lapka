@@ -25,7 +25,8 @@ order of the pipeline: session → discovery → extractors → delivery → sto
 page through the session, reads it, climbs from an episode to the series page,
 opens every embedded player with an extractor, merges all contributions into
 the catalog and marks the health of the sources. `main.mjs` is the entry point
-of `npm start`.
+of `npm start`, the launchers and `npx`; a port already held is said, not thrown: another Lapka
+there is handed the browser, another program means another port.
 
 A "seam" means: the place and the contract are defined, the code is not there
 yet. A folder appears together with its first code; there are no empty folders

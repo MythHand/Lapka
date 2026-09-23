@@ -1624,10 +1624,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .saveall.is-done{ color:var(--tx-3); } .saveall.is-done .ph{ display:none; }
 .saveall.is-busy .ph{ animation:pulse 1s ease-in-out infinite; }
 @keyframes pulse{ 50%{ opacity:.3; } }
-/* fixed and on the body: the queue panel clips what hangs out of it, and this may be wide */
+/* fixed and on the body: the queue panel clips what hangs out of it. One
+   frame whatever the words inside: the width is set, the height grows
+   downward from the button as the sections arrive */
 .savepop{
   position:fixed; z-index:60;
-  width:max-content; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); overflow:auto;
+  width:420px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); overflow:auto;
   padding:16px 18px 14px; border-radius:var(--r-lg);
   background:rgba(22,23,26,.97); border:1px solid var(--line-2); box-shadow:var(--shadow);
   backdrop-filter:blur(28px) saturate(1.4); -webkit-backdrop-filter:blur(28px) saturate(1.4);
@@ -1641,9 +1643,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .savepop__k{ color:var(--tx-3); white-space:nowrap; }
 .savepop__v{ color:var(--tx-1); font-variant-numeric:tabular-nums; }
 .savepop__v small{ color:var(--tx-3); }
+/* the line that names the dub and the quality of a part's save: a choice, so it reads as one */
+.savepop__pick{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; text-decoration-color:var(--tx-3); }
+.savepop__pick:hover{ text-decoration-color:var(--tx-1); }
 .savepop__parts{ display:grid; grid-template-columns:max-content 1fr max-content max-content; column-gap:16px; row-gap:9px; align-items:baseline; }
 .savepop__parts .n{ color:var(--tx-3); font-variant-numeric:tabular-nums; }
-.savepop__parts .t{ color:var(--tx-1); white-space:nowrap; }
+.savepop__parts .t{ color:var(--tx-1); white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .savepop__parts .c, .savepop__parts .s{ font-variant-numeric:tabular-nums; text-align:right; }
 .savepop__parts .c.is-done{ color:var(--tx-3); }
 .savepop__bar{ height:4px; margin:0 0 12px; border-radius:2px; background:var(--glass-hi); overflow:hidden; }
@@ -1701,6 +1706,37 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ── the small menu by a row's save button ──────────────────── */
 .menu--float{ position:fixed; bottom:auto; right:auto; z-index:60; min-width:200px; display:block; }
 .menu--float[hidden]{ display:none; }
+/* the save window of one row: a row per dub with its qualities as tags.
+   One frame whatever arrives: the width is set, it stands centred under
+   its button and may hang out of the queue column */
+#saveMenu{ width:380px; min-width:0; max-width:calc(100vw - 16px); max-height:min(72vh, calc(100vh - 16px)); overflow:auto; z-index:61; }   /* over the popover it may open from */
+/* a row lights up under the pointer as any menu row does; only a tag answers a click */
+#saveMenu .savemenu__row{ gap:14px; align-items:flex-start; cursor:default; }
+#saveMenu .savemenu__row .menu__main{ line-height:22px; }
+#saveMenu .savemenu__row.is-quiet .menu__main{ color:var(--tx-3); }
+/* the tags in lines of four, each line flush right, the lines stacked */
+#saveMenu .menu__tags{ max-width:none; flex-direction:column; align-items:flex-end; gap:4px; }
+#saveMenu .menu__tagline{ display:flex; gap:4px; }
+#saveMenu .qtag--wait{ cursor:default; }
+/* The three save popovers (the queue's, a part's, a row's) come and go
+   as the deck menus do, on the same curves, only down out of their
+   button when they open and back up when they close. The hidden
+   attribute stays the switch; display waits for the way out. */
+.savepop, #saveMenu{
+  opacity:0; transform:translateY(-12px);
+  transition:opacity 110ms cubic-bezier(.35,0,.65,1),
+             transform 170ms cubic-bezier(.25,.45,.55,.95),
+             display 170ms allow-discrete;
+}
+.savepop:not([hidden]), #saveMenu:not([hidden]){
+  opacity:1; transform:none;
+  transition:opacity 120ms cubic-bezier(.33,.8,.45,1),
+             transform 200ms cubic-bezier(.2,.8,.3,1),
+             display 0s allow-discrete;
+}
+@starting-style{
+  .savepop:not([hidden]), #saveMenu:not([hidden]){ opacity:0; transform:translateY(-12px); }
+}
 
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
 /* the field keeps the width a bare input has, plus forty pixels; the footer's row is as it was */

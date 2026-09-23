@@ -18,9 +18,12 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { build, haveFfmpeg } from './fixtures.mjs';
 import { startSite } from './site/serve.mjs';
-import { start } from '../core/main.mjs';
+import { start, lapkaAt } from '../core/main.mjs';
+import http from 'node:http';
+import { VERSION } from '../core/update.mjs';
 import { openState } from '../core/store/state.mjs';
 import { fileNameFor, safeName } from '../core/store/library.mjs';
+import { pickVariant } from '../core/deliver/save.mjs';
 
 const ffmpeg = await haveFfmpeg();
 let site, lapka, home, movedWrap, sideWrap;
@@ -168,6 +171,41 @@ describe('the update route', () => {
     assert.equal((await fetch(lapka.base + '/api/update/start', { method: 'POST' })).status, 403, 'no header, no token');
     const r = await (await post('/api/update/start?tag=v9.9.9')).json();
     assert.match(r.token, /^[a-z0-9]{10,}$/);
+  });
+});
+
+/* ── the variant of a master to save ── */
+describe('the variant to save', () => {
+  const master = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360', '360/index.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720,AUDIO=\"snd\"', '720/index.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080', '1080/index.m3u8'];
+  const base = 'https://cdn.example/v/master.m3u8';
+  test('the height asked for; the nearest, taller on a tie, when it is not there; the widest when none is asked', () => {
+    assert.equal(pickVariant(master, base, 720).url, 'https://cdn.example/v/720/index.m3u8');
+    assert.equal(pickVariant(master, base, 720).group, 'snd');
+    assert.equal(pickVariant(master, base, 480).url, 'https://cdn.example/v/360/index.m3u8');
+    assert.equal(pickVariant(master, base, 540).url, 'https://cdn.example/v/720/index.m3u8');
+    assert.equal(pickVariant(master, base, 4000).url, 'https://cdn.example/v/1080/index.m3u8');
+    assert.equal(pickVariant(master, base, null).url, 'https://cdn.example/v/1080/index.m3u8');
+    assert.equal(pickVariant(['#EXTM3U'], base, 720), null);
+  });
+});
+
+/* ── a port already held ── */
+describe('a taken port', () => {
+  test('held by another Lapka: said with its version and folder, not thrown as a trace', async () => {
+    const other = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-other-'));
+    await assert.rejects(start({ port: lapka.port, home: other }), e => e.code === 'EADDRINUSE' && e.port === lapka.port && e.running?.version === VERSION && e.running.home === home);
+    assert.deepEqual(await lapkaAt(lapka.port), { version: VERSION, home, base: lapka.base });
+    await fsp.rm(other, { recursive: true, force: true });
+  });
+  test('held by some other program: said as taken, with nobody named', async () => {
+    const foreign = http.createServer((req, res) => { res.writeHead(200); res.end('hello'); });
+    await new Promise(r => foreign.listen(0, '127.0.0.1', r));
+    const port = foreign.address().port;
+    const other = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-other-'));
+    try {
+      await assert.rejects(start({ port, home: other }), e => e.code === 'EADDRINUSE' && e.port === port && e.running === null);
+      assert.equal(await lapkaAt(port), null);
+    } finally { await new Promise(r => foreign.close(r)); await fsp.rm(other, { recursive: true, force: true }); }
   });
 });
 
