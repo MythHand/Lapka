@@ -1709,7 +1709,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* the save window of one row: a row per dub with its qualities as tags.
    One frame whatever arrives: the width is set, it stands centred under
    its button and may hang out of the queue column */
-#saveMenu{ width:380px; min-width:0; max-width:calc(100vw - 16px); max-height:min(72vh, calc(100vh - 16px)); overflow:auto; }
+#saveMenu{ width:380px; min-width:0; max-width:calc(100vw - 16px); max-height:min(72vh, calc(100vh - 16px)); overflow:auto; z-index:61; }   /* over the popover it may open from */
 /* a row lights up under the pointer as any menu row does; only a tag answers a click */
 #saveMenu .savemenu__row{ gap:14px; align-items:flex-start; cursor:default; }
 #saveMenu .savemenu__row .menu__main{ line-height:22px; }
