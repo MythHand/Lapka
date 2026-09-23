@@ -2962,10 +2962,12 @@ function buildSaveMenu(it) {
     } else b.onclick = ev => { ev.stopPropagation(); pick(preferredTag(it, qs)); };
     saveMenu.append(b);
   }
+  /* centred under its button, kept inside the window only; the queue column is no frame for it */
   const r = saveMenu.anchor;
   if (r) {
-    saveMenu.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - saveMenu.offsetHeight - 8)) + 'px';
-    saveMenu.style.left = Math.max(8, Math.min(r.right - saveMenu.offsetWidth, window.innerWidth - saveMenu.offsetWidth - 8)) + 'px';
+    const w = saveMenu.offsetWidth, h = saveMenu.offsetHeight;
+    saveMenu.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8)) + 'px';
+    saveMenu.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
   }
 }
 document.addEventListener('click', e => { if (!e.target.closest('#saveMenu') && !e.target.closest('.item__save')) saveMenu.hidden = true; });
