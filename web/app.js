@@ -2897,23 +2897,29 @@ function saveMarkClick(it, btn) {
    The window opens from a row's mark and closes on a click anywhere
    else, on Esc, or on a choice; the click that closes it does nothing
    else, as with the queue's popover. */
-let saveInfo = null;   // { key, dubs }: what the server says the dubs of the row being saved can be saved in
-let saveMenuFor = null;   // the row the window is open for
+let saveInfo = null;   // { key, dubs }: what the server says the dubs of one row can be saved in
+let saveMenuFor = null;   // what the window is open for: a row, or { scope, items, rep } for a part's pick
+/* what the server says the dubs of a row can be saved in, asked once per
+   episode: first what it knows, then with the sources opened; redraw is
+   called on each answer while the window is still about this row */
+function loadDubs(it, redraw) {
+  const key = `${it.seriesId}/${it.number}`;
+  if (saveInfo && saveInfo.key === key) return;
+  saveInfo = { key, dubs: null };
+  const ask = q => api(`/api/dubs?series=${it.seriesId}&episode=${it.number}${q}`)
+    .then(d => { if (saveInfo && saveInfo.key === key) { saveInfo.dubs = d.dubs; if (!saveMenu.hidden) redraw(); } })
+    .catch(() => {});
+  ask(''); ask('&open=1');
+}
+const dubsKnown = it => saveInfo && saveInfo.key === `${it.seriesId}/${it.number}` ? saveInfo.dubs : null;
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
   /* one dub, one stream of a known quality: nothing to choose */
   if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], it.streams[0]);
-  const key = `${it.seriesId}/${it.number}`;
-  if (!saveInfo || saveInfo.key !== key) {
-    saveInfo = { key, dubs: null };
-    const ask = q => api(`/api/dubs?series=${it.seriesId}&episode=${it.number}${q}`)
-      .then(d => { if (saveInfo && saveInfo.key === key) { saveInfo.dubs = d.dubs; if (saveMenuFor === it && !saveMenu.hidden) buildSaveMenu(it); } })
-      .catch(() => {});
-    ask(''); ask('&open=1');
-  }
   saveMenuFor = it;
   saveMenu.anchor = btn.getBoundingClientRect();
   saveMenu.hidden = false;
+  loadDubs(it, () => { if (saveMenuFor === it) buildSaveMenu(it); });
   buildSaveMenu(it);
 }
 function closeSaveMenu() { saveMenu.hidden = true; saveMenuFor = null; }
@@ -2927,53 +2933,149 @@ const tagsFromStreams = streams => {
   return [...out.values()];
 };
 const TAGS_PER_LINE = 4;
+const tagLabel = q => q.quality || q.kind.toUpperCase();
+/* one row of the window: the dub's name, a note under it if any, its tags four to a line; empty → a waiting or a dead tag */
+function saveMenuRow(name, sub, qs, onTag, { waiting = true } = {}) {
+  const row = document.createElement('div');
+  row.className = 'menu__item menu__item--dub savemenu__row' + (qs.length ? '' : ' is-quiet');
+  row.innerHTML = '<span class="menu__body"><span class="menu__main"></span><span class="menu__sub" hidden></span></span><span class="menu__tags"></span>';
+  row.querySelector('.menu__main').textContent = name;
+  if (sub) { const s = row.querySelector('.menu__sub'); s.textContent = sub; s.hidden = false; }
+  const tags = row.querySelector('.menu__tags');
+  let line = null;
+  qs.forEach((q, i) => {
+    if (i % TAGS_PER_LINE === 0) { line = document.createElement('span'); line.className = 'menu__tagline'; tags.append(line); }
+    const tg = document.createElement('span');
+    tg.className = 'qtag';
+    tg.textContent = q.label || tagLabel(q);
+    if (q.player) tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
+    tg.onclick = ev => { ev.stopPropagation(); onTag(q); };
+    line.append(tg);
+  });
+  if (!qs.length) {
+    const w = document.createElement('span');
+    w.className = 'qtag qtag--wait';
+    w.textContent = waiting ? '…' : t('audio.dead');
+    tags.append(w);
+  }
+  return row;
+}
+/* centred under its button, kept inside the window only; the queue column is no frame for it */
+function placeSaveMenu() {
+  const r = saveMenu.anchor;
+  if (!r) return;
+  const w = saveMenu.offsetWidth, h = saveMenu.offsetHeight;
+  saveMenu.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8)) + 'px';
+  saveMenu.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
+}
 function buildSaveMenu(it) {
   saveMenu.replaceChildren();
   menuTitle(saveMenu, t('queue.saveAs'));
-  const known = saveInfo && saveInfo.key === `${it.seriesId}/${it.number}` ? saveInfo.dubs : null;
+  const known = dubsKnown(it);
   const nowKey = it.dub ? it.dub.key : state.dubKey;
   const dubs = known || (it.dubs || []).map(d => ({ key: d.key, name: d.name, qualities: [], unopened: d.alive, alive: d.alive }));
   const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
   for (const d of rows) {
     const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
-    const row = document.createElement('div');
-    row.className = 'menu__item menu__item--dub savemenu__row' + (qs.length ? '' : ' is-quiet');
-    row.innerHTML = '<span class="menu__body"><span class="menu__main"></span></span><span class="menu__tags"></span>';
-    row.querySelector('.menu__main').textContent = d.name;
-    const tags = row.querySelector('.menu__tags');
-    /* four tags to a line, the lines flush right */
-    let line = null;
-    qs.forEach((q, i) => {
-      if (i % TAGS_PER_LINE === 0) { line = document.createElement('span'); line.className = 'menu__tagline'; tags.append(line); }
-      const tg = document.createElement('span');
-      tg.className = 'qtag';
-      tg.textContent = q.quality || q.kind.toUpperCase();
-      tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
-      tg.onclick = ev => { ev.stopPropagation(); closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); };
-      line.append(tg);
-    });
-    if (!qs.length) {
-      const w = document.createElement('span');
-      w.className = 'qtag qtag--wait';
-      w.textContent = d.unopened || !known ? '…' : t('audio.dead');
-      tags.append(w);
-    }
-    saveMenu.append(row);
+    saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); }, { waiting: !!(d.unopened || !known) }));
   }
-  /* centred under its button, kept inside the window only; the queue column is no frame for it */
-  const r = saveMenu.anchor;
-  if (r) {
-    const w = saveMenu.offsetWidth, h = saveMenu.offsetHeight;
-    saveMenu.style.top = Math.max(8, Math.min(r.bottom + 6, window.innerHeight - h - 8)) + 'px';
-    saveMenu.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
+  placeSaveMenu();
+}
+
+/* ── the dub and the quality a part, or the whole queue, is saved in ──
+   Shown in the popover as one line, "AniLibria · 1080p", and applied to
+   its Download button. Until chosen it is the dub playing (else the one
+   most rows have) in the quality the settings prefer. Chosen through
+   the same window as a row's save, with one more thing per dub: how
+   many rows of the part have it, when not all. Quality is size, not
+   content: a row without the exact one gets the nearest. A dub is
+   content: a row known to lack it is not put in line, the popover
+   counts such rows, and their marks stay for a save of their own. A row
+   whose dubs are not known yet (its page unread) goes in line and is
+   settled when it is opened. The choice lives for the page. */
+const groupPicks = new Map();   // '*' for the queue, else the part's id → { dubKey, dubName, quality }
+const scopeKey = scope => scope === null ? '*' : scope;
+const lacksDub = (it, key) => !!it.dubs && !it.dubs.some(d => d.key === key);   // known to have no such dub
+/* every dub seen across the rows, with how many rows have it */
+function dubCoverage(items) {
+  const m = new Map();
+  for (const it of items) for (const d of it.dubs || []) { const e = m.get(d.key) || { key: d.key, name: d.name, n: 0 }; e.n++; m.set(d.key, e); }
+  return [...m.values()];
+}
+function groupPickOf(scope, items) {
+  const own = groupPicks.get(scopeKey(scope));
+  if (own) return own;
+  const cov = dubCoverage(items);
+  const playing = cur();
+  const key = (playing && playing.dub && playing.dub.key) || state.dubKey;
+  const d = cov.find(x => x.key === key) || [...cov].sort((a, b) => b.n - a.n)[0];
+  return d ? { dubKey: d.key, dubName: d.name, quality: null } : null;
+}
+/* the quality of a pick in words: the label chosen, else the settings' rule */
+const qualityWords = quality => quality || ({ max: t('pop.qBest'), played: t('pop.qPlayed') })[saveQualityWanted()] || saveQualityWanted();
+/* the tag of a named quality, else the nearest by height, the taller on a tie */
+function nearestTag(qs, label) {
+  const exact = qs.find(q => tagLabel(q) === label);
+  if (exact) return exact;
+  const target = qualityNum(label), named = qs.filter(q => qualityNum(q.quality));
+  if (!target || !named.length) return qs[0] || null;
+  return [...named].sort((a, b) => Math.abs(qualityNum(a.quality) - target) - Math.abs(qualityNum(b.quality) - target) || qualityNum(b.quality) - qualityNum(a.quality))[0];
+}
+/* the tag the settings' rule picks: the best, the one played, or a named quality */
+function tagByRule(it, qs) {
+  const want = saveQualityWanted();
+  if (want === 'max') return qs[0] || null;
+  if (want === 'played') { const now = (it.stream && it.stream.quality) || (state.quality !== 'auto' ? state.quality : ''); return now ? nearestTag(qs, now) : qs[0] || null; }
+  return nearestTag(qs, want);
+}
+/* the stream of a row for a pick: the dub named, in the quality named or the nearest; null when the row has no such dub */
+async function streamForPick(it, pick) {
+  const d = await api(`/api/dubs?series=${it.seriesId}&episode=${it.number}&open=1`);
+  const dub = d.dubs.find(x => x.key === pick.dubKey);
+  if (!dub || !dub.qualities.length) return null;
+  const q = pick.quality ? nearestTag(dub.qualities, pick.quality) : tagByRule(it, dub.qualities);
+  return q ? { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null } : null;
+}
+/* the window for a part's pick: the dubs across its rows, the tags of the row playing (else the first) */
+function offerGroupPick(scope, anchor) {
+  const items = popItems();
+  const rep = items.find(it => it === cur()) || items[0];
+  if (!rep) return;
+  const ctx = { scope, items, rep };
+  saveMenuFor = ctx;
+  saveMenu.anchor = anchor.getBoundingClientRect();
+  saveMenu.hidden = false;
+  loadDubs(rep, () => { if (saveMenuFor === ctx) buildGroupMenu(ctx); });
+  buildGroupMenu(ctx);
+}
+function buildGroupMenu({ scope, items, rep }) {
+  saveMenu.replaceChildren();
+  menuTitle(saveMenu, t('queue.saveAs'));
+  const known = dubsKnown(rep);
+  const nowKey = (rep.dub && rep.dub.key) || state.dubKey;
+  const rows = dubCoverage(items).sort((a, b) => (b.key === nowKey) - (a.key === nowKey) || b.n - a.n || a.name.localeCompare(b.name));
+  const choose = (d, q) => {
+    groupPicks.set(scopeKey(scope), { dubKey: d.key, dubName: d.name, quality: q ? tagLabel(q) : null });
+    closeSaveMenu(); paintSavePop();
+  };
+  for (const d of rows) {
+    const info = known && known.find(x => x.key === d.key);
+    /* the qualities the row playing has of this dub; a dub it lacks is offered by the settings' rule alone */
+    let qs = info && info.qualities.length ? info.qualities : !known && d.key === nowKey ? tagsFromStreams(rep.streams) : [];
+    let waiting = !known || !!(info && info.unopened);
+    if (!qs.length && known && !info) { qs = [{ label: qualityWords(null), rule: true }]; waiting = false; }
+    /* how many rows have the dub, said only when some are known to lack it; rows not yet read count as possible */
+    const lacking = items.filter(it => lacksDub(it, d.key)).length;
+    const sub = lacking ? t('pop.cover', { n: items.length - lacking, total: items.length }) : '';
+    saveMenu.append(saveMenuRow(d.name, sub, qs, q => choose(d, q.rule ? null : q), { waiting }));
   }
+  placeSaveMenu();
 }
 saveMenu.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
   if (saveMenu.hidden || e.target.closest('#saveMenu')) return;
-  /* the click closes the window and does nothing else; the mark it opened from toggles it itself */
-  const mark = e.target.closest('.item__save');
-  if (!mark) { e.stopPropagation(); e.preventDefault(); }
+  /* the click closes the window and does nothing else; the mark it opened from toggles it itself, and the popover keeps its own clicks */
+  if (!e.target.closest('.item__save, #savePop')) { e.stopPropagation(); e.preventDefault(); }
   closeSaveMenu();
 }, true);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !saveMenu.hidden) closeSaveMenu(); });
@@ -3191,10 +3293,14 @@ function buildSavePop() {
   const g = el('div', 'savepop__grid');
   const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); g.append(k, v); return { k, v }; };
   const saved = row('pop.saved'), now = row('pop.now'), queued = row('pop.queued'), paused = row('pop.paused'), failed = row('pop.failed'), rest = row('pop.rest'), dur = row('pop.duration');
+  /* what the Download button saves in: the line opens the window that chooses it */
+  const pickRow = row('pop.pick'); pickRow.v.className = 'savepop__v savepop__pick';
+  pickRow.v.onclick = ev => { ev.stopPropagation(); if (!popPinned) pinSavePop(popScope, popAnchor); offerGroupPick(popScope, pickRow.v); };
+  const without = row('pop.without');
   q.append(g);
   const acts = el('div', 'savepop__acts');
   const go = el('button', 'btn btn--solid'), pause = el('button', 'btn');
-  go.onclick = ev => { ev.stopPropagation(); enqueueSaves(popItems()); };
+  go.onclick = ev => { ev.stopPropagation(); const items = popItems(), pick = groupPickOf(popScope, items); enqueueSaves(pick ? items.filter(it => !lacksDub(it, pick.dubKey)) : items, null, { pick }); };
   pause.onclick = ev => { ev.stopPropagation(); pauseItems(popItems(), popScope === null); };
   acts.append(go, pause); q.append(acts);
   /* the destructive pair asks twice: the first click arms the button, the second within a few seconds acts */
@@ -3224,7 +3330,7 @@ function buildSavePop() {
   const lib = popScope === null ? popSection(t('pop.library')) : null;
   if (lib) { lib.hidden = true; frag.append(lib); }
   savePop.replaceChildren(frag);
-  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, go, pause, cancel, del, parts, lib } };
+  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, pickRow, without, go, pause, cancel, del, parts, lib } };
 }
 
 /* the words and the buttons, from the queue as it is now */
@@ -3256,8 +3362,13 @@ function paintSavePop() {
   put(r.failed, String(failed.length), failed[0] ? failed[0].save.error : '', failed.length > 0);
   put(r.rest, String(left.length), t('pop.about', { size: fmtSize(estimate) }), estimate > 0 && left.length > 0);
   put(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '', dur > 0);
-  /* the buttons: start or take up what is not saved here; pause what loads here */
-  const toGo = left.filter(it => !isSaving(it));
+  /* the pick, and the rows it leaves out for want of the dub */
+  const pick = groupPickOf(popScope, items);
+  put(r.pickRow, pick ? `${pick.dubName} · ${qualityWords(pick.quality)}` : '', '', !!pick);
+  const lacking = pick ? left.filter(it => lacksDub(it, pick.dubKey)) : [];
+  put(r.without, lacking.length ? `${pick.dubName} · ${t('pop.episodes', { n: lacking.length })}` : '', '', lacking.length > 0);
+  /* the buttons: start or take up what is not saved here and has the dub; pause what loads here */
+  const toGo = left.filter(it => !isSaving(it) && !(pick && lacksDub(it, pick.dubKey)));
   r.go.hidden = !toGo.length;
   r.go.textContent = (paused.length || failed.length ? t(popScope === null ? 'pop.resumeAll' : 'pop.resumePart') : t(popScope === null ? 'pop.download' : 'pop.downloadPart')) + ` · ${toGo.length}`;
   r.pause.hidden = !loading.length;
@@ -3329,7 +3440,7 @@ savePop.addEventListener('pointerenter', () => clearTimeout(popT));
 savePop.addEventListener('pointerleave', hideSavePop);
 savePop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
-  if (!popPinned || e.target.closest('#savePop')) return;
+  if (!popPinned || e.target.closest('#savePop, #saveMenu')) return;
   /* the click closes the popover and does nothing else: the anchors toggle it themselves */
   const anchor = e.target.closest('#btnSaveAll, .queue__group-save');
   if (!anchor) { e.stopPropagation(); e.preventDefault(); }
@@ -3357,14 +3468,14 @@ queueList.addEventListener('click', e => {
    of its own keeps that stream for its turn. */
 const saveQueue = [];
 let opener = null;
-function enqueueSaves(items, stream = null, { first = false } = {}) {
+function enqueueSaves(items, stream = null, { first = false, pick: groupPick = null } = {}) {
   for (const it of items) {
     if (isSaved(it) || isSaving(it) || isQueued(it)) continue;
     const before = it.save || {};
     it.saveStream = stream || null;
     /* what was picked stays with the row: a pause and a resume keep the dub and the quality */
     const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
-    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, pick, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
+    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, pick, groupPick: groupPick || before.groupPick || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
     if (first) saveQueue.unshift(it); else saveQueue.push(it);
   }
   paintSaved();
@@ -3391,7 +3502,10 @@ async function submitSave(it, stream = null) {
   try {
     if (!it.stream) await resolveItem(it);
     if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved(); return; }
-    const st = stream || pick || streamOfQuality(it, quality) || streamToSave(it);
+    /* a part's pick names the dub and the quality for every row of it */
+    let st = stream || pick || null;
+    if (!st && before.groupPick) { st = await streamForPick(it, before.groupPick); if (!st) throw new Error(t('pop.noDub', { dub: before.groupPick.dubName })); }
+    st = st || streamOfQuality(it, quality) || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
     let job = await post('/api/save?stream=' + st.id + (st.level ? '&level=' + st.level : '') + (first ? '&first=1' : ''));
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));

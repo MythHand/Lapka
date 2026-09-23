@@ -1643,6 +1643,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .savepop__k{ color:var(--tx-3); white-space:nowrap; }
 .savepop__v{ color:var(--tx-1); font-variant-numeric:tabular-nums; }
 .savepop__v small{ color:var(--tx-3); }
+/* the line that names the dub and the quality of a part's save: a choice, so it reads as one */
+.savepop__pick{ cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; text-decoration-color:var(--tx-3); }
+.savepop__pick:hover{ text-decoration-color:var(--tx-1); }
 .savepop__parts{ display:grid; grid-template-columns:max-content 1fr max-content max-content; column-gap:16px; row-gap:9px; align-items:baseline; }
 .savepop__parts .n{ color:var(--tx-3); font-variant-numeric:tabular-nums; }
 .savepop__parts .t{ color:var(--tx-1); white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
