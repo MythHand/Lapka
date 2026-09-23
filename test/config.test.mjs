@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { systemConfigDir, CONFIG_FILE } from '../core/store/config.mjs';
 import { installKind, compareVersions, checkNpm } from '../core/update.mjs';
+import { defaultHome } from '../core/store/index.mjs';
 
 describe('the settings file', () => {
   test('the system\'s place for settings, per platform', () => {
@@ -36,6 +37,16 @@ describe('how Lapka got here', () => {
     assert.equal(installKind(tmp), 'git');
     assert.equal(installKind(path.join(tmp, '.npm', '_npx', 'abc123', 'node_modules', '@mythhand', 'lapka')), 'npx');
     await fsp.rm(tmp, { recursive: true, force: true });
+  });
+  test('the folder until one is chosen: inside a clone or an archive, in the home folder for a Lapka run from the npm cache', () => {
+    const was = process.env.LAPKA_HOME; delete process.env.LAPKA_HOME;
+    try {
+      assert.equal(defaultHome({ kind: 'npx', homeDir: '/Users/someone' }), path.join('/Users/someone', 'Lapka'));
+      assert.equal(defaultHome({ kind: 'git', homeDir: '/Users/someone' }), path.resolve('.dev', 'home'));
+      assert.equal(defaultHome({ kind: 'zip', homeDir: '/Users/someone' }), path.resolve('.dev', 'home'));
+      process.env.LAPKA_HOME = '/tmp/elsewhere';
+      assert.equal(defaultHome({ kind: 'npx' }), '/tmp/elsewhere');
+    } finally { if (was === undefined) delete process.env.LAPKA_HOME; else process.env.LAPKA_HOME = was; }
   });
   test('the newest on npm, compared by numbers', async () => {
     const fetch = async () => ({ ok: true, json: async () => ({ version: '1.2.0' }) });

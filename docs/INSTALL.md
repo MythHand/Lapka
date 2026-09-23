@@ -65,8 +65,9 @@ npx -y @mythhand/lapka
 
 npx fetches Lapka into its own cache, starts it and opens it in the browser. The
 next start with the same command takes the new version, when there is one. To
-stop: Ctrl+C in that terminal, or the "Quit Lapka" button in the settings. Steps
-2–4 are not needed then; go on to step 5.
+stop: Ctrl+C in that terminal, or the "Quit Lapka" button in the settings. Saved
+episodes go to a `Lapka` folder in your home folder until you choose another one
+in the settings. Steps 2–4 are not needed then; go on to step 5.
 
 ## Step 2. Download Lapka
 
@@ -208,19 +209,6 @@ folder, replacing the files.
 Either way the settings and the chosen Lapka folder stay: they live outside
 the program's files.
 
-## The antivirus and start.bat
-
-An antivirus may stop `start.bat` with a verdict like
-"PDM:Trojan.Win32.Generic". It is a behavioural match: a batch file starts a
-process that opens a network port, and antivirus software treats that sequence
-as suspicious. Lapka does exactly that by design: it is a local server, and the
-port is how the browser reaches the player.
-
-Any one of these works:
-
-- add the Lapka folder to the antivirus exclusions and run `start.bat` again;
-- start without the launcher: `npm start` in a terminal in the Lapka folder;
-- start without the folder: `npx -y @mythhand/lapka` (see "The shortest way").
 
 ## If something is off
 

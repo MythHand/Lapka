@@ -102,7 +102,7 @@ installs and starts itself again; or `update.command`, `update.bat`, `./update.s
 
 Lapka's files go into the folder you choose in the settings (the paw →
 "Lapka folder"). Until the first choice it is `.dev/home` inside the project
-folder. The choice itself is kept in the user's system settings folder, one for
+folder, or `Lapka` in your home folder when Lapka runs through npx. The choice itself is kept in the user's system settings folder, one for
 every way of starting. The `LAPKA_HOME` environment variable forces a folder,
 `PORT` changes the port.
 

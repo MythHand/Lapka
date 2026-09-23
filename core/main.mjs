@@ -108,6 +108,6 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
 const asProgram = !process.env.NODE_TEST_CONTEXT && process.argv[1] && (() => { try { return fileURLToPath(import.meta.url) === fs.realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (asProgram) {
   const s = await start();
-  console.log(`Lapka: ${s.base}\nПапка: ${s.ctx.home}`);
+  console.log(`Lapka: ${s.base}\nFolder: ${s.ctx.home}`);
   if (!process.env.LAPKA_NO_OPEN && process.stdout.isTTY) openUrl(s.base).catch(() => {});
 }
