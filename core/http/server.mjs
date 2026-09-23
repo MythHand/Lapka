@@ -143,17 +143,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
         try {
           await runUpdate({ tag: t.tag, onStep: s => send('step', s) });
-          send('step', 'Перезапускаю Lapka');
+          send('step', { key: 'updRestart' });
           send('done', { ok: true });
           res.end();
           restartAfterExit({ port: ctx.port });
           ctx.quit();
-        } catch (e) { send('fail', { error: e.message }); res.end(); }
+        } catch (e) { send('fail', { error: e.message, key: e.key || null }); res.end(); }
         return;
       }
       if (ctx.switchHome && mutating && p === '/api/home/pick') {
         try {
-          const picked = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
+          const picked = await pickFolder({ prompt: 'Lapka', start: store.home });
           if (!picked) return json(res, 200, { cancelled: true });
           const chosen = await homeInside(picked);   // the page shows the folder that will be used
           /* not switched yet: the page asks whether to take the files along */

@@ -70,7 +70,7 @@ export function discover({ html, url, profile = null }) {
       const items = [];
       for (let n = 1; n <= count; n++) items.push({ number: n, title: '', url: origin + stem.replace('N', String(n)) });
       episodes = { ...episodes, items, by: 'template', confidence: 0.5 };
-      steps.push(`Серии по шаблону адреса: ${count}`);
+      steps.push({ key: 'template', n: count });
     }
   }
 
@@ -103,15 +103,15 @@ export function discover({ html, url, profile = null }) {
   seriesTitle = tidy.title;
   /* "Grand Blue Season 3 11" on the page of episode 11: the bare number at the end is the episode */
   if (kind === 'episode' && sure && new RegExp(`\\s${sure.value}$`).test(seriesTitle)) seriesTitle = seriesTitle.replace(/\s\d+$/, '').trim();
-  if (seriesTitle) steps.push(`Сериал: ${seriesTitle}`);
-  if (episodes.items.length) steps.push(`Нашла ${episodes.items.length} ${plural(episodes.items.length, 'серию', 'серии', 'серий')}`);
+  if (seriesTitle) steps.push({ key: 'series', title: seriesTitle });
+  if (episodes.items.length) steps.push({ key: 'foundEpisodes', n: episodes.items.length });
   const dubLabels = [...new Set(players.filter(p => p.dubLabel).map(p => p.dubLabel))];
   const ids = [...new Set(players.map(p => p.id))];
-  if (players.length) steps.push(`Нашла ${ids.length} ${plural(ids.length, 'плеер', 'плеера', 'плееров')}`);
-  if (dubLabels.length) steps.push(`Нашла ${dubLabels.length} ${plural(dubLabels.length, 'озвучку', 'озвучки', 'озвучек')}`);
+  if (players.length) steps.push({ key: 'foundPlayers', n: ids.length });
+  if (dubLabels.length) steps.push({ key: 'foundDubs', n: dubLabels.length });
   const pending = players.filter(p => !p.dubLabel && !p.stream);
-  if (pending.length && dubLabels.length) steps.push(`${pending.length} ${plural(pending.length, 'плеер ждёт', 'плеера ждут', 'плееров ждут')} экстрактор`);
-  if (kind === 'unknown') steps.push('Не нашла на странице ни серий, ни плеера');
+  if (pending.length && dubLabels.length) steps.push({ key: 'pending', n: pending.length });
+  if (kind === 'unknown') steps.push({ key: 'nothing' });
 
   return {
     url, kind, profile: profile?.match || null, defaultDub: profile?.dub || null,
@@ -177,12 +177,6 @@ function findEpisodeCount(doc, { strict = false } = {}) {
   return null;
 }
 
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}
 
 /* The catalog gets: the series, its episodes, and for the episode on
    this page every player the page named a dub for, plus a stream that

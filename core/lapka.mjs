@@ -140,11 +140,11 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   async function openPlayers(series, report, { onStep = () => {} } = {}) {
     const number = report.episode.value;
     const embeds = report.players.filter(p => !p.stream);
-    if (embeds.length) { onStep({ phase: 'players', n: embeds.length }); onStep(`Открываю ${embeds.length} ${plural(embeds.length, 'плеер', 'плеера', 'плееров')}`); }
+    if (embeds.length) { onStep({ phase: 'players', n: embeds.length }); onStep({ key: 'players', n: embeds.length }); }
     /* each player is said as it answers, not when the last one has */
-    const said = r => r.error ? `${r.player.id}: ${r.error}`
-      : r.unfolded ? `${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`
-      : `${r.player.id}: потоки есть`;
+    const said = r => r.error ? { key: 'playerFail', player: r.player.id, why: r.error }
+      : r.unfolded ? { key: 'playerUnfolded', player: r.player.id, episodes: r.unfolded.episodes, dubs: r.unfolded.dubs }
+      : { key: 'playerOk', player: r.player.id };
     /* Embeds a player can unfold hold the whole series each: one such
        embed per player is opened first, and the rest of that player's are
        opened only when it did not unfold (a page lists one Kodik season
@@ -176,11 +176,9 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     if (embeds.length) {
       const same = results.filter(r => r.same).length, asked = embeds.length - same;
       const ok = results.filter(r => r.contribution).length;
-      steps.push((ok === asked ? `Открыла ${asked} ${plural(asked, 'плеер', 'плеера', 'плееров')}, потоки есть`
-        : `Открыла ${ok} из ${asked} ${plural(asked, 'плеера', 'плееров', 'плееров')}`)
-        + (same ? `; ещё ${same} ${plural(same, 'ссылка ведёт', 'ссылки ведут', 'ссылок ведут')} в тот же плеер` : ''));
-      for (const r of results) if (r.error) steps.push(`${r.player.id}: ${r.error}`);
-      for (const r of results) if (r.unfolded) steps.push(`${r.player.id}: весь сериал в плеере, ${r.unfolded.episodes} ${plural(r.unfolded.episodes, 'серия', 'серии', 'серий')}, ${r.unfolded.dubs} ${plural(r.unfolded.dubs, 'озвучка', 'озвучки', 'озвучек')}`);
+      steps.push({ key: 'opened', ok, asked, same });
+      for (const r of results) if (r.error) steps.push(said(r));
+      for (const r of results) if (r.unfolded) steps.push(said(r));
     }
     if (ep) ep.opened = true;
     registerStreams(series);
@@ -355,7 +353,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const reports = [];
     const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
     onStep({ phase: 'page' });
-    onStep(`Читаю страницу ${host}`);
+    onStep({ key: 'page', host });
     const first = await readPage(url);
     for (const s of first.steps) onStep(s);
     reports.push(first);
@@ -364,8 +362,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const site = siteFor(sites, url);
     let extra = null;
     if (site) {
-      try { extra = await site.look(url, session); if (extra) first.steps.push(`Сайт знаком: ${site.name}`); }
-      catch (e) { first.steps.push(`${site.name}: ${e.message}`); }
+      try { extra = await site.look(url, session); if (extra) first.steps.push({ key: 'siteKnown', site: site.name }); }
+      catch (e) { first.steps.push({ key: 'siteFail', site: site.name, why: e.message }); }
     }
 
     /* The adapter knows the series page best. Without one, an
@@ -379,7 +377,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const series = createSeries({ sourceUrl: seriesUrl });
 
     if (certain && seriesUrl !== first.url && !(extra && extra.seriesUrl)) {
-      try { reports.push(await readPage(seriesUrl, first.url)); } catch (e) { first.steps.push(`Страница сериала не открылась: ${e.message}`); }
+      try { reports.push(await readPage(seriesUrl, first.url)); } catch (e) { first.steps.push({ key: 'seriesFail', why: e.message }); }
     }
     /* the adapter names things best, then the series page, then the episode page */
     if (extra) merge(series, extra);
@@ -387,7 +385,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     /* the part that is this series is at the series' address, whatever page named it */
     for (const f of series.franchise) if (f.self) f.url = series.sourceUrl;
 
-    const steps = [...new Set(reports.flatMap(r => r.steps))];
+    /* a step is a key with its parts (the words are the interface's, in its language); the same step from two reports is said once */
+    const steps = [...new Map(reports.flatMap(r => r.steps).map(s => [JSON.stringify(s), s])).values()];
     let opened = [];
     const number = first.episode.value;
     /* the players are opened for a page that names its episode, and
@@ -411,9 +410,3 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   return { look, readPage, context, series, adopt, openEpisode, openAllSources, levelsOf, dubsOf, levelsOfMaster, resolve, session, extractors, sites, profiles };
 }
 
-function plural(n, one, few, many) {
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
-}

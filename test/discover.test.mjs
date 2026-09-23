@@ -68,7 +68,7 @@ describe('the synthetic site', () => {
     assert.deepEqual(r.players.map(p => [p.id, p.dubLabel]), [['embed/alpha', 'AniLibria'], ['embed/alpha', 'AniDub']]);
     assert.equal(r.switches.length, 1);
     assert.equal(r.switches[0].kind, 'dubs');
-    assert.ok(r.steps.some(s => s.includes('2 озвучки')), r.steps.join(' | '));
+    assert.ok(r.steps.some(s => s.key === 'foundDubs' && s.n === 2), JSON.stringify(r.steps));
   });
 
   test('an episode page with two players, dubs on the page for one and inside for the other', () => {
@@ -84,7 +84,7 @@ describe('the synthetic site', () => {
     assert.ok(beta, 'beta embed found');
     assert.equal(beta.dubLabel, null);
     assert.equal(beta.playerLabel, 'Плеер 2');
-    assert.ok(r.steps.some(s => s.includes('ждёт экстрактор')), r.steps.join(' | '));
+    assert.ok(r.steps.some(s => s.key === 'pending' && s.n === 1), JSON.stringify(r.steps));
   });
 
   test('an episode page with a video tag and an HLS source', () => {

@@ -179,12 +179,14 @@ describe('the live look', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.match(r.headers.get('content-type'), /text\/event-stream/);
     const text = await r.text();
     const events = text.split('\n\n').filter(Boolean).map(chunk => { const m = /^event: (\w+)\ndata: ([\s\S]*)$/.exec(chunk); return m && { event: m[1], data: JSON.parse(m[2]) }; }).filter(Boolean);
-    const steps = events.filter(e => e.event === 'step' && typeof e.data === 'string').map(e => e.data);
-    const phases = events.filter(e => e.event === 'step' && typeof e.data === 'object').map(e => e.data.phase);
+    /* a phase names itself; a line of the log is a key with its parts, worded by the page in its language */
+    const steps = events.filter(e => e.event === 'step' && e.data.key).map(e => e.data);
+    const phases = events.filter(e => e.event === 'step' && e.data.phase).map(e => e.data.phase);
     assert.deepEqual(phases, ['page', 'players'], 'the phases are told apart from the lines');
-    assert.ok(steps.length >= 3, `steps: ${steps.join(' | ')}`);
-    assert.match(steps[0], /^Читаю страницу/);
-    assert.ok(steps.some(s => /плеер/.test(s)), 'the players are told');
+    assert.ok(steps.length >= 3, `steps: ${JSON.stringify(steps)}`);
+    assert.deepEqual(steps[0], { key: 'page', host: '127.0.0.1' });
+    assert.ok(steps.some(s => s.key === 'players' && s.n === 3), 'the players are told');
+    assert.ok(events.filter(e => e.event === 'step').every(e => typeof e.data === 'object'), 'no line comes worded from the server: every step is a phase or a key with its parts');
     const done = events.at(-1);
     assert.equal(done.event, 'done');
     assert.equal(done.data.series.episodes.length, 4);

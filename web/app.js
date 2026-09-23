@@ -722,12 +722,30 @@ function prepPhase(phase, mode, aux = '') {
 }
 /* a step from the server: a phase change, or a line for the log */
 function prepStep(step) {
-  if (step && typeof step === 'object') {
+  if (step && typeof step === 'object' && step.phase) {
     if (step.phase === 'players') prepPhase('page', 'done');
     prepPhase(step.phase, 'active', step.n ? `0 / ${step.n}` : '');
     return;
   }
-  prepLog(String(step));
+  prepLog(stepText(step));
+}
+/* The server says what it does as a key with its parts, never in words
+   of one language: the words are the page's, in the language chosen
+   here. A reason a player gave is worded when it is one Lapka knows,
+   else passed on as the player reader said it. A plain string passes
+   as it is. */
+function stepText(step) {
+  if (!step || typeof step !== 'object') return String(step ?? '');
+  const v = { ...step };
+  if (v.key === 'opened') return t(v.ok === v.asked ? 'log.openedAll' : 'log.openedSome', { n: v.asked, ok: v.ok }) + (v.same ? t('log.same', { n: v.same }) : '');
+  if (v.key === 'playerUnfolded') { v.episodes = t('log.nEpisodes', { n: v.episodes }); v.dubs = t('log.nDubs', { n: v.dubs }); }
+  if (v.why) v.why = whyText(v.why);
+  return t('log.' + v.key, v);
+}
+function whyText(error) {
+  if (error === 'no extractor') return t('log.noExtractor');
+  if (error === 'closed door') return t('log.closedDoor');
+  return error;
 }
 const PREP_LINES = 10;
 function prepLog(text) {
@@ -1115,7 +1133,7 @@ async function sourceFor(it) {
   if (it !== cur()) return null;
   if (!r.stream) {
     /* no live source: the reason stands on the stage, a closed player named as such */
-    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : `${d.player}: ${d.error}`).join('; ');
+    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : d.error === 'closed door' ? t('why.closedDoor', { player: d.player }) : `${d.player}: ${d.error}`).join('; ');
     it.err = true; it.why = why; render();
     showNotice(t('notice.noOpen', { name: it.name, why }), { mid: true });
     return null;
@@ -2242,7 +2260,7 @@ function paintUpdate() {
     case 'latest': show(t('upd.latest'), t('upd.again')); break;
     case 'newer': show(t('upd.available', { v }), t('upd.to', { v })); break;
     case 'npx': show(t('upd.npx', { v }), t('upd.again')); break;
-    case 'updating': show(t('upd.updating', { v }), ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = s; log.append(d); } break;
+    case 'updating': show(t('upd.updating', { v }), ''); for (const s of update.steps) { const d = document.createElement('div'); d.textContent = stepText(s); log.append(d); } break;
     case 'restarting': show(t('upd.waiting'), ''); break;
     case 'done': show(t('upd.done', { v }), t('upd.reload')); break;
     case 'failed': show(t('upd.failed', { why: update.why }), t('upd.again')); break;
@@ -2268,7 +2286,7 @@ async function startUpdate() {
   catch (e) { update.phase = 'failed'; update.why = e.message; paintUpdate(); return; }
   const es = new EventSource('/api/update/live?token=' + encodeURIComponent(token));
   es.addEventListener('step', e => { try { update.steps.push(JSON.parse(e.data)); } catch (_) {} paintUpdate(); });
-  es.addEventListener('fail', e => { es.close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} update.phase = 'failed'; update.why = d.error || 'update failed'; serverState = 'up'; paintStatus(); paintUpdate(); });
+  es.addEventListener('fail', e => { es.close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} update.phase = 'failed'; update.why = d.key ? t('upd.err.' + d.key) : d.error || 'update failed'; serverState = 'up'; paintStatus(); paintUpdate(); });
   es.addEventListener('done', () => { es.close(); update.phase = 'restarting'; paintUpdate(); awaitRestart(); });
   es.onerror = () => { if (update.phase === 'updating') { es.close(); update.phase = 'failed'; update.why = t('set.cacheFail'); serverState = 'up'; paintStatus(); paintUpdate(); } };
 }

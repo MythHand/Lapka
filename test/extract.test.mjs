@@ -78,7 +78,7 @@ describe('from an address to streams', { skip: !ffmpeg && 'ffmpeg not installed'
     assert.deepEqual(ep.dubs.map(d => [d.name, d.sources.length, d.sources[0].streams[0]?.kind, d.sources[0].health.ok]),
       [['AniLibria', 1, 'mp4', true], ['AniDub', 1, 'mp4', true]]);
     assert.equal(ep.dubs[0].sources[0].extractor, 'generic');
-    assert.ok(steps.some(s => s.startsWith('Открыла 2 плеера')), steps.join(' | '));
+    assert.ok(steps.some(s => s.key === 'opened' && s.ok === 2 && s.asked === 2), JSON.stringify(steps));
   });
 
   test('two players, one studio in both: one dub, two live sources', async () => {
@@ -113,14 +113,14 @@ describe('from an address to streams', { skip: !ffmpeg && 'ffmpeg not installed'
     assert.equal(ghost.sources[0].health.ok, false);
     assert.match(ghost.sources[0].health.error, /404/);
     assert.equal(ep.dubs.find(d => d.key === 'anilibria').sources[0].health.ok, true);
-    assert.ok(steps.some(s => s.startsWith('Открыла 1 из 2')), steps.join(' | '));
+    assert.ok(steps.some(s => s.key === 'opened' && s.ok === 1 && s.asked === 2), JSON.stringify(steps));
   });
 });
 
 describe('closed doors', () => {
   test('a player behind a door known to be closed is refused without a request, with the reason', () => {
-    assert.match(closedDoor('https://www.youtube.com/embed/abc?autoplay=1'), /закрытая дверь/);
-    assert.match(closedDoor('https://youtu.be/abc'), /закрытая дверь/);
+    assert.equal(closedDoor('https://www.youtube.com/embed/abc?autoplay=1'), 'closed door');
+    assert.equal(closedDoor('https://youtu.be/abc'), 'closed door');
     assert.equal(closedDoor('https://player.example/serial/1/abc/720p'), null);
     assert.equal(closedDoor('not a url'), null);
   });
