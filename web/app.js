@@ -2884,16 +2884,21 @@ function saveMarkClick(it, btn) {
 }
 /* The save of one row: which dub, in which quality. Built as the dub
    menu is: a row per dub, the qualities it can be saved in as tags on
-   the right, the dub playing first (first is the whole mark: the player
-   shows it already), the rest in their order. A tag saves the dub in
-   that quality; the row saves it in the quality the settings prefer.
-   What each dub offers is asked of the server once per episode, levels
-   of adaptive streams included; the dub playing shows what this page
-   already knows at once, a dub whose sources are not open yet shows a
-   waiting tag, and the window is drawn again when the answer comes.
-   No "auto": a file is saved in one quality, so an adaptive stream is
-   offered as its levels, and one of unknown height by what it is. */
+   the right, four to a line, the dub playing first (first is the whole
+   mark: the player shows it already), the rest in their order. Only a
+   tag chooses: it names the dub and the quality both, and a row on its
+   own would leave the quality unsaid. What each dub offers is asked of
+   the server once per episode, levels of adaptive streams included; the
+   dub playing shows what this page already knows at once, a dub whose
+   sources are not open yet shows a waiting tag, and the window is drawn
+   again when the answer comes. No "auto": a file is saved in one
+   quality, so an adaptive stream is offered as its levels, and one of
+   unknown height by what it is.
+   The window opens from a row's mark and closes on a click anywhere
+   else, on Esc, or on a choice; the click that closes it does nothing
+   else, as with the queue's popover. */
 let saveInfo = null;   // { key, dubs }: what the server says the dubs of the row being saved can be saved in
+let saveMenuFor = null;   // the row the window is open for
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
   /* one dub, one stream of a known quality: nothing to choose */
@@ -2902,15 +2907,16 @@ async function offerSave(it, btn) {
   if (!saveInfo || saveInfo.key !== key) {
     saveInfo = { key, dubs: null };
     const ask = q => api(`/api/dubs?series=${it.seriesId}&episode=${it.number}${q}`)
-      .then(d => { if (saveInfo && saveInfo.key === key) { saveInfo.dubs = d.dubs; if (!saveMenu.hidden && saveMenu.dataset.key === key) buildSaveMenu(it); } })
+      .then(d => { if (saveInfo && saveInfo.key === key) { saveInfo.dubs = d.dubs; if (saveMenuFor === it && !saveMenu.hidden) buildSaveMenu(it); } })
       .catch(() => {});
     ask(''); ask('&open=1');
   }
-  saveMenu.dataset.key = key;
+  saveMenuFor = it;
   saveMenu.anchor = btn.getBoundingClientRect();
   saveMenu.hidden = false;
   buildSaveMenu(it);
 }
+function closeSaveMenu() { saveMenu.hidden = true; saveMenuFor = null; }
 /* the qualities this page knows of the dub playing, before the server has said */
 const tagsFromStreams = streams => {
   const out = new Map();
@@ -2920,16 +2926,7 @@ const tagsFromStreams = streams => {
   }
   return [...out.values()];
 };
-/* the tag the settings would pick: the best, the one played, or the nearest to a named quality */
-function preferredTag(it, qs) {
-  const want = saveQualityWanted();
-  const target = want === 'max' ? 0
-               : want === 'played' ? qualityNum((it.stream && it.stream.quality) || (state.quality !== 'auto' ? state.quality : ''))
-               : qualityNum(want);
-  const named = qs.filter(q => qualityNum(q.quality));
-  if (!target || !named.length) return qs[0];
-  return [...named].sort((a, b) => Math.abs(qualityNum(a.quality) - target) - Math.abs(qualityNum(b.quality) - target) || qualityNum(b.quality) - qualityNum(a.quality))[0];
-}
+const TAGS_PER_LINE = 4;
 function buildSaveMenu(it) {
   saveMenu.replaceChildren();
   menuTitle(saveMenu, t('queue.saveAs'));
@@ -2939,28 +2936,29 @@ function buildSaveMenu(it) {
   const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
   for (const d of rows) {
     const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
-    const b = document.createElement('button');
-    b.className = 'menu__item menu__item--dub';
-    b.innerHTML = '<span class="menu__body"><span class="menu__main"></span></span><span class="menu__tags"></span>';
-    b.querySelector('.menu__main').textContent = d.name;
-    const tags = b.querySelector('.menu__tags');
-    const pick = q => { saveMenu.hidden = true; enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); };
-    for (const q of qs) {
+    const row = document.createElement('div');
+    row.className = 'menu__item menu__item--dub savemenu__row' + (qs.length ? '' : ' is-quiet');
+    row.innerHTML = '<span class="menu__body"><span class="menu__main"></span></span><span class="menu__tags"></span>';
+    row.querySelector('.menu__main').textContent = d.name;
+    const tags = row.querySelector('.menu__tags');
+    /* four tags to a line, the lines flush right */
+    let line = null;
+    qs.forEach((q, i) => {
+      if (i % TAGS_PER_LINE === 0) { line = document.createElement('span'); line.className = 'menu__tagline'; tags.append(line); }
       const tg = document.createElement('span');
       tg.className = 'qtag';
       tg.textContent = q.quality || q.kind.toUpperCase();
       tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
-      tg.onclick = ev => { ev.stopPropagation(); pick(q); };
-      tags.append(tg);
-    }
+      tg.onclick = ev => { ev.stopPropagation(); closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); };
+      line.append(tg);
+    });
     if (!qs.length) {
       const w = document.createElement('span');
       w.className = 'qtag qtag--wait';
       w.textContent = d.unopened || !known ? '…' : t('audio.dead');
       tags.append(w);
-      b.disabled = true;
-    } else b.onclick = ev => { ev.stopPropagation(); pick(preferredTag(it, qs)); };
-    saveMenu.append(b);
+    }
+    saveMenu.append(row);
   }
   /* centred under its button, kept inside the window only; the queue column is no frame for it */
   const r = saveMenu.anchor;
@@ -2970,7 +2968,15 @@ function buildSaveMenu(it) {
     saveMenu.style.left = Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8)) + 'px';
   }
 }
-document.addEventListener('click', e => { if (!e.target.closest('#saveMenu') && !e.target.closest('.item__save')) saveMenu.hidden = true; });
+saveMenu.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', e => {
+  if (saveMenu.hidden || e.target.closest('#saveMenu')) return;
+  /* the click closes the window and does nothing else; the mark it opened from toggles it itself */
+  const mark = e.target.closest('.item__save');
+  if (!mark) { e.stopPropagation(); e.preventDefault(); }
+  closeSaveMenu();
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !saveMenu.hidden) closeSaveMenu(); });
 
 /* the stream of a named quality, for taking a save up again the way it was started */
 const streamOfQuality = (it, quality) => (quality && (saveQualities(it).find(o => o.label === quality) || {}).stream) || null;
