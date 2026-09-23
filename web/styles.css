@@ -1707,9 +1707,8 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    One frame whatever arrives: the width is set, it stands centred under
    its button and may hang out of the queue column */
 #saveMenu{ width:380px; min-width:0; max-width:calc(100vw - 16px); max-height:min(72vh, calc(100vh - 16px)); overflow:auto; }
-/* a row is a label and its tags, not a button: only a tag chooses, so the row neither lights up nor answers a click */
+/* a row lights up under the pointer as any menu row does; only a tag answers a click */
 #saveMenu .savemenu__row{ gap:14px; align-items:flex-start; cursor:default; }
-#saveMenu .savemenu__row:hover{ background:none; color:var(--tx-2); }
 #saveMenu .savemenu__row .menu__main{ line-height:22px; }
 #saveMenu .savemenu__row.is-quiet .menu__main{ color:var(--tx-3); }
 /* the tags in lines of four, each line flush right, the lines stacked */
