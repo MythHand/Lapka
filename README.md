@@ -106,7 +106,7 @@ folder, or `Lapka` in your home folder when Lapka runs through npx. The choice i
 every way of starting. The `LAPKA_HOME` environment variable forces a folder,
 `PORT` changes the port.
 
-Or with no folder at all, when Node.js is there: `npx -y @mythhand/lapka`
+Or with no folder at all, when Node.js is there: `npx -y lapka`
 fetches Lapka into the npm cache, starts it and opens it in the browser; the
 next such start takes the new version by itself.
 

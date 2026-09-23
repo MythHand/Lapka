@@ -1,0 +1,26 @@
+{
+  "name": "lapka",
+  "version": "1.0.0",
+  "description": "Lapka, the local anime player, by its short name: runs the newest @mythhand/lapka",
+  "keywords": ["lapka", "anime", "player", "local", "hls"],
+  "homepage": "https://github.com/MythHand/Lapka#readme",
+  "bugs": {
+    "url": "https://github.com/MythHand/Lapka/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MythHand/Lapka.git",
+    "directory": "npm/lapka"
+  },
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "bin": {
+    "lapka": "lapka.mjs"
+  },
+  "files": [
+    "lapka.mjs"
+  ],
+  "engines": {
+    "node": ">=22"
+  }
+}
