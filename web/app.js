@@ -3277,12 +3277,15 @@ function popRow(grid, k, v, small) {
   grid.append(val);
 }
 let popScope = null, popAnchor = null, popPinned = false, pop = null;
+/* under its button: a part's popover centred on the part's button, the
+   queue's flush with the left of its own; both kept inside the window */
 function placeSavePop() {
   if (savePop.parentNode !== document.body) document.body.append(savePop);
   const anchor = popAnchor || btnSaveAll;
-  const r = anchor.getBoundingClientRect();
-  savePop.style.top = Math.min(r.bottom + 8, window.innerHeight - savePop.offsetHeight - 12) + 'px';
-  savePop.style.left = Math.max(12, Math.min(r.left, window.innerWidth - savePop.offsetWidth - 12)) + 'px';
+  const r = anchor.getBoundingClientRect(), w = savePop.offsetWidth, h = savePop.offsetHeight;
+  const left = popAnchor ? r.left + r.width / 2 - w / 2 : r.left;
+  savePop.style.top = Math.min(r.bottom + 8, window.innerHeight - h - 12) + 'px';
+  savePop.style.left = Math.max(12, Math.min(left, window.innerWidth - w - 12)) + 'px';
 }
 const popItems = () => popScope === null ? state.list : state.list.filter(it => it.group === popScope);
 
