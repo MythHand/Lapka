@@ -11,6 +11,7 @@ test/site/The Legend of Vox Machina*/
 
 # what Dima drops in by hand for me to place: never part of the repo
 user_input/
+user_output/
 
 # the project's own notes: kept in their own repository in .internal/, never public
 .internal/
