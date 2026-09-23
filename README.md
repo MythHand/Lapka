@@ -134,7 +134,7 @@ it is the tooling for working on Lapka's code, not needed for watching.
   of their pages.
 - The map of the core and the contracts of its blocks: [core/README.md](core/README.md).
 
-![npm test: 100 tests pass](docs/media/tests.png)
+![npm test: 95 tests pass](docs/media/tests.png)
 
 ## Boundaries
 

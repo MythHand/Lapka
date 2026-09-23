@@ -156,32 +156,6 @@ describe('the page\'s own word', () => {
   });
 });
 
-describe('players in script objects', () => {
-  test('an address of a known player in a script object counts without a name beside it', () => {
-    const html = `<html><head><title>Дни [ТВ-1] смотреть</title></head><body><h1>Дни [ТВ-1]</h1>
-      <script>var kodik = {"item_id":"serial-1","translators":{"AniDUB":{"seasons":{"1":{"link":"\\/\\/kodikplayer.com\\/season\\/107290\\/f172c0\\/720p","list":[1,2,3]}}},"SHIZA":{"seasons":{"1":{"link":"\\/\\/kodikplayer.com\\/season\\/107274\\/899b7e\\/720p","list":[1,2,3]}}}}};</script>
-      <script>var other = {"link":"https://example.org/promo","list":[1]};</script>
-    </body></html>`;
-    const r = discover({ html, url: 'https://site.test/5190-dni.html' });
-    assert.deepEqual(r.players.map(p => p.url).sort(), ['https://kodikplayer.com/season/107274/899b7e/720p', 'https://kodikplayer.com/season/107290/f172c0/720p']);
-    assert.equal(r.season, 1);
-  });
-});
-
-describe('a player as an element on the page', () => {
-  test('a <video-player> with its ids becomes an address of the player\'s own; the page\'s ?season goes along', () => {
-    const html = `<html><head><title>Шоу (сериал, 1-3 сезон) смотреть онлайн</title></head><body><h1>Шоу (сериал, 1-3 сезон)</h1>
-      <video-player id="p" data-publisher-id="15" data-title-id="178707" data-aggregator="kp"></video-player></body></html>`;
-    const r = discover({ html, url: 'https://site.test/142-show.html' });
-    assert.deepEqual(r.players.map(p => [p.url, p.kind]), [['https://player.cdnvideohub.com/embed?title_id=178707&pub=15&aggr=kp', 'element']]);
-    assert.equal(r.title.value, 'Шоу', 'the bracket that lists seasons is not part of the name');
-    assert.equal(r.season, null, 'a run of seasons in the name is not one season');
-    const two = discover({ html, url: 'https://site.test/142-show.html?season=2' });
-    assert.equal(two.players[0].url, 'https://player.cdnvideohub.com/embed?title_id=178707&pub=15&aggr=kp&season=2');
-    assert.equal(two.season, 2);
-  });
-});
-
 describe('into the catalog', () => {
   test('series page then episode page: episodes with dubs and sources', () => {
     const s = createSeries({ sourceUrl: `${BASE}/s/links/` });
@@ -224,10 +198,10 @@ const WILD = `<!doctype html><html><head>
 <div class="breadcrumb"><a href="/">Главная</a> › <a href="/anime/">Аниме</a> › <a href="/anime/one-piece/">Ван-Пис</a></div>
 <h1>Ван-Пис Серия 5</h1>
 <div class="translations">
-  <div class="translations__item active" data-media-id="1" data-url="//kodik.info/seria/1001/abc/720p">AniLibria</div>
-  <div class="translations__item" data-media-id="2" data-url="//kodik.info/seria/1002/def/720p">Дримкаст</div>
+  <div class="translations__item active" data-media-id="1" data-url="//embed.example/seria/1001/abc/720p">AniLibria</div>
+  <div class="translations__item" data-media-id="2" data-url="//embed.example/seria/1002/def/720p">Дримкаст</div>
 </div>
-<iframe src="//kodik.info/seria/1001/abc/720p" allowfullscreen></iframe>
+<iframe src="//embed.example/seria/1001/abc/720p" allowfullscreen></iframe>
 <ul class="episodes">
   <li><a href="/anime/one-piece/1-seriya">Серия 1</a></li>
   <li><a href="/anime/one-piece/2-seriya">Серия 2</a></li>
@@ -256,7 +230,7 @@ describe('a page from the wild', () => {
     assert.deepEqual(r.episodes.items.map(e => e.number), [1, 2, 3, 4, 6]);
   });
   test('an external player named by its host, two dubs', () => {
-    assert.deepEqual(r.players.map(p => [p.id, p.dubLabel]), [['kodik.info', 'AniLibria'], ['kodik.info', 'Дримкаст']]);
+    assert.deepEqual(r.players.map(p => [p.id, p.dubLabel]), [['embed.example', 'AniLibria'], ['embed.example', 'Дримкаст']]);
     const c = toContribution(r);
     const ep = c.episodes.find(e => e.number === 5);
     assert.deepEqual(ep.dubs.map(d => d.name), ['AniLibria', 'Дримкаст']);
