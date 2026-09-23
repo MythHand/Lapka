@@ -1,0 +1,21 @@
+# What stays out of the npm package. The "files" list in package.json is the
+# working rule: it names what goes in, and its "!" lines what inside those
+# folders stays out (npm reads neither .gitignore nor this file for what a
+# named folder holds). This file mirrors .gitignore all the same, so the
+# exclusions are in one plain place and hold if that behaviour ever changes.
+.DS_Store
+*.log
+*.mkv
+*.mp4
+# the page for recording the seal, a tool, not the product
+web/seal.html
+# only the fonts live in web/assets: brand marks and screenshots are not part of the code
+web/assets/*.png
+web/assets/*.svg
+# never inside the package whatever folder they turn up in
+.dev/
+.internal/
+CLAUDE.md
+user_input/
+user_output/
+test/snapshots

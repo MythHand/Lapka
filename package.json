@@ -8,7 +8,6 @@
   },
   "files": [
     "core",
-    "web",
     "profiles",
     "scripts",
     "start.command",
@@ -25,7 +24,11 @@
     "TRADEMARKS.ru.md",
     "README.ru.md",
     "docs/INSTALL.md",
-    "docs/INSTALL.ru.md"
+    "docs/INSTALL.ru.md",
+    "web/**",
+    "!web/seal.html",
+    "!web/assets/*.png",
+    "!web/assets/*.svg"
   ],
   "homepage": "https://github.com/MythHand/Lapka#readme",
   "repository": {
