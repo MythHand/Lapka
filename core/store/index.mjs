@@ -23,17 +23,23 @@ import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { installKind } from '../update.mjs';
 
 export const GB = 1024 ** 3;
 export const HOT_MS = 10 * 60 * 1000;
 const LIMIT_MIN_GB = 1;
 
-/* Where the Lapka folder is. Choosing it is the user's, at first
-   start, and that comes with the UI; until then it is inside the
-   project, under .dev/, so nothing lands anywhere else on the
-   machine. LAPKA_HOME overrides. */
-export function defaultHome() {
-  return process.env.LAPKA_HOME || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.dev', 'home');
+/* Where the Lapka folder is until the user chooses one in the settings.
+   A clone or an unpacked archive keeps it inside its own folder, under
+   .dev/, so nothing lands anywhere else on the machine. A Lapka run from
+   the npm cache (npx, a global install) has no folder of its own to keep
+   things in: the cache is replaced by the next version, so the folder is
+   Lapka in the user's home folder, named as a Lapka folder is.
+   LAPKA_HOME overrides. */
+export function defaultHome({ kind = installKind(), homeDir = os.homedir() } = {}) {
+  if (process.env.LAPKA_HOME) return process.env.LAPKA_HOME;
+  if (kind === 'npx') return path.join(homeDir, 'Lapka');
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.dev', 'home');
 }
 
 export async function openStore({ home = defaultHome(), limitGb = 24 } = {}) {

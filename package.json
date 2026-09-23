@@ -1,9 +1,35 @@
 {
   "name": "lapka",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Lapka: a local anime player. Paste a link, it finds the episodes and the dubs, plays them and saves them to your folder.",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "bin": {
+    "lapka": "core/main.mjs"
+  },
+  "files": [
+    "core",
+    "profiles",
+    "scripts",
+    "start.command",
+    "start.sh",
+    "start.bat",
+    "stop.command",
+    "stop.sh",
+    "stop.bat",
+    "update.command",
+    "update.sh",
+    "update.bat",
+    "LICENSES",
+    "TRADEMARKS.md",
+    "TRADEMARKS.ru.md",
+    "README.ru.md",
+    "docs/INSTALL.md",
+    "docs/INSTALL.ru.md",
+    "web/**",
+    "!web/seal.html",
+    "!web/assets/*.png",
+    "!web/assets/*.svg"
+  ],
   "homepage": "https://github.com/MythHand/Lapka#readme",
   "repository": {
     "type": "git",
@@ -15,12 +41,13 @@
   "engines": {
     "node": ">=22"
   },
+  "license": "AGPL-3.0-only",
   "scripts": {
     "start": "node core/main.mjs",
     "dev": "node scripts/dev.mjs",
     "site": "node test/site/serve.mjs",
     "check": "node scripts/check.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node scripts/test.mjs"
   },
   "dependencies": {
     "hls.js": "^1.7.3",

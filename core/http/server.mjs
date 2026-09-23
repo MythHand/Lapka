@@ -22,7 +22,7 @@ import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
-import { VERSION, checkUpdate, runUpdate, restartAfterExit, installKind } from '../update.mjs';
+import { VERSION, checkUpdate, checkNpm, runUpdate, restartAfterExit, installKind } from '../update.mjs';
 export { VERSION };
 
 const VENDOR = { 'hls.min.js': createRequire(import.meta.url).resolve('hls.js/dist/hls.min.js') };
@@ -126,10 +126,11 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
          is a stream of steps like the live look; it starts with a one-time
          token from a POST, so no page but Lapka's own can set it off. */
       if (mutating && p === '/api/update/check') {
-        try { return json(res, 200, { ...(await checkUpdate()), kind: installKind() }); }
+        try { const kind = installKind(); return json(res, 200, { ...(kind === 'npx' ? await checkNpm() : await checkUpdate()), kind }); }
         catch (e) { return json(res, 502, { error: e.message }); }
       }
       if (ctx.quit && mutating && p === '/api/update/start') {
+        if (installKind() === 'npx') return json(res, 400, { error: 'a Lapka run through npx is updated by the next npx' });
         const tag = url.searchParams.get('tag') || '';
         ctx.updateToken = { token: Math.random().toString(36).slice(2) + Date.now().toString(36), tag, until: Date.now() + 60 * 1000 };
         return json(res, 200, { token: ctx.updateToken.token });
@@ -142,17 +143,17 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const send = (event, data) => { if (!res.writableEnded) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); };
         try {
           await runUpdate({ tag: t.tag, onStep: s => send('step', s) });
-          send('step', 'Перезапускаю Lapka');
+          send('step', { key: 'updRestart' });
           send('done', { ok: true });
           res.end();
           restartAfterExit({ port: ctx.port });
           ctx.quit();
-        } catch (e) { send('fail', { error: e.message }); res.end(); }
+        } catch (e) { send('fail', { error: e.message, key: e.key || null }); res.end(); }
         return;
       }
       if (ctx.switchHome && mutating && p === '/api/home/pick') {
         try {
-          const picked = await pickFolder({ prompt: 'Папка Lapka', start: store.home });
+          const picked = await pickFolder({ prompt: 'Lapka', start: store.home });
           if (!picked) return json(res, 200, { cancelled: true });
           const chosen = await homeInside(picked);   // the page shows the folder that will be used
           /* not switched yet: the page asks whether to take the files along */

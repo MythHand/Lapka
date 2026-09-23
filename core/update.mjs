@@ -22,6 +22,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { systemConfigDir } from './store/config.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = createRequire(import.meta.url)('../package.json');
@@ -62,31 +63,45 @@ export async function checkUpdate({ fetch = globalThis.fetch, repo = REPO, curre
   return { current, latest, tag, url, newer: !!latest && compareVersions(latest, current) > 0 };
 }
 
-export function installKind(root = ROOT) { return fs.existsSync(path.join(root, '.git')) ? 'git' : 'zip'; }
+/* How this Lapka got here: a clone (git), an archive (zip), or the npm
+   cache that npx runs from (npx). The npx cache is not a place to update:
+   the next `npx` takes the newest by itself. */
+export function installKind(root = ROOT) {
+  if (fs.existsSync(path.join(root, '.git'))) return 'git';
+  if (/[\\/]_npx[\\/]|[\\/]node_modules[\\/]/.test(root)) return 'npx';
+  return 'zip';
+}
+/* the newest version on npm, for a Lapka that runs from there */
+export async function checkNpm({ fetch = globalThis.fetch, name = pkg.name, current = VERSION } = {}) {
+  const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name).replace('%40', '@')}/latest`, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
+  if (!res.ok) throw new Error(`npm answered ${res.status}`);
+  const latest = String((await res.json()).version || '') || null;
+  return { current, latest, tag: latest ? 'v' + latest : null, url: `https://www.npmjs.com/package/${name}`, newer: !!latest && compareVersions(latest, current) > 0 };
+}
 
 /* Brings the folder to the version tagged, telling each step; leaves the
    process running for the caller to restart. */
 export async function runUpdate({ tag, onStep = () => {}, fetch = globalThis.fetch, root = ROOT, repo = REPO } = {}) {
   const kind = installKind(root);
   if (kind === 'git') {
-    onStep('Проверяю папку');
+    onStep({ key: 'updFolder' });
     const dirty = (await run('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: root })).trim();
-    if (dirty) throw new Error('в папке есть изменённые файлы, git не станет их перезаписывать; обновите руками');
-    onStep('Забираю новую версию');
+    if (dirty) throw Object.assign(new Error('the folder has changed files, git will not overwrite them; update by hand'), { key: 'dirty' });
+    onStep({ key: 'updPull' });
     await run('git', ['pull', '--ff-only'], { cwd: root });
   } else {
-    if (!tag) throw new Error('нет версии, которую скачивать');
-    onStep(`Скачиваю архив ${tag}`);
+    if (!tag) throw Object.assign(new Error('no version to download'), { key: 'noTag' });
+    onStep({ key: 'updZip', tag });
     const res = await fetch(`https://github.com/${repo}/archive/refs/tags/${tag}.zip`, { headers: { 'user-agent': 'Lapka' }, signal: AbortSignal.timeout(5 * 60 * 1000), redirect: 'follow' });
     if (!res.ok) throw new Error(`GitHub answered ${res.status} for the archive`);
     const work = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-update-'));
     const zip = path.join(work, 'lapka.zip');
     await fsp.writeFile(zip, Buffer.from(await res.arrayBuffer()));
-    onStep('Распаковываю');
+    onStep({ key: 'updUnpack' });
     await run('tar', ['-xf', zip, '-C', work]);   // bsdtar reads zip on macOS, Linux and Windows 10+
     const top = (await fsp.readdir(work, { withFileTypes: true })).find(d => d.isDirectory());
-    if (!top) throw new Error('в архиве нет папки');
-    onStep('Заменяю файлы');
+    if (!top) throw Object.assign(new Error('the archive holds no folder'), { key: 'noFolder' });
+    onStep({ key: 'updReplace' });
     const from = path.join(work, top.name);
     for (const d of await fsp.readdir(from, { withFileTypes: true })) {
       if (KEEP.has(d.name)) continue;
@@ -95,22 +110,26 @@ export async function runUpdate({ tag, onStep = () => {}, fetch = globalThis.fet
     }
     await fsp.rm(work, { recursive: true, force: true });
   }
-  onStep('Устанавливаю зависимости');
+  onStep({ key: 'updDeps' });
   await run('npm', ['install', '--no-audit', '--no-fund'], { cwd: root });
   return { kind };
 }
 
 /* A detached shell that waits for this process to end and starts Lapka
    again the way the launcher does, with the same port; then the caller
-   ends this process. */
-export function restartAfterExit({ port, root = ROOT } = {}) {
+   ends this process. What the new Lapka prints goes to the log where the
+   system keeps Lapka's settings, as the launcher's does; the program
+   folder holds the program only. */
+export function restartAfterExit({ port, root = ROOT, own = systemConfigDir() } = {}) {
   const node = process.execPath, main = path.join(root, 'core', 'main.mjs');
   const env = { ...process.env, PORT: String(port) };
   if (process.platform === 'win32') {
     const child = spawn('cmd.exe', ['/d', '/c', `timeout /t 2 /nobreak >nul & start "" /b "${node}" "${main}"`], { detached: true, stdio: 'ignore', cwd: root, env, windowsHide: true });
     child.unref();
   } else {
-    const script = `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done; mkdir -p .dev; nohup "${node}" "${main}" >> .dev/lapka.log 2>&1 & echo $! > .dev/lapka.pid`;
+    fs.mkdirSync(own, { recursive: true });
+    const log = path.join(own, 'lapka.log');
+    const script = `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done; nohup "${node}" "${main}" >> "${log}" 2>&1 &`;
     const child = spawn('/bin/sh', ['-c', script], { detached: true, stdio: 'ignore', cwd: root, env });
     child.unref();
   }

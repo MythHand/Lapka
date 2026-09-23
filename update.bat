@@ -28,7 +28,7 @@ if %was_running%==1 (
   echo Lapka was running: starting the new one...
   curl -fs -X POST -H "x-lapka: 1" %URL%/api/quit >nul 2>nul
   timeout /t 2 /nobreak >nul
-  call start.bat
+  start "" start.bat
 ) else (
   echo Done. Start Lapka as usual: start.bat or npm start.
   pause

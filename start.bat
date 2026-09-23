@@ -1,12 +1,14 @@
 @echo off
 rem Lapka on Windows: double-click. Checks Node, installs what is missing
-rem the first time, starts Lapka in the background and opens it in the
-rem browser. This window can be closed afterwards; stop.bat stops Lapka.
+rem the first time, starts Lapka in a window of its own, minimised, and
+rem opens it in the browser. This window can be closed afterwards; the
+rem minimised Lapka window stays in the taskbar: closing it, or stop.bat,
+rem or the Quit button in the settings stops Lapka. Plainly: Lapka's own
+rem window, no helper process in between.
 setlocal
 cd /d "%~dp0"
 if "%PORT%"=="" set PORT=8800
 set URL=http://127.0.0.1:%PORT%
-if not exist .dev mkdir .dev
 
 curl -fs %URL%/api/ping >nul 2>nul && (echo Lapka is already running at %URL% & start "" %URL% & exit /b 0)
 
@@ -22,18 +24,19 @@ if not exist node_modules (
 where ffmpeg >nul 2>nul || echo ffmpeg is not installed: watching works, saving episodes to a file will not. See docs\INSTALL.md.
 
 echo Starting Lapka at %URL% ...
-powershell -NoProfile -Command "$p = Start-Process -FilePath 'node' -ArgumentList 'core\main.mjs' -WindowStyle Hidden -PassThru -RedirectStandardOutput '.dev\lapka.log' -RedirectStandardError '.dev\lapka.err.log'; $p.Id | Out-File -Encoding ascii '.dev\lapka.pid'"
+set LAPKA_NO_OPEN=1
+start "Lapka" /min node core\main.mjs
 
 set /a tries=0
 :wait
 curl -fs %URL%/api/ping >nul 2>nul && goto up
 set /a tries+=1
-if %tries% GEQ 60 (type .dev\lapka.log & type .dev\lapka.err.log & echo Lapka did not answer at %URL% in time; see above. If the port is taken, set PORT=8801 and run again. & pause & exit /b 1)
+if %tries% GEQ 60 (echo Lapka did not answer at %URL% in time; see the Lapka window. If the port is taken, set PORT=8801 and run again. & pause & exit /b 1)
 timeout /t 1 /nobreak >nul
 goto wait
 
 :up
 start "" %URL%
-echo Lapka is running in the background at %URL%. This window can be closed.
-echo To stop it: stop.bat, or the Quit button in the settings.
+echo Lapka is running at %URL% in a minimised window of its own. This window can be closed.
+echo To stop it: close the Lapka window, or stop.bat, or the Quit button in the settings.
 timeout /t 5

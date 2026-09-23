@@ -1,4 +1,6 @@
-/* Lapka, started by hand or by `npm start`. */
+#!/usr/bin/env node
+/* Lapka, started by hand, by `npm start`, by a launcher, or as a command
+   through npx. */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { bootLapka } from './lapka.mjs';
@@ -9,7 +11,9 @@ import { openLibrary } from './store/library.mjs';
 import { createDelivery } from './deliver/index.mjs';
 import { createSaver } from './deliver/save.mjs';
 import { createSession } from './session/index.mjs';
+import fs from 'node:fs';
 import { readConfig, writeConfig, checkHome, homeInside } from './store/config.mjs';
+import { openUrl } from './store/folder.mjs';
 
 export const PORT = Number(process.env.PORT) || 8800;
 export const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -49,7 +53,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
      and is never written into the config; the config is for the
      folder the user chose in the settings */
   const explicit = !!home;
-  home = home || (await readConfig()).home || undefined;
+  home = home || (process.env.LAPKA_HOME ? undefined : (await readConfig()).home) || undefined;
   const session = createSession();
   const ctx = { session };
   const delivery = createDelivery({ session, cache: () => ctx.store.cache });
@@ -96,7 +100,14 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   return { ctx, get lapka() { return ctx.lapka; }, get store() { return ctx.store; }, get state() { return ctx.state; }, get library() { return ctx.library; }, get delivery() { return ctx.delivery; }, get saver() { return ctx.saver; }, ...server, close };
 }
 
-if (!process.env.NODE_TEST_CONTEXT && process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+/* Run as a program (node core/main.mjs, npm start, a launcher, npx): the
+   server is started and said; when the terminal is a person's own and
+   nothing asked otherwise, the browser is opened on it, as the launchers
+   do. LAPKA_NO_OPEN keeps the browser shut (the launchers open it
+   themselves; tests never get here). A bin symlink resolves to this file. */
+const asProgram = !process.env.NODE_TEST_CONTEXT && process.argv[1] && (() => { try { return fileURLToPath(import.meta.url) === fs.realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
+if (asProgram) {
   const s = await start();
-  console.log(`Lapka: ${s.base}\nПапка: ${s.ctx.home}`);
+  console.log(`Lapka: ${s.base}\nFolder: ${s.ctx.home}`);
+  if (!process.env.LAPKA_NO_OPEN && process.stdout.isTTY) openUrl(s.base).catch(() => {});
 }

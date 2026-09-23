@@ -5,9 +5,14 @@
 # the "Quit Lapka" button in the settings, or with a restart of the machine.
 PORT="${PORT:-8800}"
 URL="http://127.0.0.1:$PORT"
-mkdir -p .dev
-PIDFILE=".dev/lapka.pid"
-LOG=".dev/lapka.log"
+# What Lapka prints goes to a log where the system keeps Lapka's settings;
+# the program folder holds the program only.
+case "$(uname)" in
+  Darwin) OWN="$HOME/Library/Application Support/Lapka" ;;
+  *) OWN="${XDG_CONFIG_HOME:-$HOME/.config}/lapka" ;;
+esac
+mkdir -p "$OWN"
+LOG="$OWN/lapka.log"
 
 say() { printf '\n%s\n' "$*"; }
 halt() { say "$*"; printf '\nPress Enter to close.'; read -r _; exit 1; }
@@ -31,8 +36,8 @@ fi
 command -v ffmpeg >/dev/null 2>&1 || say "ffmpeg is not installed: watching works, saving episodes to a file will not. See docs/INSTALL.md."
 
 say "Starting Lapka at $URL …"
-PORT="$PORT" nohup node core/main.mjs >"$LOG" 2>&1 &
-echo $! >"$PIDFILE"
+PORT="$PORT" LAPKA_NO_OPEN=1 nohup node core/main.mjs >"$LOG" 2>&1 &
+PID=$!
 disown 2>/dev/null
 
 for _ in $(seq 1 60); do
@@ -42,7 +47,7 @@ for _ in $(seq 1 60); do
     say "To stop it: stop.command (macOS), ./stop.sh (Linux), or the Quit button in the settings."
     exit 0
   fi
-  kill -0 "$(cat "$PIDFILE")" 2>/dev/null || { cat "$LOG"; halt "Lapka did not start; see above. If the port is taken, run: PORT=8801 ./start.sh"; }
+  kill -0 "$PID" 2>/dev/null || { cat "$LOG"; halt "Lapka did not start; see above. If the port is taken, run: PORT=8801 ./start.sh"; }
   sleep 0.5
 done
 cat "$LOG"; halt "Lapka did not answer at $URL in time; see above."
