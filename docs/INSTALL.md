@@ -60,14 +60,15 @@ With Node.js in place (step 1), Lapka starts with one command in the terminal,
 with no download and no project folder:
 
 ```bash
-npx -y @mythhand/lapka
+npx -y lapka
 ```
 
-npx fetches Lapka into its own cache, starts it and opens it in the browser. The
-next start with the same command takes the new version, when there is one. To
-stop: Ctrl+C in that terminal, or the "Quit Lapka" button in the settings. Saved
-episodes go to a `Lapka` folder in your home folder until you choose another one
-in the settings. Steps 2–4 are not needed then; go on to step 5.
+npx fetches Lapka (the package `@mythhand/lapka`, by its short name) into its
+own cache, starts it and opens it in the browser. The next start with the same
+command takes the new version, when there is one. To stop: Ctrl+C in that
+terminal, or the "Quit Lapka" button in the settings. Saved episodes go to a
+`Lapka` folder in your home folder until you choose another one in the settings.
+Steps 2–4 are not needed then; go on to step 5.
 
 ## Step 2. Download Lapka
 
