@@ -208,6 +208,20 @@ folder, replacing the files.
 Either way the settings and the chosen Lapka folder stay: they live outside
 the program's files.
 
+## The antivirus flags start.bat
+
+Kaspersky and its kind may mark `start.bat` as "PDM:Trojan.Win32.Generic".
+That is not a virus found but a behavioural match: a batch file that spawns a
+background process holding a network port looks, to an antivirus, like a trojan
+installer. Lapka's code is open and sits in this very folder; since 1.1.1 the
+launcher starts Lapka in an ordinary minimised window, with no PowerShell and no
+hidden process, which gives less reason for such a match.
+
+If the antivirus still objects: add the Lapka folder to its exclusions, or start
+without the launcher, with `npm start` in a terminal in the Lapka folder, or with
+no folder at all, through `npx -y @mythhand/lapka` (see "The shortest way"). In
+the last two the batch file plays no part.
+
 ## If something is off
 
 **`npm` or `node` not found.** Node.js is not installed, or the terminal was
