@@ -73,7 +73,16 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
     if (!explicit && !process.env.LAPKA_HOME) await writeConfig({ home: check.path });
     return check;
   };
-  const server = await startServer({ port, webDir, ctx });
+  /* A port already held is said, not thrown as a trace: by another Lapka
+     (which one, so the caller can hand over to it) or by some other
+     program (then another port is the way). */
+  let server;
+  try { server = await startServer({ port, webDir, ctx }); }
+  catch (e) {
+    await ctx.state.close().catch(() => {});
+    if (e.code !== 'EADDRINUSE') throw e;
+    throw Object.assign(new Error(`port ${port} is taken`), { code: 'EADDRINUSE', port, running: await lapkaAt(port) });
+  }
   ctx.port = server.port || port;   // the one really listened on, for starting again after an update
   /* saves cut short last time are taken up again, a moment after start, unless switched off */
   ctx.resumeSaves = () => (ctx.state.setting('autoResume') === 'off' ? Promise.resolve([]) : ctx.saver.resume(ctx.lapka));
@@ -100,6 +109,15 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   return { ctx, get lapka() { return ctx.lapka; }, get store() { return ctx.store; }, get state() { return ctx.state; }, get library() { return ctx.library; }, get delivery() { return ctx.delivery; }, get saver() { return ctx.saver; }, ...server, close };
 }
 
+/* The Lapka listening on a port, if it is one: its version and folder; null for anything else */
+export async function lapkaAt(port, host = '127.0.0.1') {
+  try {
+    const r = await fetch(`http://${host}:${port}/api/ping`, { signal: AbortSignal.timeout(1500) });
+    const j = r.ok ? await r.json() : null;
+    return j && j.ok && j.version ? { version: j.version, home: j.home || null, base: `http://${host}:${port}` } : null;
+  } catch { return null; }
+}
+
 /* Run as a program (node core/main.mjs, npm start, a launcher, npx): the
    server is started and said; when the terminal is a person's own and
    nothing asked otherwise, the browser is opened on it, as the launchers
@@ -107,7 +125,20 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
    themselves; tests never get here). A bin symlink resolves to this file. */
 const asProgram = !process.env.NODE_TEST_CONTEXT && process.argv[1] && (() => { try { return fileURLToPath(import.meta.url) === fs.realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (asProgram) {
-  const s = await start();
-  console.log(`Lapka: ${s.base}\nFolder: ${s.ctx.home}`);
-  if (!process.env.LAPKA_NO_OPEN && process.stdout.isTTY) openUrl(s.base).catch(() => {});
+  const mayOpen = !process.env.LAPKA_NO_OPEN && process.stdout.isTTY;
+  try {
+    const s = await start();
+    console.log(`Lapka: ${s.base}\nFolder: ${s.ctx.home}`);
+    if (mayOpen) openUrl(s.base).catch(() => {});
+  } catch (e) {
+    if (e.code !== 'EADDRINUSE') throw e;
+    /* another Lapka has the port: that one is the Lapka, this run hands over to it */
+    if (e.running) {
+      console.log(`Lapka is already running: ${e.running.base} (v${e.running.version})${e.running.home ? `\nFolder: ${e.running.home}` : ''}`);
+      if (mayOpen) await openUrl(e.running.base).catch(() => {});
+      process.exit(0);
+    }
+    console.error(`Port ${e.port} is taken by another program. Start Lapka on another one, for example: PORT=${e.port + 1}`);
+    process.exit(1);
+  }
 }

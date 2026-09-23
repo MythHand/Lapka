@@ -1,6 +1,6 @@
 {
   "name": "@mythhand/lapka",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Lapka: a local anime player. Paste a link, it finds the episodes and the dubs, plays them and saves them to your folder.",
   "bin": {
     "lapka": "core/main.mjs"

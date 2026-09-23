@@ -216,13 +216,15 @@ the program's files.
 **`npm` or `node` not found.** Node.js is not installed, or the terminal was
 opened before the installation. Close the terminal, open it again, `node -v`.
 
-**Port 8800 is taken.** Start on another one:
+**Port 8800 is taken.** Lapka says so itself. When the port is held by another
+Lapka, that one is opened in the browser: it is the same player, started another
+way. When it is held by some other program, start Lapka on another port:
 
 ```bash
 PORT=8801 npm start
 ```
 
-In Windows PowerShell: `$env:PORT=8801; npm start`.
+In Windows PowerShell: `$env:PORT=8801; npm start`. With npx: `PORT=8801 npx -y lapka`.
 
 **The page does not open.** Make sure the terminal with `npm start` is open
 and shows no red errors; the address is exactly `http://127.0.0.1:8800`, not
