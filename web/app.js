@@ -2426,6 +2426,8 @@ function buildGearMenu() {
       setTimeout(() => { quit.classList.remove('is-armed'); quit.textContent = t('set.quit'); }, 4000);
       return;
     }
+    /* the place where watching is goes first, at once: the server is about to end */
+    if (loaded && video.currentTime) { video.pause(); markPos(loaded, video.currentTime, 'now'); await sleep(150); }
     try { await post('/api/quit'); } catch (_) {}
     serverState = 'off';
     closeMenus();
