@@ -396,12 +396,10 @@ const POS_MIN = 30;        // before the thirtieth second there is nowhere to re
 const POS_TAIL = 60;       // and not to the very end either: the episode is finished
 
 /* Where an episode was left is kept on the server, keyed by the
-   series, the episode and the dub: nothing here is a path. The copy
-   in state.positions is what the rows are painted from. */
-const posKey = it => {
-  const dub = it.dub ? it.dub.key : state.dubKey;
-  return it && it.seriesId && dub ? `${it.seriesId}/${it.number}/${dub}` : null;
-};
+   series and the episode, whatever the dub it was watched in: a place
+   is one, and nothing here is a path. The copy in state.positions is
+   what the rows are painted from. */
+const posKey = it => it && it.seriesId ? `${it.seriesId}/${it.number}` : null;
 /* The item whose media the video holds. A position belongs to it and
    to nothing else: the row chosen runs ahead of the video while a start
    is on, and the video's time is nobody's from the moment the media
@@ -420,8 +418,8 @@ function markPos(it, sec, send = true) {
   if (d > POS_TAIL && sec > d - POS_TAIL) markWatched(it);   // the last minute: the episode is finished
   if (send) {
     clearTimeout(posTimers[k]);
-    const [series, episode, dub] = k.split('/');
-    const path = `/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`;
+    const [series, episode] = k.split('/');
+    const path = `/api/state/position?series=${series}&episode=${episode}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`;
     /* at once when the page is leaving (a timer would never fire), with the request kept alive past the page; else a moment later, the ticks of one second folded into one request */
     if (send === 'now') fetch(path, { method: 'POST', headers: { 'x-lapka': '1' }, keepalive: true }).catch(() => {});
     else posTimers[k] = setTimeout(() => post(path).catch(() => {}), 800);
@@ -496,7 +494,7 @@ const state = {
   dubKey: null,      // the dub chosen, carried to every episode and every season
   quality: strFromStore('lapka.quality', 'auto'),   // '1080p', '720p', … or 'auto' for the best there is
   saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, size, path }]
-  positions: {},     // series/episode/dub → { t: seconds, d: duration }, mirrored from the server
+  positions: {},     // series/episode → { t: seconds, d: duration }, mirrored from the server
   watched: {},       // series/episode → true, mirrored from the server
   remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,

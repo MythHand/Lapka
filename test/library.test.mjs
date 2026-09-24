@@ -126,38 +126,51 @@ describe('the state', () => {
   test('positions and the dub choice survive a restart', async () => {
     const own = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-state-'));
     const a = await openState(own);
-    a.setPosition('s1', 3, 'anilibria', 754.5, 1440);
-    a.setPosition('s1', 4, 'anilibria', 12);
+    a.setPosition('s1', 3, 754.5, 1440);
+    a.setPosition('s1', 4, 12);
     a.setDub('s1', 'anilibria');
     a.setWatched('s1', 2);
     a.setSetting('cacheGb', 40);
-    assert.equal(a.position('s1', 3, 'anilibria'), 754.5);
+    assert.equal(a.position('s1', 3), 754.5);
     assert.equal(a.watched('s1', 2), true);
     await a.close();
     const b = await openState(own);
-    assert.equal(b.position('s1', 3, 'anilibria'), 754.5);
-    assert.equal(b.get().positions['s1/3/anilibria'].d, 1440);
-    assert.equal(b.position('s1', 4, 'anilibria'), 12);
-    assert.equal(b.position('s1', 5, 'anilibria'), null);
+    assert.equal(b.position('s1', 3), 754.5);
+    assert.equal(b.get().positions['s1/3'].d, 1440);
+    assert.equal(b.position('s1', 4), 12);
+    assert.equal(b.position('s1', 5), null);
     assert.equal(b.dub('s1'), 'anilibria');
     assert.equal(b.watched('s1', 2), true);
     assert.equal(b.watched('s1', 3), false);
     b.setWatched('s1', 2, false);
     assert.equal(b.watched('s1', 2), false);
     assert.equal(b.setting('cacheGb'), 40);
-    b.setPosition('s1', 3, 'anilibria', null);
-    assert.equal(b.position('s1', 3, 'anilibria'), null);
+    b.setPosition('s1', 3, null);
+    assert.equal(b.position('s1', 3), null);
     await b.close();
     await fsp.rm(own, { recursive: true, force: true });
   });
 
+  test('places kept per dub before 1.1.3 fold into one per episode, the newest winning', async () => {
+    const own = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-state-'));
+    await fsp.writeFile(path.join(own, 'state.json'), JSON.stringify({ v: 1, positions: {
+      's1/3/anilibria': { t: 300, d: 1400, at: 1000 }, 's1/3/jam': { t: 754, d: 1400, at: 2000 }, 's1/4/jam': { t: 40, d: 1400, at: 1500 } }, watched: {}, dubs: {}, settings: {}, saves: {} }));
+    const a = await openState(own);
+    assert.deepEqual(Object.keys(a.get().positions).sort(), ['s1/3', 's1/4']);
+    assert.equal(a.position('s1', 3), 754);
+    assert.equal(a.position('s1', 4), 40);
+    await a.close();
+    assert.deepEqual(Object.keys(JSON.parse(await fsp.readFile(path.join(own, 'state.json'), 'utf8')).positions).sort(), ['s1/3', 's1/4'], 'folded on disk too');
+    await fsp.rm(own, { recursive: true, force: true });
+  });
+
   test('the routes write it', async () => {
-    assert.equal((await post('/api/state/position?series=s9&episode=2&dub=jam&t=33&d=1400')).status, 200);
+    assert.equal((await post('/api/state/position?series=s9&episode=2&t=33&d=1400')).status, 200);
     assert.equal((await post('/api/state/dub?series=s9&dub=jam')).status, 200);
     assert.equal((await post('/api/state/watched?series=s9&episode=1')).status, 200);
     const st = await (await get('/api/state')).json();
-    assert.equal(st.positions['s9/2/jam'].t, 33);
-    assert.equal(st.positions['s9/2/jam'].d, 1400);
+    assert.equal(st.positions['s9/2'].t, 33);
+    assert.equal(st.positions['s9/2'].d, 1400);
     assert.ok(st.watched['s9/1'].at > 0);
     assert.equal(st.dubs.s9, 'jam');
     assert.equal((await fetch(lapka.base + '/api/state/dub?series=s9&dub=x', { method: 'POST' })).status, 403);

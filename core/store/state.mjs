@@ -23,6 +23,17 @@ export async function openState(own) {
     const got = JSON.parse(await fsp.readFile(file, 'utf8'));
     if (got && got.v === STATE_V) data = { ...data, ...got, history: got.history || {} };
   } catch { /* first start */ }
+  /* A place is one per episode, whatever the dub it was watched in; until
+     1.1.3 it was kept per dub. Old keys "series/episode/dub" fold into
+     "series/episode", the newest of them winning. */
+  let folded = false;
+  for (const [k, v] of Object.entries(data.positions)) {
+    const parts = k.split('/');
+    if (parts.length < 3) continue;
+    const nk = `${parts[0]}/${parts[1]}`;
+    if (!data.positions[nk] || (v.at || 0) > (data.positions[nk].at || 0)) data.positions[nk] = v;
+    delete data.positions[k]; folded = true;
+  }
 
   let timer = null, writing = null;
   const flush = async () => {
@@ -30,16 +41,17 @@ export async function openState(own) {
     await (writing = fsp.writeFile(file + '.part', JSON.stringify(data, null, 1)).then(() => fsp.rename(file + '.part', file)));
   };
   const soon = () => { if (!timer) timer = setTimeout(() => flush().catch(() => {}), 500); };
+  if (folded) soon();
 
-  const posKey = (seriesId, episode, dub) => `${seriesId}/${episode}/${dub}`;
+  const posKey = (seriesId, episode) => `${seriesId}/${episode}`;
 
   return {
     file,
     get: () => data,
-    position(seriesId, episode, dub) { return data.positions[posKey(seriesId, episode, dub)]?.t ?? null; },
+    position(seriesId, episode) { return data.positions[posKey(seriesId, episode)]?.t ?? null; },
     /* the duration goes along, so a row can show where the episode was left before it is ever opened again */
-    setPosition(seriesId, episode, dub, seconds, duration = 0) {
-      const k = posKey(seriesId, episode, dub);
+    setPosition(seriesId, episode, seconds, duration = 0) {
+      const k = posKey(seriesId, episode);
       if (seconds === null) delete data.positions[k];
       else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), d: Math.max(0, Number(duration) || 0), at: Date.now() };
       /* the oldest are let go, so the file does not grow with every episode ever watched */
