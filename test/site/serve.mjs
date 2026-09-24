@@ -63,7 +63,8 @@ export function startSite({ port = 0, media } = {}) {
     /* a track of thumbnails, as players list beside the subtitles: not a subtitle */
     if (p === '/media/thumbs.vtt') { res.writeHead(200, { 'content-type': 'text/vtt; charset=utf-8' }); return res.end('WEBVTT\n\n00:00:00.000 --> 00:00:05.000\n/media/cover-a.jpg#xywh=0,0,160,90\n'); }
     if ((m = /^\/media\/((?:hls(?:-audio)?\/)?[a-z0-9-]+\.(?:m3u8|ts|mp4|mkv|srt|vtt))$/.exec(p)) && media) {
-      const file = path.join(media, m[1]);
+      /* the qualities case names one clip by several heights: the same bytes under each name */
+      const file = path.join(media, m[1].replace(/^native-\d+\.mp4$/, 'native.mp4'));
       let st;
       try { st = await fsp.stat(file); } catch { return notFound(res); }
       /* SITE_SLOW_MS: every segment waits this long, so a save takes real time (for trying pauses by hand) */

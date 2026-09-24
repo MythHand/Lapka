@@ -125,9 +125,14 @@ export async function lapkaAt(port, host = '127.0.0.1') {
    themselves; tests never get here). A bin symlink resolves to this file. */
 const asProgram = !process.env.NODE_TEST_CONTEXT && process.argv[1] && (() => { try { return fileURLToPath(import.meta.url) === fs.realpathSync(path.resolve(process.argv[1])); } catch { return false; } })();
 if (asProgram) {
+  /* Ctrl+C in the terminal, a stop from the system: the notes are written down before the process ends */
+  const bye = () => { Promise.resolve(ctxOf && ctxOf.state && ctxOf.state.close()).catch(() => {}).finally(() => process.exit(0)); };
+  let ctxOf = null;
+  process.on('SIGINT', bye); process.on('SIGTERM', bye);
   const mayOpen = !process.env.LAPKA_NO_OPEN && process.stdout.isTTY;
   try {
     const s = await start();
+    ctxOf = s.ctx;
     console.log(`Lapka: ${s.base}\nFolder: ${s.ctx.home}`);
     if (mayOpen) openUrl(s.base).catch(() => {});
   } catch (e) {

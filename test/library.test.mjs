@@ -126,38 +126,51 @@ describe('the state', () => {
   test('positions and the dub choice survive a restart', async () => {
     const own = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-state-'));
     const a = await openState(own);
-    a.setPosition('s1', 3, 'anilibria', 754.5, 1440);
-    a.setPosition('s1', 4, 'anilibria', 12);
+    a.setPosition('s1', 3, 754.5, 1440);
+    a.setPosition('s1', 4, 12);
     a.setDub('s1', 'anilibria');
     a.setWatched('s1', 2);
     a.setSetting('cacheGb', 40);
-    assert.equal(a.position('s1', 3, 'anilibria'), 754.5);
+    assert.equal(a.position('s1', 3), 754.5);
     assert.equal(a.watched('s1', 2), true);
     await a.close();
     const b = await openState(own);
-    assert.equal(b.position('s1', 3, 'anilibria'), 754.5);
-    assert.equal(b.get().positions['s1/3/anilibria'].d, 1440);
-    assert.equal(b.position('s1', 4, 'anilibria'), 12);
-    assert.equal(b.position('s1', 5, 'anilibria'), null);
+    assert.equal(b.position('s1', 3), 754.5);
+    assert.equal(b.get().positions['s1/3'].d, 1440);
+    assert.equal(b.position('s1', 4), 12);
+    assert.equal(b.position('s1', 5), null);
     assert.equal(b.dub('s1'), 'anilibria');
     assert.equal(b.watched('s1', 2), true);
     assert.equal(b.watched('s1', 3), false);
     b.setWatched('s1', 2, false);
     assert.equal(b.watched('s1', 2), false);
     assert.equal(b.setting('cacheGb'), 40);
-    b.setPosition('s1', 3, 'anilibria', null);
-    assert.equal(b.position('s1', 3, 'anilibria'), null);
+    b.setPosition('s1', 3, null);
+    assert.equal(b.position('s1', 3), null);
     await b.close();
     await fsp.rm(own, { recursive: true, force: true });
   });
 
+  test('places kept per dub before 1.1.3 fold into one per episode, the newest winning', async () => {
+    const own = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-state-'));
+    await fsp.writeFile(path.join(own, 'state.json'), JSON.stringify({ v: 1, positions: {
+      's1/3/anilibria': { t: 300, d: 1400, at: 1000 }, 's1/3/jam': { t: 754, d: 1400, at: 2000 }, 's1/4/jam': { t: 40, d: 1400, at: 1500 } }, watched: {}, dubs: {}, settings: {}, saves: {} }));
+    const a = await openState(own);
+    assert.deepEqual(Object.keys(a.get().positions).sort(), ['s1/3', 's1/4']);
+    assert.equal(a.position('s1', 3), 754);
+    assert.equal(a.position('s1', 4), 40);
+    await a.close();
+    assert.deepEqual(Object.keys(JSON.parse(await fsp.readFile(path.join(own, 'state.json'), 'utf8')).positions).sort(), ['s1/3', 's1/4'], 'folded on disk too');
+    await fsp.rm(own, { recursive: true, force: true });
+  });
+
   test('the routes write it', async () => {
-    assert.equal((await post('/api/state/position?series=s9&episode=2&dub=jam&t=33&d=1400')).status, 200);
+    assert.equal((await post('/api/state/position?series=s9&episode=2&t=33&d=1400')).status, 200);
     assert.equal((await post('/api/state/dub?series=s9&dub=jam')).status, 200);
     assert.equal((await post('/api/state/watched?series=s9&episode=1')).status, 200);
     const st = await (await get('/api/state')).json();
-    assert.equal(st.positions['s9/2/jam'].t, 33);
-    assert.equal(st.positions['s9/2/jam'].d, 1400);
+    assert.equal(st.positions['s9/2'].t, 33);
+    assert.equal(st.positions['s9/2'].d, 1400);
     assert.ok(st.watched['s9/1'].at > 0);
     assert.equal(st.dubs.s9, 'jam');
     assert.equal((await fetch(lapka.base + '/api/state/dub?series=s9&dub=x', { method: 'POST' })).status, 403);
@@ -171,6 +184,44 @@ describe('the update route', () => {
     assert.equal((await fetch(lapka.base + '/api/update/start', { method: 'POST' })).status, 403, 'no header, no token');
     const r = await (await post('/api/update/start?tag=v9.9.9')).json();
     assert.match(r.token, /^[a-z0-9]{10,}$/);
+  });
+});
+
+/* ── the links pasted ── */
+describe('the links pasted', () => {
+  test('a link is written down with what it opened, its cover kept as a file of Lapka\'s own; forgetting the notes forgets it', async () => {
+    const link = site.base + '/s/select/ep-2';
+    const q = new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', kind: 'tv', year: '2024', season: '1', episodes: '4', cover: site.base + '/media/cover-a.jpg' });
+    const rec = await (await post('/api/history?' + q)).json();
+    assert.equal(rec.url, link);
+    assert.equal(rec.title, 'Сериал Селект');
+    assert.equal(rec.cover, '/api/history/cover/abc123');
+    const list = (await (await get('/api/history')).json()).history;
+    assert.equal(list.at(-1).url, link);
+    assert.equal(list.at(-1).last, null, 'nothing watched yet');
+    /* a position noted in a part the link opened: the row says where watching stopped */
+    await post('/api/history?' + new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', episodes: '4', parts: JSON.stringify([{ id: 'abc123', ordinal: 1, title: 'Сериал Селект' }, { id: 'abc124', ordinal: 2, title: 'Сериал Селект 2' }]) }));
+    await post('/api/state/position?series=abc124&episode=3&dub=anilibria&t=734&d=1400');
+    const withStop = (await (await get('/api/history')).json()).history.at(-1);
+    assert.deepEqual({ seriesId: withStop.last.seriesId, episode: withStop.last.episode, t: withStop.last.t, done: withStop.last.done }, { seriesId: 'abc124', episode: 3, t: 734, done: false });
+    await post('/api/state/watched?series=abc124&episode=3&on=1');
+    await post('/api/state/position?series=abc124&episode=3&dub=anilibria');
+    const finished = (await (await get('/api/history')).json()).history.at(-1);
+    assert.equal(finished.last.done, true);
+    assert.equal(finished.last.episode, 3);
+    const img = await get('/api/history/cover/abc123');
+    assert.equal(img.status, 200);
+    assert.match(img.headers.get('content-type'), /image\/jpeg/);
+    assert.ok((await img.arrayBuffer()).byteLength > 100);
+    /* pasted again: one entry, moved to the end */
+    await post('/api/history?' + new URLSearchParams({ url: site.base + '/s/links/ep-1', series: 'def456', title: 'Сериал Ссылки', episodes: '3' }));
+    await post('/api/history?' + q);
+    const again = (await (await get('/api/history')).json()).history;
+    assert.deepEqual(again.map(h => h.title), ['Сериал Ссылки', 'Сериал Селект']);
+    assert.ok((await (await get('/api/home')).json()).notes >= 2, 'the links count among the notes');
+    await post('/api/state/forget');
+    assert.deepEqual((await (await get('/api/history')).json()).history, []);
+    assert.equal((await get('/api/history/cover/abc123')).status, 404);
   });
 });
 

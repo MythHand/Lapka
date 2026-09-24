@@ -48,6 +48,15 @@ export const CASES = [
     layout: { episodes: 'links', dubs: 'page-tabs', player: 'iframe', seasons: 2 },
   },
   {
+    id: 'qualities',
+    title: 'Сериал Качества',
+    device: 'episodes as links; one dub; the embed offers the same episode as two files, 720p and 480p, as <source> elements of one <video>',
+    episodes: 2,
+    players: ['alpha'],
+    dubs: { alpha: ['AniLibria'] },
+    layout: { episodes: 'links', dubs: 'page-tabs', player: 'iframe', qualities: [720, 480] },
+  },
+  {
     id: 'video',
     title: 'Сериал Видео',
     device: 'episodes as links; no dubs; a <video> tag with an HLS source on the episode page',

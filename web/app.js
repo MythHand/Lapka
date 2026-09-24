@@ -156,6 +156,7 @@ const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
 const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
+const btnHistory = $('#btnHistory'), histPop = $('#histPop');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, qualityMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
@@ -395,12 +396,10 @@ const POS_MIN = 30;        // before the thirtieth second there is nowhere to re
 const POS_TAIL = 60;       // and not to the very end either: the episode is finished
 
 /* Where an episode was left is kept on the server, keyed by the
-   series, the episode and the dub: nothing here is a path. The copy
-   in state.positions is what the rows are painted from. */
-const posKey = it => {
-  const dub = it.dub ? it.dub.key : state.dubKey;
-  return it && it.seriesId && dub ? `${it.seriesId}/${it.number}/${dub}` : null;
-};
+   series and the episode, whatever the dub it was watched in: a place
+   is one, and nothing here is a path. The copy in state.positions is
+   what the rows are painted from. */
+const posKey = it => it && it.seriesId ? `${it.seriesId}/${it.number}` : null;
 /* The item whose media the video holds. A position belongs to it and
    to nothing else: the row chosen runs ahead of the video while a start
    is on, and the video's time is nobody's from the moment the media
@@ -419,8 +418,11 @@ function markPos(it, sec, send = true) {
   if (d > POS_TAIL && sec > d - POS_TAIL) markWatched(it);   // the last minute: the episode is finished
   if (send) {
     clearTimeout(posTimers[k]);
-    const [series, episode, dub] = k.split('/');
-    posTimers[k] = setTimeout(() => post(`/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`).catch(() => {}), 800);
+    const [series, episode] = k.split('/');
+    const path = `/api/state/position?series=${series}&episode=${episode}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`;
+    /* at once when the page is leaving (a timer would never fire), with the request kept alive past the page; else a moment later, the ticks of one second folded into one request */
+    if (send === 'now') fetch(path, { method: 'POST', headers: { 'x-lapka': '1' }, keepalive: true }).catch(() => {});
+    else posTimers[k] = setTimeout(() => post(path).catch(() => {}), 800);
   }
   for (const li of queueList.children) {
     const x = byId(li.dataset.id);
@@ -492,7 +494,7 @@ const state = {
   dubKey: null,      // the dub chosen, carried to every episode and every season
   quality: strFromStore('lapka.quality', 'auto'),   // '1080p', '720p', … or 'auto' for the best there is
   saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, size, path }]
-  positions: {},     // series/episode/dub → { t: seconds, d: duration }, mirrored from the server
+  positions: {},     // series/episode → { t: seconds, d: duration }, mirrored from the server
   watched: {},       // series/episode → true, mirrored from the server
   remote: {},        // the server's state as it was at boot
   loop: 'off', queueOpen: true,
@@ -980,7 +982,7 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   linkInput.value = '';
   render(); paintTitle();
   loadLibrary(); watchSaves();
-  if (!quiet) toast(t('toast.opened', { n: state.list.length }));
+  if (!quiet) { toast(t('toast.opened', { n: state.list.length })); rememberLink(url, got.series); }
 
   /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
   const wantedNumber = at && at.number != null ? at.number : at != null && typeof at !== 'object' ? at : got.start ? got.start.episode : null;
@@ -996,6 +998,88 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   }
   return true;
 }
+
+/* ── the links pasted ─────────────────────────────────────────
+   Every link a person pastes is written down on the server with what
+   it opened: the series' title, its cover kept as a file, kind, year,
+   season, how many episodes. A session restored on reload is not a
+   paste and is not written. The list stands beside the history button
+   in the queue's footer: as tall as the window allows, the newest at
+   the bottom, nearest the button; a row opens its link again. */
+function rememberLink(url, series) {
+  const q = new URLSearchParams({ url, series: series.id, title: series.title || '', episodes: String(series.episodes.length) });
+  if (series.cover) q.set('cover', series.cover);
+  if (series.kind) q.set('kind', series.kind);
+  if (series.year) q.set('year', String(series.year));
+  if (series.season) q.set('season', String(series.season));
+  /* the parts the link opened: where watching stops is looked for across them */
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '' }))));
+  post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
+}
+let histList = [];
+async function loadHistory() {
+  try { histList = (await api('/api/history')).history || []; } catch (_) { histList = []; }
+  if (!histPop.hidden) buildHistory();
+}
+function whenWords(at) {
+  try { return new Date(at).toLocaleString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; }
+}
+function buildHistory() {
+  histPop.replaceChildren();
+  const head = document.createElement('div'); head.className = 'histpop__head'; head.textContent = t('queue.history'); histPop.append(head);
+  if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); histPop.append(e); }
+  for (const h of histList) {
+    const row = document.createElement('button');
+    row.className = 'histpop__row';
+    row.type = 'button';
+    const cover = h.cover ? document.createElement('img') : document.createElement('span');
+    cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
+    if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
+    const body = document.createElement('div'); body.className = 'histpop__body';
+    const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+    /* what the series is on the left, when it was pasted on the right */
+    const meta = document.createElement('div'); meta.className = 'histpop__meta';
+    const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
+    const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
+    meta.append(about, when);
+    body.append(title, meta);
+    /* where watching stopped, across the parts the link opened; a part other than the link's is named */
+    const last = h.last;
+    if (last) {
+      const stop = document.createElement('div'); stop.className = 'histpop__stop';
+      const part = (h.parts || []).find(x => x.id === last.seriesId);
+      const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
+      stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) }));
+      body.append(stop);
+    }
+    const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url;
+    body.append(link);
+    row.append(cover, body);
+    /* the link opens where it was left: the episode stopped in, or the one after the last finished */
+    row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
+    histPop.append(row);
+  }
+  placeHistory();
+  histPop.scrollTop = histPop.scrollHeight;
+}
+/* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
+function placeHistory() {
+  const r = btnHistory.getBoundingClientRect(), edge = queueAdd.getBoundingClientRect().right, w = histPop.offsetWidth, h = histPop.offsetHeight;
+  histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
+  histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
+}
+function openHistory() { histPop.hidden = false; buildHistory(); loadHistory(); }
+function closeHistory() { histPop.hidden = true; }
+btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
+histPop.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', e => {
+  if (histPop.hidden || e.target.closest('#histPop')) return;
+  /* the click closes the list and does nothing else; the button toggles it itself */
+  if (!e.target.closest('#btnHistory')) { e.stopPropagation(); e.preventDefault(); }
+  closeHistory();
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !histPop.hidden) closeHistory(); });
+addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
    The server opens the episode's page if it has not, takes the dub
@@ -1145,7 +1229,8 @@ async function sourceFor(it) {
   /* mid-switch: the line now names the source being tried */
   if (it.switching && r.source) showNotice(t('notice.switchingTo', { from: it.switching.from || '?', to: r.source.player, n: it.switching.n, total: 3 }), { kind: 'switching', busy: true });
   paintMeta();
-  return r.stream;
+  /* the stream this page chose for the wanted quality, not the server's best: the server does not know the quality wanted */
+  return it.stream || r.stream;
 }
 
 /* The next episode is opened while the current one plays, so that
@@ -2339,6 +2424,8 @@ function buildGearMenu() {
       setTimeout(() => { quit.classList.remove('is-armed'); quit.textContent = t('set.quit'); }, 4000);
       return;
     }
+    /* the place where watching is goes first, at once: the server is about to end */
+    if (loaded && video.currentTime) { video.pause(); markPos(loaded, video.currentTime, 'now'); await sleep(150); }
     try { await post('/api/quit'); } catch (_) {}
     serverState = 'off';
     closeMenus();
@@ -4490,9 +4577,9 @@ function paintModeHint() {
   syncOpenButton();
 }
 
-window.addEventListener('beforeunload', () => {
-  if (loaded && video.currentTime) markPos(loaded, video.currentTime);
-  if (state.pipWin) state.pipWin.close();
-});
+/* the page leaving: the place is sent at once, not after a timer the page would not live to see; pagehide is the event the browsers agree on, beforeunload the older one */
+const leaving = () => { if (loaded && video.currentTime) markPos(loaded, video.currentTime, 'now'); };
+window.addEventListener('pagehide', leaving);
+window.addEventListener('beforeunload', () => { leaving(); if (state.pipWin) state.pipWin.close(); });
 
 })();
