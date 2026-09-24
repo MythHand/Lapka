@@ -2,22 +2,26 @@
    State: what the user did, remembered.
 
    Where each episode was left, which episodes were watched to the end,
-   which dub the user chose for a series, the settings. One JSON file, written whole and atomically, a little
-   after the last change rather than on every tick of the clock.
-   Keys are catalog identities, never paths.
+   which dub the user chose for a series, the settings, and the links
+   pasted, each with the title and the cover of the series it opened.
+   One JSON file, written whole and atomically, a little after the last
+   change rather than on every tick of the clock.
+   Keys are catalog identities, never paths; the history alone is keyed
+   by the link as it was pasted.
    ═══════════════════════════════════════════════════════════ */
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
 export const STATE_V = 1;
 const POS_KEEP = 500;
+const HISTORY_KEEP = 200;
 
 export async function openState(own) {
   const file = path.join(own, 'state.json');
-  let data = { v: STATE_V, positions: {}, watched: {}, dubs: {}, settings: {}, saves: {} };
+  let data = { v: STATE_V, positions: {}, watched: {}, dubs: {}, settings: {}, saves: {}, history: {} };
   try {
     const got = JSON.parse(await fsp.readFile(file, 'utf8'));
-    if (got && got.v === STATE_V) data = { ...data, ...got };
+    if (got && got.v === STATE_V) data = { ...data, ...got, history: got.history || {} };
   } catch { /* first start */ }
 
   let timer = null, writing = null;
@@ -58,9 +62,24 @@ export async function openState(own) {
     setSave(key, rec) { data.saves[key] = { ...(data.saves[key] || {}), ...rec, at: Date.now() }; soon(); },
     clearSave(key) { delete data.saves[key]; soon(); },
     setSetting(k, v) { if (v === undefined) delete data.settings[k]; else data.settings[k] = v; soon(); },
-    /* what was noted about watching: positions, watched marks, dub choices. Settings and save records stay. */
-    notes() { return Object.keys(data.positions).length + Object.keys(data.watched).length + Object.keys(data.dubs).length; },
-    forget() { data.positions = {}; data.watched = {}; data.dubs = {}; soon(); },
+    /* The links pasted, oldest first: the link as typed, the series it
+       opened (its id, title, kind, year, season, episode count), the cover
+       kept as a file of Lapka's own, and when. Pasted again, a link moves
+       to the end with what it opened now. */
+    history() { return Object.values(data.history).sort((a, b) => a.at - b.at); },
+    remember(rec) {
+      const url = String(rec.url || '').trim();
+      if (!url) return null;
+      const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || null, coverFile: rec.coverFile || null, at: Date.now() };
+      data.history[url] = entry;
+      const keys = Object.keys(data.history);
+      if (keys.length > HISTORY_KEEP) for (const k of keys.sort((a, b) => data.history[a].at - data.history[b].at).slice(0, keys.length - HISTORY_KEEP)) delete data.history[k];
+      soon();
+      return entry;
+    },
+    /* what was noted about watching: positions, watched marks, dub choices, the links pasted. Settings and save records stay. */
+    notes() { return Object.keys(data.positions).length + Object.keys(data.watched).length + Object.keys(data.dubs).length + Object.keys(data.history).length; },
+    forget() { data.positions = {}; data.watched = {}; data.dubs = {}; data.history = {}; soon(); },
     flush,
     close: async () => { if (timer) await flush(); else if (writing) await writing; },
   };

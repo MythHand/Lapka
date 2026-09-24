@@ -156,6 +156,7 @@ const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
 const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
+const btnHistory = $('#btnHistory'), histPop = $('#histPop');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, qualityMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
@@ -980,7 +981,7 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   linkInput.value = '';
   render(); paintTitle();
   loadLibrary(); watchSaves();
-  if (!quiet) toast(t('toast.opened', { n: state.list.length }));
+  if (!quiet) { toast(t('toast.opened', { n: state.list.length })); rememberLink(url, got.series); }
 
   /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
   const wantedNumber = at && at.number != null ? at.number : at != null && typeof at !== 'object' ? at : got.start ? got.start.episode : null;
@@ -996,6 +997,72 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   }
   return true;
 }
+
+/* ── the links pasted ─────────────────────────────────────────
+   Every link a person pastes is written down on the server with what
+   it opened: the series' title, its cover kept as a file, kind, year,
+   season, how many episodes. A session restored on reload is not a
+   paste and is not written. The list stands beside the history button
+   in the queue's footer: as tall as the window allows, the newest at
+   the bottom, nearest the button; a row opens its link again. */
+function rememberLink(url, series) {
+  const q = new URLSearchParams({ url, series: series.id, title: series.title || '', episodes: String(series.episodes.length) });
+  if (series.cover) q.set('cover', series.cover);
+  if (series.kind) q.set('kind', series.kind);
+  if (series.year) q.set('year', String(series.year));
+  if (series.season) q.set('season', String(series.season));
+  post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
+}
+let histList = [];
+async function loadHistory() {
+  try { histList = (await api('/api/history')).history || []; } catch (_) { histList = []; }
+  if (!histPop.hidden) buildHistory();
+}
+function whenWords(at) {
+  try { return new Date(at).toLocaleString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; }
+}
+function buildHistory() {
+  histPop.replaceChildren();
+  const head = document.createElement('div'); head.className = 'histpop__head'; head.textContent = t('queue.history'); histPop.append(head);
+  if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); histPop.append(e); }
+  for (const h of histList) {
+    const row = document.createElement('button');
+    row.className = 'histpop__row';
+    row.type = 'button';
+    const cover = h.cover ? document.createElement('img') : document.createElement('span');
+    cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
+    if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
+    const body = document.createElement('div'); body.className = 'histpop__body';
+    const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+    const meta = document.createElement('div'); meta.className = 'histpop__meta';
+    meta.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null, whenWords(h.at)].filter(Boolean).join(' · ');
+    const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url;
+    body.append(title, meta, link);
+    row.append(cover, body);
+    row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url); };
+    histPop.append(row);
+  }
+  placeHistory();
+  histPop.scrollTop = histPop.scrollHeight;
+}
+/* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
+function placeHistory() {
+  const r = btnHistory.getBoundingClientRect(), edge = queueAdd.getBoundingClientRect().right, w = histPop.offsetWidth, h = histPop.offsetHeight;
+  histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
+  histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
+}
+function openHistory() { histPop.hidden = false; buildHistory(); loadHistory(); }
+function closeHistory() { histPop.hidden = true; }
+btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
+histPop.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', e => {
+  if (histPop.hidden || e.target.closest('#histPop')) return;
+  /* the click closes the list and does nothing else; the button toggles it itself */
+  if (!e.target.closest('#btnHistory')) { e.stopPropagation(); e.preventDefault(); }
+  closeHistory();
+}, true);
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !histPop.hidden) closeHistory(); });
+addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
    The server opens the episode's page if it has not, takes the dub

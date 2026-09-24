@@ -201,7 +201,45 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (state && mutating && p === '/api/state/forget') {
         state.forget();
         await store.forgetKnowledge();
+        await fsp.rm(path.join(store.own, 'covers'), { recursive: true, force: true });
         return json(res, 200, { ok: true });
+      }
+      /* ── the links pasted ──
+         The page tells of a link it opened, with what the series said of
+         itself; the cover is fetched once and kept as a file of Lapka's
+         own, so the list opens without a request to any site. */
+      if (state && req.method === 'GET' && p === '/api/history') return json(res, 200, { history: state.history() });
+      if (state && store && mutating && p === '/api/history') {
+        const q = url.searchParams;
+        const seriesId = q.get('series') || null, coverUrl = q.get('cover') || null;
+        let coverFile = null;
+        if (seriesId && coverUrl && /^https?:/i.test(coverUrl)) {
+          try {
+            const r = await fetch(coverUrl, { headers: { 'user-agent': lapka.session.ua, referer: q.get('url') || coverUrl, accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
+            const type = (r.headers.get('content-type') || '').split(';')[0].trim();
+            const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' }[type];
+            if (r.ok && ext) {
+              const bytes = Buffer.from(await r.arrayBuffer());
+              if (bytes.length && bytes.length < 8 * 1024 * 1024) {
+                await fsp.mkdir(path.join(store.own, 'covers'), { recursive: true });
+                coverFile = `${seriesId.replace(/[^\w.-]/g, '_')}.${ext}`;
+                await fsp.writeFile(path.join(store.own, 'covers', coverFile), bytes);
+              }
+            }
+          } catch { /* no cover: the row stands without a picture */ }
+        }
+        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
+        return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
+      }
+      if (state && store && req.method === 'GET' && p.startsWith('/api/history/cover/')) {
+        const id = decodeURIComponent(p.slice('/api/history/cover/'.length));
+        const rec = state.history().find(h => h.seriesId === id && h.coverFile);
+        if (!rec) return json(res, 404, { error: 'no cover' });
+        const file = path.join(store.own, 'covers', rec.coverFile);
+        let bytes; try { bytes = await fsp.readFile(file); } catch { return json(res, 404, { error: 'no cover' }); }
+        const type = { '.jpg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif' }[path.extname(file)] || 'application/octet-stream';
+        res.writeHead(200, { 'content-type': type, 'content-length': bytes.length, 'cache-control': 'no-store' });
+        return res.end(bytes);
       }
       if (library && mutating && p === '/api/library/delete') {
         const seriesId = url.searchParams.get('series') || '', episodes = (url.searchParams.get('episodes') || '').split(',').filter(Boolean);

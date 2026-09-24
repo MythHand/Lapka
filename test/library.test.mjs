@@ -174,6 +174,33 @@ describe('the update route', () => {
   });
 });
 
+/* ── the links pasted ── */
+describe('the links pasted', () => {
+  test('a link is written down with what it opened, its cover kept as a file of Lapka\'s own; forgetting the notes forgets it', async () => {
+    const link = site.base + '/s/select/ep-2';
+    const q = new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', kind: 'tv', year: '2024', season: '1', episodes: '4', cover: site.base + '/media/cover-a.jpg' });
+    const rec = await (await post('/api/history?' + q)).json();
+    assert.equal(rec.url, link);
+    assert.equal(rec.title, 'Сериал Селект');
+    assert.equal(rec.cover, '/api/history/cover/abc123');
+    const list = (await (await get('/api/history')).json()).history;
+    assert.equal(list.at(-1).url, link);
+    const img = await get('/api/history/cover/abc123');
+    assert.equal(img.status, 200);
+    assert.match(img.headers.get('content-type'), /image\/jpeg/);
+    assert.ok((await img.arrayBuffer()).byteLength > 100);
+    /* pasted again: one entry, moved to the end */
+    await post('/api/history?' + new URLSearchParams({ url: site.base + '/s/links/ep-1', series: 'def456', title: 'Сериал Ссылки', episodes: '3' }));
+    await post('/api/history?' + q);
+    const again = (await (await get('/api/history')).json()).history;
+    assert.deepEqual(again.map(h => h.title), ['Сериал Ссылки', 'Сериал Селект']);
+    assert.ok((await (await get('/api/home')).json()).notes >= 2, 'the links count among the notes');
+    await post('/api/state/forget');
+    assert.deepEqual((await (await get('/api/history')).json()).history, []);
+    assert.equal((await get('/api/history/cover/abc123')).status, 404);
+  });
+});
+
 /* ── the variant of a master to save ── */
 describe('the variant to save', () => {
   const master = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360', '360/index.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720,AUDIO=\"snd\"', '720/index.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080', '1080/index.m3u8'];
