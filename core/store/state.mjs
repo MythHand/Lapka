@@ -14,7 +14,7 @@ import path from 'node:path';
 
 export const STATE_V = 1;
 const POS_KEEP = 500;
-const HISTORY_KEEP = 200;
+const HISTORY_KEEP = 100;
 
 export async function openState(own) {
   const file = path.join(own, 'state.json');
