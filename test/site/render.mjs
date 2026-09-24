@@ -88,12 +88,17 @@ document.querySelectorAll('[data-embed]').forEach(b => b.addEventListener('click
   return page({ title, body });
 }
 
-/* alpha: the stream is a plain <video src>; the dub is in the URL. */
+/* alpha: the stream is a plain <video src>; the dub is in the URL. A case
+   with qualities offers the same episode as several files, one <source>
+   each, named by their height the way sites name them. */
 export function renderEmbedAlpha(c, ep, dubSlug) {
   const dub = c.dubs.alpha.find(d => slug(d) === dubSlug);
   if (!dub) return null;
-  return page({ title: `alpha · ${c.id} ${ep} ${dub}`, body:
-    `<video id="v" controls src="/media/native.mp4" data-dub="${esc(dub)}"></video>` });
+  const qs = c.layout.qualities;
+  const video = qs
+    ? `<video id="v" controls data-dub="${esc(dub)}">\n${qs.map(h => `<source src="/media/native-${h}.mp4" type="video/mp4">`).join('\n')}\n</video>`
+    : `<video id="v" controls src="/media/native.mp4" data-dub="${esc(dub)}"></video>`;
+  return page({ title: `alpha · ${c.id} ${ep} ${dub}`, body: video });
 }
 
 /* beta: the stream is in a script, the dubs are a select of its own. */

@@ -1145,7 +1145,8 @@ async function sourceFor(it) {
   /* mid-switch: the line now names the source being tried */
   if (it.switching && r.source) showNotice(t('notice.switchingTo', { from: it.switching.from || '?', to: r.source.player, n: it.switching.n, total: 3 }), { kind: 'switching', busy: true });
   paintMeta();
-  return r.stream;
+  /* the stream this page chose for the wanted quality, not the server's best: the server does not know the quality wanted */
+  return it.stream || r.stream;
 }
 
 /* The next episode is opened while the current one plays, so that
