@@ -421,7 +421,10 @@ function markPos(it, sec, send = true) {
   if (send) {
     clearTimeout(posTimers[k]);
     const [series, episode, dub] = k.split('/');
-    posTimers[k] = setTimeout(() => post(`/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`).catch(() => {}), 800);
+    const path = `/api/state/position?series=${series}&episode=${episode}&dub=${encodeURIComponent(dub)}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`;
+    /* at once when the page is leaving (a timer would never fire), with the request kept alive past the page; else a moment later, the ticks of one second folded into one request */
+    if (send === 'now') fetch(path, { method: 'POST', headers: { 'x-lapka': '1' }, keepalive: true }).catch(() => {});
+    else posTimers[k] = setTimeout(() => post(path).catch(() => {}), 800);
   }
   for (const li of queueList.children) {
     const x = byId(li.dataset.id);
@@ -4574,9 +4577,9 @@ function paintModeHint() {
   syncOpenButton();
 }
 
-window.addEventListener('beforeunload', () => {
-  if (loaded && video.currentTime) markPos(loaded, video.currentTime);
-  if (state.pipWin) state.pipWin.close();
-});
+/* the page leaving: the place is sent at once, not after a timer the page would not live to see; pagehide is the event the browsers agree on, beforeunload the older one */
+const leaving = () => { if (loaded && video.currentTime) markPos(loaded, video.currentTime, 'now'); };
+window.addEventListener('pagehide', leaving);
+window.addEventListener('beforeunload', () => { leaving(); if (state.pipWin) state.pipWin.close(); });
 
 })();
