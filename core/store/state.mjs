@@ -67,10 +67,28 @@ export async function openState(own) {
        kept as a file of Lapka's own, and when. Pasted again, a link moves
        to the end with what it opened now. */
     history() { return Object.values(data.history).sort((a, b) => a.at - b.at); },
+    /* where watching last stopped across the parts named: the newest of
+       the positions kept and the episodes watched to the end */
+    lastStop(ids) {
+      const set = new Set((ids || []).map(String));
+      let best = null;
+      for (const [k, v] of Object.entries(data.positions)) {
+        const [sid, ep] = k.split('/');
+        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: v.t, d: v.d || 0, at: v.at, done: false };
+      }
+      for (const [k, v] of Object.entries(data.watched)) {
+        const [sid, ep] = k.split('/');
+        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: 0, d: 0, at: v.at, done: true };
+      }
+      return best;
+    },
     remember(rec) {
       const url = String(rec.url || '').trim();
       if (!url) return null;
-      const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || null, coverFile: rec.coverFile || null, at: Date.now() };
+      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '' })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
+      /* a link pasted again keeps the cover it had when none came this time */
+      const prev = data.history[url] || {};
+      const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || prev.cover || null, coverFile: rec.coverFile || prev.coverFile || null, parts, at: Date.now() };
       data.history[url] = entry;
       const keys = Object.keys(data.history);
       if (keys.length > HISTORY_KEEP) for (const k of keys.sort((a, b) => data.history[a].at - data.history[b].at).slice(0, keys.length - HISTORY_KEEP)) delete data.history[k];

@@ -208,7 +208,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
          The page tells of a link it opened, with what the series said of
          itself; the cover is fetched once and kept as a file of Lapka's
          own, so the list opens without a request to any site. */
-      if (state && req.method === 'GET' && p === '/api/history') return json(res, 200, { history: state.history() });
+      if (state && req.method === 'GET' && p === '/api/history') return json(res, 200, { history: state.history().map(h => ({ ...h, last: state.lastStop((h.parts || []).map(x => x.id).concat(h.seriesId ? [h.seriesId] : [])) })) });
       if (state && store && mutating && p === '/api/history') {
         const q = url.searchParams;
         const seriesId = q.get('series') || null, coverUrl = q.get('cover') || null;
@@ -228,7 +228,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
             }
           } catch { /* no cover: the row stands without a picture */ }
         }
-        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
+        let parts = null; try { parts = JSON.parse(q.get('parts') || 'null'); } catch { /* no parts named */ }
+        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
         return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
       }
       if (state && store && req.method === 'GET' && p.startsWith('/api/history/cover/')) {

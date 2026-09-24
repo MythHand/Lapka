@@ -1011,6 +1011,8 @@ function rememberLink(url, series) {
   if (series.kind) q.set('kind', series.kind);
   if (series.year) q.set('year', String(series.year));
   if (series.season) q.set('season', String(series.season));
+  /* the parts the link opened: where watching stops is looked for across them */
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '' }))));
   post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
 }
 let histList = [];
@@ -1034,12 +1036,26 @@ function buildHistory() {
     if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
     const body = document.createElement('div'); body.className = 'histpop__body';
     const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+    /* what the series is on the left, when it was pasted on the right */
     const meta = document.createElement('div'); meta.className = 'histpop__meta';
-    meta.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null, whenWords(h.at)].filter(Boolean).join(' · ');
+    const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
+    const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
+    meta.append(about, when);
+    body.append(title, meta);
+    /* where watching stopped, across the parts the link opened; a part other than the link's is named */
+    const last = h.last;
+    if (last) {
+      const stop = document.createElement('div'); stop.className = 'histpop__stop';
+      const part = (h.parts || []).find(x => x.id === last.seriesId);
+      const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
+      stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) }));
+      body.append(stop);
+    }
     const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url;
-    body.append(title, meta, link);
+    body.append(link);
     row.append(cover, body);
-    row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url); };
+    /* the link opens where it was left: the episode stopped in, or the one after the last finished */
+    row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
     histPop.append(row);
   }
   placeHistory();

@@ -185,6 +185,17 @@ describe('the links pasted', () => {
     assert.equal(rec.cover, '/api/history/cover/abc123');
     const list = (await (await get('/api/history')).json()).history;
     assert.equal(list.at(-1).url, link);
+    assert.equal(list.at(-1).last, null, 'nothing watched yet');
+    /* a position noted in a part the link opened: the row says where watching stopped */
+    await post('/api/history?' + new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', episodes: '4', parts: JSON.stringify([{ id: 'abc123', ordinal: 1, title: 'Сериал Селект' }, { id: 'abc124', ordinal: 2, title: 'Сериал Селект 2' }]) }));
+    await post('/api/state/position?series=abc124&episode=3&dub=anilibria&t=734&d=1400');
+    const withStop = (await (await get('/api/history')).json()).history.at(-1);
+    assert.deepEqual({ seriesId: withStop.last.seriesId, episode: withStop.last.episode, t: withStop.last.t, done: withStop.last.done }, { seriesId: 'abc124', episode: 3, t: 734, done: false });
+    await post('/api/state/watched?series=abc124&episode=3&on=1');
+    await post('/api/state/position?series=abc124&episode=3&dub=anilibria');
+    const finished = (await (await get('/api/history')).json()).history.at(-1);
+    assert.equal(finished.last.done, true);
+    assert.equal(finished.last.episode, 3);
     const img = await get('/api/history/cover/abc123');
     assert.equal(img.status, 200);
     assert.match(img.headers.get('content-type'), /image\/jpeg/);
