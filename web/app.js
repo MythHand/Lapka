@@ -321,6 +321,8 @@ const SETTINGS = [
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'font', def: 'fixel', label: 'set.font',
     opts: [['fixel', 'set.font.fixel'], ['inter', 'set.font.inter']] },
+  { key: 'histLinks', def: 'on', label: 'set.histLinks',
+    opts: [['on', 'common.on'], ['off', 'common.off']] },
 ];
 const SETTINGS_V = '6';   // the defaults changed, so what was saved is dropped
 
@@ -1017,48 +1019,93 @@ function rememberLink(url, series) {
   post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
 }
 let histList = [];
+let histQuery = '';
 async function loadHistory() {
   try { histList = (await api('/api/history')).history || []; } catch (_) { histList = []; }
-  if (!histPop.hidden) buildHistory();
+  if (!histPop.hidden) paintHistoryList();
 }
 function whenWords(at) {
   try { return new Date(at).toLocaleString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; }
 }
+/* The frame of the list, once per opening: on top the title and, at the
+   right edge, how many links the history holds, whatever is searched;
+   under it the rows; at the bottom the search, next to the button the
+   list came from. Top and bottom stay while the rows scroll between
+   them. A search narrows the rows as it is typed, by the title, the
+   link, the year or the name of any part the link opened, and the frame
+   takes the height of what is left, up to the window. */
 function buildHistory() {
   histPop.replaceChildren();
-  const head = document.createElement('div'); head.className = 'histpop__head'; head.textContent = t('queue.history'); histPop.append(head);
-  if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); histPop.append(e); }
-  for (const h of histList) {
-    const row = document.createElement('button');
-    row.className = 'histpop__row';
-    row.type = 'button';
-    const cover = h.cover ? document.createElement('img') : document.createElement('span');
-    cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
-    if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
-    const body = document.createElement('div'); body.className = 'histpop__body';
-    const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
-    /* what the series is on the left, when it was pasted on the right */
-    const meta = document.createElement('div'); meta.className = 'histpop__meta';
-    const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
-    const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
-    meta.append(about, when);
-    body.append(title, meta);
-    /* where watching stopped, across the parts the link opened; a part other than the link's is named */
-    const last = h.last;
-    if (last) {
-      const stop = document.createElement('div'); stop.className = 'histpop__stop';
-      const part = (h.parts || []).find(x => x.id === last.seriesId);
-      const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
-      stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) }));
-      body.append(stop);
-    }
-    const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url;
-    body.append(link);
-    row.append(cover, body);
-    /* the link opens where it was left: the episode stopped in, or the one after the last finished */
-    row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
-    histPop.append(row);
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.history');
+  const count = document.createElement('span'); count.className = 'histpop__count';
+  top.append(head, count);
+  const list = document.createElement('div'); list.className = 'histpop__list';
+  const bottom = document.createElement('div'); bottom.className = 'histpop__bottom';
+  const wrap = document.createElement('span'); wrap.className = 'histpop__field';
+  const search = document.createElement('input');
+  search.className = 'linkform__in histpop__search';
+  search.type = 'text'; search.spellcheck = false; search.autocomplete = 'off';
+  search.placeholder = t('hist.search');
+  search.value = histQuery;
+  /* the project's own cross, not the browser's: it clears the search and gives the field back */
+  const clear = document.createElement('button');
+  clear.type = 'button'; clear.className = 'histpop__clear'; clear.title = t('queue.clear');
+  clear.innerHTML = phSvg(PH.x);
+  clear.hidden = !histQuery;
+  search.oninput = () => { histQuery = search.value; clear.hidden = !histQuery; paintHistoryList(); };
+  clear.onclick = ev => { ev.stopPropagation(); search.value = ''; histQuery = ''; clear.hidden = true; paintHistoryList(); search.focus({ preventScroll: true }); };
+  wrap.append(search, clear);
+  bottom.append(wrap);
+  histPop.append(top, list, bottom);
+  paintHistoryList();
+  search.focus({ preventScroll: true });
+}
+function historyRow(h) {
+  const row = document.createElement('button');
+  row.className = 'histpop__row';
+  row.type = 'button';
+  const cover = h.cover ? document.createElement('img') : document.createElement('span');
+  cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
+  if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
+  const body = document.createElement('div'); body.className = 'histpop__body';
+  const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+  /* what the series is on the left, when it was pasted on the right */
+  const meta = document.createElement('div'); meta.className = 'histpop__meta';
+  const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
+  const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
+  meta.append(about, when);
+  body.append(title, meta);
+  /* where watching stopped, across the parts the link opened; a part other than the link's is named */
+  const last = h.last;
+  if (last) {
+    const stop = document.createElement('div'); stop.className = 'histpop__stop';
+    const part = (h.parts || []).find(x => x.id === last.seriesId);
+    const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
+    stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) }));
+    body.append(stop);
   }
+  /* the link as pasted, unless the settings keep it out of sight */
+  if (state.set.histLinks !== 'off') { const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url; body.append(link); }
+  row.append(cover, body);
+  /* the link opens where it was left: the episode stopped in, or the one after the last finished */
+  row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
+  return row;
+}
+const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.parts || []).map(p => p.title)].some(x => String(x || '').toLowerCase().includes(q));
+function paintHistoryList() {
+  const list = histPop.querySelector('.histpop__list');
+  if (!list) return;
+  const count = histPop.querySelector('.histpop__count');
+  if (count) count.textContent = String(histList.length);
+  const q = histQuery.trim().toLowerCase();
+  const shown = q ? histList.filter(h => histMatches(h, q)) : histList;
+  list.replaceChildren();
+  const say = text => { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = text; list.append(e); };
+  if (!histList.length) say(t('hist.empty'));
+  else if (!shown.length) say(t('hist.nothing'));
+  for (const h of shown) list.append(historyRow(h));
+  /* the height of what is shown, up to the window; the bottom stays at the button, the newest rows beside it */
   placeHistory();
   histPop.scrollTop = histPop.scrollHeight;
 }
@@ -1068,7 +1115,7 @@ function placeHistory() {
   histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
   histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
 }
-function openHistory() { histPop.hidden = false; buildHistory(); loadHistory(); }
+function openHistory() { histQuery = ''; histPop.hidden = false; buildHistory(); loadHistory(); }
 function closeHistory() { histPop.hidden = true; }
 btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
 histPop.addEventListener('click', e => e.stopPropagation());
@@ -1078,7 +1125,13 @@ document.addEventListener('click', e => {
   if (!e.target.closest('#btnHistory')) { e.stopPropagation(); e.preventDefault(); }
   closeHistory();
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !histPop.hidden) closeHistory(); });
+/* Esc: a search typed is cleared first, then the list closes */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || histPop.hidden) return;
+  const search = histPop.querySelector('.histpop__search');
+  if (search && search.value) { search.value = ''; histQuery = ''; const x = histPop.querySelector('.histpop__clear'); if (x) x.hidden = true; paintHistoryList(); e.stopPropagation(); return; }
+  closeHistory();
+});
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
@@ -2479,6 +2532,7 @@ function buildGearMenu() {
   langRow.append(langLab, chips);
   ui.append(langRow);
   settingRow(ui, iface.find(r => r.key === 'font'));
+  settingRow(ui, SETTINGS.find(r => r.key === 'histLinks'));   // the links as pasted, shown in the history list or not
 
   /* ─ middle: the player ─ */
   const player = document.createElement('div');

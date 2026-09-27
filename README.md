@@ -77,6 +77,17 @@ You need [Node.js](https://nodejs.org/) 22 or newer (tested on 24) and, only
 for saving episodes to a file, [ffmpeg](https://ffmpeg.org/) in PATH. Watching
 works without ffmpeg.
 
+The shortest way, with no download and no folder:
+
+```bash
+npx -y lapka
+```
+
+npx fetches Lapka into the npm cache, starts it and opens it in the browser;
+the next such start takes the new version by itself.
+
+With the project folder:
+
 ```bash
 git clone https://github.com/MythHand/Lapka.git
 cd Lapka
@@ -102,13 +113,10 @@ installs and starts itself again; or `update.command`, `update.bat`, `./update.s
 
 Lapka's files go into the folder you choose in the settings (the paw →
 "Lapka folder"). Until the first choice it is `.dev/home` inside the project
-folder, or `Lapka` in your home folder when Lapka runs through npx. The choice itself is kept in the user's system settings folder, one for
-every way of starting. The `LAPKA_HOME` environment variable forces a folder,
-`PORT` changes the port.
-
-Or with no folder at all, when Node.js is there: `npx -y lapka`
-fetches Lapka into the npm cache, starts it and opens it in the browser; the
-next such start takes the new version by itself.
+folder, or `Lapka` in your home folder when Lapka runs through npx. The choice
+itself is kept in the user's system settings folder, one for every way of
+starting. The `LAPKA_HOME` environment variable forces a folder, `PORT` changes
+the port.
 
 ## If you are not a developer
 
