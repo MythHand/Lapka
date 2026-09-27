@@ -219,6 +219,11 @@ describe('the links pasted', () => {
     const again = (await (await get('/api/history')).json()).history;
     assert.deepEqual(again.map(h => h.title), ['Сериал Ссылки', 'Сериал Селект']);
     assert.ok((await (await get('/api/home')).json()).notes >= 2, 'the links count among the notes');
+    /* another season of the same franchise pasted: its parts meet the row's, and it takes the row's place */
+    const s5 = site.base + '/s/select/season-5';
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc123', ordinal: 1 }, { id: 'abc124', ordinal: 2 }, { id: 'abc125', ordinal: 5 }]) }));
+    const merged = (await (await get('/api/history')).json()).history;
+    assert.deepEqual(merged.map(h => h.url), [site.base + '/s/links/ep-1', s5], 'one row per franchise, the newest link');
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);
     assert.equal((await get('/api/history/cover/abc123')).status, 404);

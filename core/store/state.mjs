@@ -27,6 +27,12 @@ export async function openState(own) {
      1.1.3 it was kept per dub. Old keys "series/episode/dub" fold into
      "series/episode", the newest of them winning. */
   let folded = false;
+  /* one row of history per franchise: rows whose parts meet fold into the newest */
+  for (const h of Object.values(data.history).sort((a, b) => b.at - a.at)) {
+    if (!data.history[h.url]) continue;
+    const ids = new Set((h.parts || []).map(p => p.id));
+    for (const o of Object.values(data.history)) if (o.url !== h.url && (o.parts || []).some(p => ids.has(p.id))) { delete data.history[o.url]; folded = true; }
+  }
   for (const [k, v] of Object.entries(data.positions)) {
     const parts = k.split('/');
     if (parts.length < 3) continue;
@@ -98,8 +104,14 @@ export async function openState(own) {
       const url = String(rec.url || '').trim();
       if (!url) return null;
       const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '' })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
-      /* a link pasted again keeps the cover it had when none came this time */
-      const prev = data.history[url] || {};
+      /* A franchise is one row: a link whose parts meet those of a row
+         already kept (the first season pasted after the fifth, on the same
+         site) takes that row's place. A link pasted again keeps the cover it
+         had when none came this time. */
+      const ids = new Set(parts.map(p => p.id));
+      const same = Object.values(data.history).filter(h => h.url !== url && (h.parts || []).some(p => ids.has(p.id)));
+      for (const h of same) delete data.history[h.url];
+      const prev = data.history[url] || same.find(h => h.seriesId === rec.seriesId) || {};
       const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || prev.cover || null, coverFile: rec.coverFile || prev.coverFile || null, parts, at: Date.now() };
       data.history[url] = entry;
       const keys = Object.keys(data.history);
