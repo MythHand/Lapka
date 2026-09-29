@@ -201,9 +201,9 @@ describe('the links pasted', () => {
     assert.equal(list.at(-1).last, null, 'nothing watched yet');
     /* a position noted in a part the link opened: the row says where watching stopped */
     await post('/api/history?' + new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', episodes: '4', parts: JSON.stringify([{ id: 'abc123', ordinal: 1, title: 'Сериал Селект' }, { id: 'abc124', ordinal: 2, title: 'Сериал Селект 2' }]) }));
-    await post('/api/state/position?series=abc124&episode=3&dub=anilibria&t=734&d=1400');
+    await post('/api/state/position?series=abc124&episode=3&t=734&d=1400&dubName=AniLibria');
     const withStop = (await (await get('/api/history')).json()).history.at(-1);
-    assert.deepEqual({ seriesId: withStop.last.seriesId, episode: withStop.last.episode, t: withStop.last.t, done: withStop.last.done }, { seriesId: 'abc124', episode: 3, t: 734, done: false });
+    assert.deepEqual({ seriesId: withStop.last.seriesId, episode: withStop.last.episode, t: withStop.last.t, done: withStop.last.done, dub: withStop.last.dub }, { seriesId: 'abc124', episode: 3, t: 734, done: false, dub: 'AniLibria' });
     await post('/api/state/watched?series=abc124&episode=3&on=1');
     await post('/api/state/position?series=abc124&episode=3&dub=anilibria');
     const finished = (await (await get('/api/history')).json()).history.at(-1);

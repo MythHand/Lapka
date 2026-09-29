@@ -421,7 +421,7 @@ function markPos(it, sec, send = true) {
   if (send) {
     clearTimeout(posTimers[k]);
     const [series, episode] = k.split('/');
-    const path = `/api/state/position?series=${series}&episode=${episode}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`;
+    const path = `/api/state/position?series=${series}&episode=${episode}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0) + (it.dub ? '&dubName=' + encodeURIComponent(it.dub.name) : '')}`;
     /* at once when the page is leaving (a timer would never fire), with the request kept alive past the page; else a moment later, the ticks of one second folded into one request */
     if (send === 'now') fetch(path, { method: 'POST', headers: { 'x-lapka': '1' }, keepalive: true }).catch(() => {});
     else posTimers[k] = setTimeout(() => post(path).catch(() => {}), 800);
@@ -441,7 +441,7 @@ function markWatched(it) {
   if (!k || state.watched[k]) return;
   state.watched[k] = true;
   const [series, episode] = k.split('/');
-  post(`/api/state/watched?series=${series}&episode=${episode}`).catch(() => {});
+  post(`/api/state/watched?series=${series}&episode=${episode}${it.dub ? '&dubName=' + encodeURIComponent(it.dub.name) : ''}`).catch(() => {});
   for (const li of queueList.children) if (byId(li.dataset.id) === it) paintPos(li, it);
 }
 
@@ -980,7 +980,8 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
       state.list.push(it);
     }
   }
-  state.dubKey = (state.remote.dubs || {})[got.series.id] || null;
+  /* the dub is the franchise's: the one noted for the part to start in, else the part pasted, else any part */
+  state.dubKey = franchiseDub([at && at.seriesId, got.series.id, ...state.seasons.map(s => s.series.id)]);
   linkInput.value = '';
   render(); paintTitle();
   loadLibrary(); watchSaves();
@@ -1008,6 +1009,12 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
    paste and is not written. The list stands beside the history button
    in the queue's footer: as tall as the window allows, the newest at
    the bottom, nearest the button; a row opens its link again. */
+/* the dub noted for the first of these parts that has one */
+function franchiseDub(ids) {
+  const dubs = state.remote.dubs || {};
+  for (const id of ids) if (id && dubs[id]) return dubs[id];
+  return null;
+}
 function rememberLink(url, series) {
   const q = new URLSearchParams({ url, series: series.id, title: series.title || '', episodes: String(series.episodes.length) });
   if (series.cover) q.set('cover', series.cover);
@@ -1082,7 +1089,7 @@ function historyRow(h) {
     const stop = document.createElement('div'); stop.className = 'histpop__stop';
     const part = (h.parts || []).find(x => x.id === last.seriesId);
     const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
-    stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) }));
+    stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) })) + (last.dub ? ` · ${last.dub}` : '');
     body.append(stop);
   }
   /* the link as pasted, unless the settings keep it out of sight */
@@ -1120,9 +1127,9 @@ function closeHistory() { histPop.hidden = true; }
 btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
 histPop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
-  if (histPop.hidden || e.target.closest('#histPop')) return;
-  /* the click closes the list and does nothing else; the button toggles it itself */
-  if (!e.target.closest('#btnHistory')) { e.stopPropagation(); e.preventDefault(); }
+  /* the button toggles the list itself; any other click closes it and does nothing else */
+  if (histPop.hidden || e.target.closest('#histPop, #btnHistory')) return;
+  e.stopPropagation(); e.preventDefault();
   closeHistory();
 }, true);
 /* Esc: a search typed is cleared first, then the list closes */
@@ -1237,6 +1244,9 @@ function pickQuality(opt) {
   if (!it) return;
   if (opt.level !== undefined) {           // a level inside one HLS stream
     if (hls) hls.currentLevel = opt.level;
+    /* the choice is kept, as a quality picked any other way is: the next episode starts in it */
+    const wanted = opt.level === -1 ? 'auto' : /^\d{3,4}p$/.test(opt.main) ? opt.main : null;
+    if (wanted) { state.quality = wanted; saveStr('lapka.quality', wanted); }
     toast(t('quality.current', { name: opt.main }));
     setTimeout(syncQualityButton, 300);
     return;
@@ -1758,7 +1768,10 @@ function pickAudio(opt, quality = null) {
     return;
   }
   state.dubKey = opt.id;
-  post(`/api/state/dub?series=${it.seriesId}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
+  /* noted for every part of the franchise open, so another part, or the same link pasted again, starts in it */
+  const ids = [...new Set([it.seriesId, ...state.seasons.map(s => s.series.id)])];
+  state.remote.dubs = state.remote.dubs || {};
+  for (const id of ids) { state.remote.dubs[id] = opt.id; post(`/api/state/dub?series=${id}&dub=${encodeURIComponent(opt.id)}`).catch(() => {}); }
   hideNotice();
   toast(t('audio.current', { name: opt.main }));
   switchTrack(it);
@@ -2539,12 +2552,6 @@ function buildGearMenu() {
   player.className = 'menu__col menu__col--player';
   menuTitle(player, t('set.head'));
   for (const row of SETTINGS) if (!iface.includes(row)) settingRow(player, row);
-  /* the quality a group is saved in: the best there is, the one playing, or the nearest to a named one */
-  segRow(player, t('set.saveQuality'), saveQualityWanted(),
-         [['max', t('quality.max')], ['played', t('quality.played')], null, ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], val => {
-    state.remote.settings = { ...(state.remote.settings || {}), saveQuality: val };
-    post('/api/state/setting?k=saveQuality&v=' + val).catch(() => {});
-  });
   switchRow(player, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
@@ -3223,11 +3230,12 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && !saveMenu.
 
 /* the stream of a named quality, for taking a save up again the way it was started */
 const streamOfQuality = (it, quality) => (quality && (saveQualities(it).find(o => o.label === quality) || {}).stream) || null;
-/* What a group is saved in. 'max' is the best there is; 'played' is what
-   the player has for the episode, or its own preference before it has
-   anything; a named quality takes the nearest one offered, the higher
-   on a tie. The old 'auto' meant the best. */
-const saveQualityWanted = () => ({ auto: 'max' })[state.remote.settings?.saveQuality] || state.remote.settings?.saveQuality || 'max';
+/* What is saved when nothing was picked in the save window: what is
+   watched. The quality the player has for the episode, or its wanted
+   quality before it has anything; the nearest one offered, the higher on
+   a tie, and the best there is when nothing is known. A quality of one's
+   own is picked with a tag in the save window. */
+const saveQualityWanted = () => 'played';
 const streamToSave = it => {
   const want = saveQualityWanted();
   const opts = saveQualities(it);

@@ -56,10 +56,10 @@ export async function openState(own) {
     get: () => data,
     position(seriesId, episode) { return data.positions[posKey(seriesId, episode)]?.t ?? null; },
     /* the duration goes along, so a row can show where the episode was left before it is ever opened again */
-    setPosition(seriesId, episode, seconds, duration = 0) {
+    setPosition(seriesId, episode, seconds, duration = 0, dub = null) {
       const k = posKey(seriesId, episode);
       if (seconds === null) delete data.positions[k];
-      else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), d: Math.max(0, Number(duration) || 0), at: Date.now() };
+      else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), d: Math.max(0, Number(duration) || 0), at: Date.now(), ...(dub ? { dub: String(dub) } : {}) };
       /* the oldest are let go, so the file does not grow with every episode ever watched */
       const keys = Object.keys(data.positions);
       if (keys.length > POS_KEEP) for (const k of keys.sort((a, b) => data.positions[a].at - data.positions[b].at).slice(0, keys.length - POS_KEEP)) delete data.positions[k];
@@ -67,9 +67,9 @@ export async function openState(own) {
     },
     /* an episode watched to its end, whatever the dub; kept for good, unlike the positions */
     watched(seriesId, episode) { return !!data.watched[`${seriesId}/${episode}`]; },
-    setWatched(seriesId, episode, on = true) {
+    setWatched(seriesId, episode, on = true, dub = null) {
       const k = `${seriesId}/${episode}`;
-      if (on) data.watched[k] = { at: Date.now() }; else delete data.watched[k];
+      if (on) data.watched[k] = { at: Date.now(), ...(dub ? { dub: String(dub) } : {}) }; else delete data.watched[k];
       soon();
     },
     dub(seriesId) { return data.dubs[seriesId] || null; },
@@ -92,11 +92,11 @@ export async function openState(own) {
       let best = null;
       for (const [k, v] of Object.entries(data.positions)) {
         const [sid, ep] = k.split('/');
-        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: v.t, d: v.d || 0, at: v.at, done: false };
+        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: v.t, d: v.d || 0, at: v.at, done: false, dub: v.dub || null };
       }
       for (const [k, v] of Object.entries(data.watched)) {
         const [sid, ep] = k.split('/');
-        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: 0, d: 0, at: v.at, done: true };
+        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: 0, d: 0, at: v.at, done: true, dub: v.dub || null };
       }
       return best;
     },

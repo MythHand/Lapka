@@ -282,12 +282,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (state && req.method === 'GET' && p === '/api/state') return json(res, 200, state.get());
       if (state && mutating && p === '/api/state/position') {
         const q = url.searchParams;
-        state.setPosition(q.get('series'), Number(q.get('episode')), q.has('t') ? Number(q.get('t')) : null, Number(q.get('d')) || 0);   // a place is the episode's, whatever the dub
+        state.setPosition(q.get('series'), Number(q.get('episode')), q.has('t') ? Number(q.get('t')) : null, Number(q.get('d')) || 0, q.get('dubName'));   // a place is the episode's, whatever the dub; the dub's name goes along to be said
         return json(res, 200, { ok: true });
       }
       if (state && mutating && p === '/api/state/watched') {
         const q = url.searchParams;
-        state.setWatched(q.get('series'), Number(q.get('episode')), q.get('on') !== '0');
+        state.setWatched(q.get('series'), Number(q.get('episode')), q.get('on') !== '0', q.get('dubName'));
         return json(res, 200, { ok: true });
       }
       if (state && mutating && p === '/api/state/dub') {
