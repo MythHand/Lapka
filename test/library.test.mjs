@@ -24,6 +24,7 @@ import { VERSION } from '../core/update.mjs';
 import { openState } from '../core/store/state.mjs';
 import { fileNameFor, safeName } from '../core/store/library.mjs';
 import { pickVariant } from '../core/deliver/save.mjs';
+import { reasonOf, originReason } from '../core/deliver/reasons.mjs';
 
 const ffmpeg = await haveFfmpeg();
 let site, lapka, home, movedWrap, sideWrap;
@@ -235,6 +236,21 @@ describe('the links pasted', () => {
   });
 });
 
+/* ── why a save broke off, as a code ── */
+describe('the reason of a broken save', () => {
+  test('the source by its status, the network, the disk, a code given ready, anything else with its detail', () => {
+    assert.deepEqual(originReason(404), { key: 'gone', status: 404 });
+    assert.deepEqual(originReason(403), { key: 'denied', status: 403 });
+    assert.deepEqual(originReason(500), { key: 'origin', status: 500 });
+    assert.equal(reasonOf(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })).key, 'network');
+    assert.equal(reasonOf(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })).key, 'network');
+    assert.equal(reasonOf(Object.assign(new Error('no space left'), { code: 'ENOSPC' })).key, 'disk');
+    assert.equal(reasonOf(Object.assign(new Error('x'), { code: 'EACCES' })).key, 'access');
+    assert.deepEqual(reasonOf(Object.assign(new Error('origin answered 410'), { reason: originReason(410) })), { key: 'gone', status: 410 });
+    assert.deepEqual(reasonOf(new Error('odd')), { key: 'other', detail: 'odd' });
+  });
+});
+
 /* ── the variant of a master to save ── */
 describe('the variant to save', () => {
   const master = ['#EXTM3U', '#EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360', '360/index.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=2500000,RESOLUTION=1280x720,AUDIO=\"snd\"', '720/index.m3u8', '#EXT-X-STREAM-INF:BANDWIDTH=5000000,RESOLUTION=1920x1080', '1080/index.m3u8'];
@@ -416,7 +432,8 @@ describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     lapka.state.setSave('nope/1/x', { seriesUrl: site.base + '/s/nope/', seriesId: 'nope', episode: 1, dubKey: 'x', quality: 'auto' });
     const out2 = await lapka.saver.resume(lapka.lapka);
     assert.equal(out2[0].state, 'error');
-    assert.ok((await (await get('/api/saves')).json()).pending['nope/1/x'].error);
+    const why = (await (await get('/api/saves')).json()).pending['nope/1/x'].error;
+    assert.equal(typeof why.key, 'string', 'a save that broke off keeps a code for the page to word, not a sentence');
     assert.equal((await post('/api/saves/forget?key=nope/1/x')).status, 200);
     assert.equal(Object.keys((await (await get('/api/saves')).json()).pending).length, 0);
     /* a setting through its route */

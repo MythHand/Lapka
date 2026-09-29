@@ -15,6 +15,7 @@
    here: a whole file is fetched once at saving time instead.
    ═══════════════════════════════════════════════════════════ */
 import { createHash } from 'node:crypto';
+import { originReason } from './reasons.mjs';
 
 const hash = s => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const ATTR_URI = /URI="([^"]+)"/g;
@@ -69,7 +70,7 @@ export function createDelivery({ session, cache }) {
      (the timestamps' commas become dots, the header goes on top). */
   async function text(entry) {
     const res = await fetchOrigin(entry, entry.stream.url);
-    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });
+    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
     const raw = (await res.text()).replace(/^\uFEFF/, '');
     if (/^WEBVTT/.test(raw.trim())) return raw;
     const cues = raw.replace(/\r\n?/g, '\n').replace(/(\d{2}:\d{2}:\d{2}),(\d{3})/g, '$1.$2');
@@ -79,9 +80,9 @@ export function createDelivery({ session, cache }) {
   /* The playlist: fetched every time (it may be live or signed
      anew), rewritten, and the media playlist kept for saving later. */
   async function playlist(entry, url = entry.stream.url) {
-    if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403 });
+    if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
     const res = await fetchOrigin(entry, url);
-    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });
+    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
     const text = await res.text();
     const body = rewrite(entry, text, res.url || url);
     cacheOf().write(entry.id, nameFor(url), text).catch(() => {});
@@ -91,12 +92,12 @@ export function createDelivery({ session, cache }) {
   /* A segment or a key: from the cache if it passed through before,
      otherwise from the origin and into the cache on the way. */
   async function piece(entry, url) {
-    if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403 });
+    if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
     const name = nameFor(url);
     const cache = cacheOf();
     if (await cache.has(entry.id, name)) { cache.touch(entry.id); return { bytes: await cache.read(entry.id, name), hit: true }; }
     const res = await fetchOrigin(entry, url);
-    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });
+    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
     const bytes = Buffer.from(await res.arrayBuffer());
     cache.write(entry.id, name, bytes).catch(() => {});
     return { bytes, hit: false };
@@ -105,7 +106,7 @@ export function createDelivery({ session, cache }) {
   /* MP4: the browser's range request goes to the origin as it is. */
   async function file(entry, range) {
     const res = await fetchOrigin(entry, entry.stream.url, range ? { range } : {});
-    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502 });
+    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
     return res;
   }
 

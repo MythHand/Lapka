@@ -637,7 +637,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function api(path, opts) {
   const r = await fetch(path, opts);
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || String(r.status));
+  if (!r.ok) throw Object.assign(new Error(d.error || String(r.status)), { reason: d.reason || null });   // a reason, when given, is a code for the page to word
   return d;
 }
 /* the look of a page told as it goes: every step to onStep, the answer at the end */
@@ -3288,6 +3288,10 @@ const isSaving = it => !!(it.save && (it.save.st === 'saving' || it.save.st === 
 const isQueued = it => !!(it.save && it.save.st === 'queued');
 const isPaused = it => !!(it.save && it.save.st === 'paused');
 /* how far a save got, in its own units: sizes for a file fetched whole, a count for pieces */
+/* why a save broke off, in words: the server names it by a code; a
+   sentence kept from before 1.2.0, or made by this page, stays as it is */
+const SAVE_WHY = { gone: 'save.err.gone', denied: 'save.err.denied', origin: 'save.err.origin', network: 'save.err.network', playlist: 'save.err.playlist', noStream: 'save.err.noStream', noFfmpeg: 'save.err.noFfmpeg', ffmpeg: 'save.err.ffmpeg', disk: 'save.err.disk', access: 'save.err.access', other: 'save.err.other' };
+const saveWhy = why => !why ? '' : typeof why === 'string' ? why : t(SAVE_WHY[why.key] || 'save.err.other', { status: why.status || '', detail: why.detail || why.key || '' });
 const progressWords = sv => sv.unit === 'bytes' ? `${fmtSize(sv.done || 0)} / ${fmtSize(sv.total || 0)}` : `${sv.done || 0} / ${sv.total || 0}`;
 const progressPct = sv => sv.phase === 'assemble' ? 100 : sv.total ? Math.round(sv.done / sv.total * 100) : 0;
 const isFailed = it => !!(it.save && it.save.st === 'failed');
@@ -3401,7 +3405,7 @@ function paintSaveCard(btn) {
   const put = (r, text) => { r.k.hidden = r.v.hidden = !text; r.v.textContent = text || ''; };
   for (const r of card.rows) r.k.textContent = t(r.key);
   put(card.got, sv.total ? `${progressWords(sv)} · ${progressPct(sv)}%` : '');
-  put(card.why, failed ? sv.error : '');
+  put(card.why, failed ? saveWhy(sv.error) : '');
   put(card.dub, sv.dubName || '');
   put(card.quality, sv.quality === 'auto' ? t('pop.qBest') : sv.quality || '');
   card.hint.textContent = t(failed ? 'queue.retryHint' : paused ? 'queue.resumeHint' : queued ? 'queue.promoteHint' : 'queue.pauseHint');
@@ -3561,7 +3565,7 @@ function paintSavePop() {
   put(r.now, cur1 ? cur1.name : '', cur1 && cur1.save.st === 'saving' ? (cur1.save.total ? `${progressWords(cur1.save)} · ${progressPct(cur1.save)}%` : t('queue.assembling')) : (cur1 ? t('queue.opening') : ''), loading.length > 0);
   put(r.queued, String(queued.length), '', queued.length > 0);
   put(r.paused, String(paused.length), '', paused.length > 0);
-  put(r.failed, String(failed.length), failed[0] ? failed[0].save.error : '', failed.length > 0);
+  put(r.failed, String(failed.length), failed[0] ? saveWhy(failed[0].save.error) : '', failed.length > 0);
   put(r.rest, String(left.length), t('pop.about', { size: fmtSize(estimate) }), estimate > 0 && left.length > 0);
   put(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '', dur > 0);
   /* the pick, and the rows it leaves out for want of the dub */
@@ -3713,8 +3717,8 @@ async function submitSave(it, stream = null) {
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     it.save = jobState(job, quality); paintSaved();
   } catch (e) {
-    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
-    toast(t('toast.saveFail', { why: e.message }));
+    it.save = { st: 'failed', error: e.reason || e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
+    toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) }));
   }
 }
 /* a server job as the row's state */
@@ -3746,7 +3750,7 @@ async function promoteSave(it) {
   if (!sv || sv.st !== 'queued') return;
   if (sv.jobId) {
     try { const job = await post('/api/save/promote?id=' + encodeURIComponent(sv.jobId)); it.save = jobState(job, sv.quality); }
-    catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+    catch (e) { toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) })); }
   } else {
     const i = saveQueue.indexOf(it); if (i >= 0) saveQueue.splice(i, 1);
     sv.first = true;
@@ -3770,7 +3774,7 @@ async function cancelSaves(items) {
   for (const it of mine) { if (!bySeries.has(it.seriesId)) bySeries.set(it.seriesId, []); bySeries.get(it.seriesId).push(it.number); }
   try {
     for (const [seriesId, eps] of bySeries) await post(`/api/saves/cancel?series=${encodeURIComponent(seriesId)}&episodes=${eps.join(',')}`);
-  } catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  } catch (e) { toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) })); }
   if (mine.length) toast(t('toast.cancelled', { n: mine.length }));
   clearTimeout(savesT); watchSaves();
 }
@@ -3781,7 +3785,7 @@ async function deleteSaved(items) {
   let n = 0;
   try {
     for (const [seriesId, eps] of bySeries) n += (await post(`/api/library/delete?series=${encodeURIComponent(seriesId)}&episodes=${eps.join(',')}`)).removed || 0;
-  } catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  } catch (e) { toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) })); }
   await loadLibrary();
   toast(t('toast.deleted', { n }));
 }
