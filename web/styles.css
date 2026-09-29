@@ -1056,6 +1056,8 @@ svg.ph{ fill:currentColor; stroke:none; }
 .histpop__meta{ display:flex; justify-content:space-between; gap:12px; font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; }
 .histpop__when{ flex:none; }
 .histpop__stop{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); }
+/* the episode, the time and the dub stay together: at the end of the line, or whole on the next */
+.histpop__tail{ white-space:nowrap; }
 .histpop__url{ font-family:var(--mono); letter-spacing:0; font-size:calc(12px + var(--fs)); color:var(--tx-2); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; word-break:break-all; line-height:1.4; margin-top:2px; }
 
 /* ───────────── modals ───────────── */

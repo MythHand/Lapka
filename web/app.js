@@ -1068,6 +1068,16 @@ function buildHistory() {
   paintHistoryList();
   search.focus({ preventScroll: true });
 }
+/* a title without its season: "2 сезон", "Season 2", "TV-2", "Part 2", a
+   closing number equal to the season; what is left says whose season it is */
+const SEASON_MARKS = [/\d{1,2}\s*-?\s*(?:й|ой|ый)?\s*сезон/giu, /сезон\s*№?\s*\d{1,2}(?!\d)/giu, /season\s*\d{1,2}/gi, /\d{1,2}(?:st|nd|rd|th)\s+season/gi, /(?:^|\s)(?:part|часть)\s*\d{1,2}(?!\d)/giu, /\bS\d{1,2}\b(?!\d)/g, /(?:ТВ|TV)-\d{1,2}(?!\d)/giu];
+function titleBase(title, season) {
+  let s = String(title || '');
+  for (const re of SEASON_MARKS) s = s.replace(re, ' ');
+  s = s.replace(/[\s\p{P}]+/gu, ' ').trim();
+  if (season) s = s.replace(new RegExp(`(?:^|\\s)${Number(season)}$`), '');
+  return s.trim().toLowerCase();
+}
 function historyRow(h) {
   const row = document.createElement('button');
   row.className = 'histpop__row';
@@ -1083,19 +1093,23 @@ function historyRow(h) {
   const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
   meta.append(about, when);
   body.append(title, meta);
-  /* where watching stopped, across the parts the link opened, in one
-     sentence: in the link's own part by the episode; in another by its
-     season, a film by its title, a part with no season number by its title */
+  /* where watching stopped, across the parts the link opened: the head
+     names the part, the tail says the episode, the time and the dub. The
+     tail never breaks: it stands at the end of the line while it fits,
+     else it goes whole to the next one. The link's own part needs no name;
+     a film is named by its title; a part whose title is the row's with
+     only the season changed is named by the season; any other part (a
+     branch, a title of its own) by its title, as the site calls it. */
   const last = h.last;
   if (last) {
     const stop = document.createElement('div'); stop.className = 'histpop__stop';
     const part = last.seriesId !== h.seriesId ? (h.parts || []).find(x => x.id === last.seriesId) : null;
-    const how = !part ? '' : part.kind === 'movie' ? 'Movie' : part.season ? 'Season' : 'Part';
-    const words = { n: last.episode, time: fmt(last.t), season: part && part.season, title: part && part.title };
-    const key = last.done
-      ? { '': 'hist.finished', Movie: 'hist.finishedMovie', Season: 'hist.finishedSeason', Part: 'hist.finishedPart' }[how]
-      : { '': 'hist.stopped', Movie: 'hist.stoppedMovie', Season: 'hist.stoppedSeason', Part: 'hist.stoppedPart' }[how];
-    stop.textContent = t(key, words) + (last.dub ? ` · ${last.dub}` : '');
+    const film = part ? part.kind === 'movie' : h.kind === 'movie';
+    const name = !part ? '' : !film && part.season && titleBase(part.title, part.season) === titleBase(h.title, h.season) ? t('queue.season', { n: part.season }) : part.title;
+    const head = [t(last.done ? 'hist.finishedAt' : 'hist.stoppedAt'), name].filter(Boolean).join(' · ');
+    const tail = document.createElement('span'); tail.className = 'histpop__tail';
+    tail.textContent = [film ? '' : t('hist.ep', { n: last.episode }), last.done ? '' : fmt(last.t), last.dub || ''].filter(Boolean).join(' · ');
+    stop.append(tail.textContent ? head + ' · ' : head, tail);
     body.append(stop);
   }
   /* the link as pasted, unless the settings keep it out of sight */
