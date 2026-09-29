@@ -1747,6 +1747,19 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 }
 .tip__sub{ color:var(--tx-3); white-space:normal; }
 
+/* ── the card of a row's save: beside its ring, the popovers' own look ── */
+.savecard{
+  position:fixed; z-index:70; width:340px; max-width:calc(100vw - 24px);
+  padding:14px 16px 12px; border-radius:var(--r-lg);
+  background:rgba(22,23,26,.97); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  font-size:calc(12.5px + var(--fs)); line-height:1.5; color:var(--tx-2); pointer-events:none;
+}
+.savecard .savepop__v{ overflow-wrap:anywhere; }
+/* the bar takes the ring's colour: grey on a pause, the warning's when broken off */
+.savecard.is-paused .savepop__bar i{ background:var(--tx-3); }
+.savecard.is-failed .savepop__bar i{ background:#e0a24a; }
+.savecard__hint{ margin-top:12px; color:var(--tx-3); }
+
 /* ── a switch for a setting that is on or off ───────────────── */
 .menu__row.menu__row--switch{ flex-direction:row; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; }
 .menu__row--switch .menu__rowlabel{ margin:0; text-align:left; }

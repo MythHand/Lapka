@@ -103,7 +103,7 @@ export async function openState(own) {
     remember(rec) {
       const url = String(rec.url || '').trim();
       if (!url) return null;
-      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '' })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
+      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '', season: Number(p.season) || null, kind: p.kind || null })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
       /* A franchise is one row: a link whose parts meet those of a row
          already kept (the first season pasted after the fifth, on the same
          site) takes that row's place. A link pasted again keeps the cover it

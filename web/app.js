@@ -1022,7 +1022,7 @@ function rememberLink(url, series) {
   if (series.year) q.set('year', String(series.year));
   if (series.season) q.set('season', String(series.season));
   /* the parts the link opened: where watching stops is looked for across them */
-  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '' }))));
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null }))));
   post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
 }
 let histList = [];
@@ -1083,13 +1083,19 @@ function historyRow(h) {
   const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
   meta.append(about, when);
   body.append(title, meta);
-  /* where watching stopped, across the parts the link opened; a part other than the link's is named */
+  /* where watching stopped, across the parts the link opened, in one
+     sentence: in the link's own part by the episode; in another by its
+     season, a film by its title, a part with no season number by its title */
   const last = h.last;
   if (last) {
     const stop = document.createElement('div'); stop.className = 'histpop__stop';
-    const part = (h.parts || []).find(x => x.id === last.seriesId);
-    const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
-    stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) })) + (last.dub ? ` · ${last.dub}` : '');
+    const part = last.seriesId !== h.seriesId ? (h.parts || []).find(x => x.id === last.seriesId) : null;
+    const how = !part ? '' : part.kind === 'movie' ? 'Movie' : part.season ? 'Season' : 'Part';
+    const words = { n: last.episode, time: fmt(last.t), season: part && part.season, title: part && part.title };
+    const key = last.done
+      ? { '': 'hist.finished', Movie: 'hist.finishedMovie', Season: 'hist.finishedSeason', Part: 'hist.finishedPart' }[how]
+      : { '': 'hist.stopped', Movie: 'hist.stoppedMovie', Season: 'hist.stoppedSeason', Part: 'hist.stoppedPart' }[how];
+    stop.textContent = t(key, words) + (last.dub ? ` · ${last.dub}` : '');
     body.append(stop);
   }
   /* the link as pasted, unless the settings keep it out of sight */
@@ -3063,7 +3069,7 @@ const dubsKnown = it => saveInfo && saveInfo.key === `${it.seriesId}/${it.number
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
   /* one dub, one stream of a known quality: nothing to choose */
-  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], it.streams[0]);
+  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], { ...it.streams[0], dubName: it.dub ? it.dub.name : null });
   saveMenuFor = it;
   saveMenu.anchor = btn.getBoundingClientRect();
   saveMenu.hidden = false;
@@ -3125,7 +3131,7 @@ function buildSaveMenu(it) {
   const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
   for (const d of rows) {
     const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
-    saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); }, { waiting: !!(d.unopened || !known) }));
+    saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player, dubName: d.name }); }, { waiting: !!(d.unopened || !known) }));
   }
   placeSaveMenu();
 }
@@ -3299,9 +3305,9 @@ async function watchSaves() {
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job), pick: job.streamId ? { id: job.streamId, level: job.level || null } : null }; active = true; }
-    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
-    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
+    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job), dubName: job.dubName || null, pick: job.streamId ? { id: job.streamId, level: job.level || null } : null }; active = true; }
+    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null, dubName: rec.dubName || null };
+    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null, dubName: rec.dubName || null };
     else if (it.save) { if (it.save.jobId) finished = true; it.save = null; }   // its job is gone without a record: the file is in the library
   }
   if (finished) await loadLibrary(); else paintSaved();
@@ -3341,9 +3347,9 @@ function paintSaveButton(btn, it) {
   btn.classList.toggle('is-paused', paused);
   btn.classList.toggle('is-failed', failed);
   btn.classList.toggle('is-queued', queued);
-  let tip, sub = '';
+  btn._it = it;
   if (saving || paused || failed || queued) {
-    const pct = progressPct(sv), p = pct / 100;
+    const p = progressPct(sv) / 100;
     let ring = btn.querySelector('.ring');
     if (!ring) {
       btn.innerHTML = `<svg class="ring" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(2)}"/></svg><i class="ring__pause"></i>`;
@@ -3351,21 +3357,62 @@ function paintSaveButton(btn, it) {
     }
     ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
     ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
-    const got = t('queue.got', { got: progressWords(sv), pct });
-    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = (sv.total ? got + ' · ' : '') + t('queue.retryHint'); }
-    else if (paused) { tip = t('queue.savePaused', { got }); sub = t('queue.resumeHint'); }
-    else if (queued) { tip = t('queue.queued'); sub = t('queue.promoteHint'); }
-    else if (sv.st === 'opening') { tip = t('queue.opening'); sub = t('queue.pauseHint'); }
-    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.pauseHint'); }
-    else { tip = t('queue.saving', { got }); sub = t('queue.pauseHint'); }
-    delete btn.dataset.icon;
+    /* a save under way is told by the card, not by the tooltip */
+    delete btn.dataset.icon; delete btn.dataset.tip; delete btn.dataset.tipSub;
+    btn.dataset.card = '';
   } else {
     const want = saved ? PH.check : PH.download;
     if (btn.dataset.icon !== (saved ? 'check' : 'download')) { btn.innerHTML = phSvg(want); btn.dataset.icon = saved ? 'check' : 'download'; }
-    tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
+    delete btn.dataset.card;
+    btn.dataset.tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
+    btn.dataset.tipSub = '';
   }
-  btn.dataset.tip = tip; btn.dataset.tipSub = sub;
   if (tipFor === btn) paintTip(btn);
+}
+
+/* ── the card of a row's save ──────────────────────────────────
+   While a row waits, loads, stands paused or has broken off, its ring
+   says only how far; the card beside it, to the right so the rows stay
+   in sight, says the rest: the state as its heading, the bar, how much
+   of how much, the dub and the quality, what a click does. Built once,
+   filled in place as the save moves. */
+const saveCard = $('#saveCard');
+let card = null;
+const cardParts = () => card || (card = (() => {
+  const head = el('div', 'savepop__head');
+  const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill);
+  const grid = el('div', 'savepop__grid');
+  const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); grid.append(k, v); return { k, v, key }; };
+  const got = row('card.got'), why = row('card.why'), dub = row('card.dub'), quality = row('card.quality');
+  const hint = el('div', 'savecard__hint');
+  saveCard.append(head, bar, grid, hint);
+  return { head, fill, rows: [got, why, dub, quality], got, why, dub, quality, hint };
+})());
+function paintSaveCard(btn) {
+  const it = btn._it, sv = it && it.save;
+  if (!sv || !('card' in btn.dataset)) { saveCard.hidden = true; return; }
+  const card = cardParts();
+  const failed = sv.st === 'failed', paused = sv.st === 'paused', queued = sv.st === 'queued', opening = sv.st === 'opening';
+  const assembling = !failed && !paused && !queued && sv.phase === 'assemble';
+  card.head.textContent = t(failed ? 'card.failed' : paused ? 'card.paused' : queued ? 'card.queued' : opening ? 'queue.opening' : assembling ? 'card.assembling' : 'card.saving');
+  saveCard.classList.toggle('is-failed', failed);
+  saveCard.classList.toggle('is-paused', paused);
+  card.fill.style.width = progressPct(sv) + '%';
+  const put = (r, text) => { r.k.hidden = r.v.hidden = !text; r.v.textContent = text || ''; };
+  for (const r of card.rows) r.k.textContent = t(r.key);
+  put(card.got, sv.total ? `${progressWords(sv)} · ${progressPct(sv)}%` : '');
+  put(card.why, failed ? sv.error : '');
+  put(card.dub, sv.dubName || '');
+  put(card.quality, sv.quality === 'auto' ? t('pop.qBest') : sv.quality || '');
+  card.hint.textContent = t(failed ? 'queue.retryHint' : paused ? 'queue.resumeHint' : queued ? 'queue.promoteHint' : 'queue.pauseHint');
+  /* past the queue's right edge, level with the ring, so no row or group is covered; on the left only when the window ends first */
+  const r = btn.getBoundingClientRect(), panel = btn.closest('.queue');
+  saveCard.hidden = false;
+  const w = saveCard.offsetWidth, h = saveCard.offsetHeight;
+  let left = (panel ? panel.getBoundingClientRect().right : r.right) + 12;
+  if (left + w > window.innerWidth - 8) left = Math.max(8, r.left - w - 12);
+  const top = Math.max(8, Math.min(r.top + r.height / 2 - h / 2, window.innerHeight - h - 8));
+  saveCard.style.left = left + 'px'; saveCard.style.top = top + 'px';
 }
 
 /* ── Lapka's own tooltip ───────────────────────────────────────
@@ -3374,6 +3421,8 @@ function paintSaveButton(btn, it) {
    repainted with its element while it is up. */
 let tipFor = null;
 function paintTip(el) {
+  if ('card' in el.dataset) { tipEl.hidden = true; return paintSaveCard(el); }
+  saveCard.hidden = true;
   tipEl.textContent = el.dataset.tip || '';
   if (el.dataset.tipSub) { const s = document.createElement('div'); s.className = 'tip__sub'; s.textContent = el.dataset.tipSub; tipEl.append(s); }
   const r = el.getBoundingClientRect();
@@ -3386,14 +3435,15 @@ function paintTip(el) {
   left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
   tipEl.style.left = left + 'px'; tipEl.style.top = top + 'px';
 }
+const hideTips = () => { tipFor = null; tipEl.hidden = true; saveCard.hidden = true; };
 document.addEventListener('pointerover', e => {
-  const el = e.target.closest('[data-tip]');
+  const el = e.target.closest('[data-tip], [data-card]');
   if (el === tipFor) return;
-  tipFor = el;
-  if (el) paintTip(el); else tipEl.hidden = true;
+  if (!el) return hideTips();
+  tipFor = el; paintTip(el);
 });
-document.addEventListener('pointerdown', () => { tipFor = null; tipEl.hidden = true; });
-queueList.addEventListener('scroll', () => { tipFor = null; tipEl.hidden = true; }, { passive: true });
+document.addEventListener('pointerdown', hideTips);
+queueList.addEventListener('scroll', hideTips, { passive: true });
 
 function paintGroupSave(li) {
   const items = state.list.filter(it => it.group === li.dataset.group);
@@ -3627,7 +3677,7 @@ function enqueueSaves(items, stream = null, { first = false, pick: groupPick = n
     it.saveStream = stream || null;
     /* what was picked stays with the row: a pause and a resume keep the dub and the quality */
     const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
-    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, pick, groupPick: groupPick || before.groupPick || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
+    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, dubName: (stream && stream.dubName) || (groupPick && groupPick.dubName) || before.dubName || null, pick, groupPick: groupPick || before.groupPick || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
     if (first) saveQueue.unshift(it); else saveQueue.push(it);
   }
   paintSaved();
@@ -3650,10 +3700,10 @@ async function submitSave(it, stream = null) {
   const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
   const first = !!before.first;
   it.pauseWanted = false;
-  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved();
+  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
   try {
     if (!it.stream) await resolveItem(it);
-    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved(); return; }
+    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved(); return; }
     /* a part's pick names the dub and the quality for every row of it */
     let st = stream || pick || null;
     if (!st && before.groupPick) { st = await streamForPick(it, before.groupPick); if (!st) throw new Error(t('pop.noDub', { dub: before.groupPick.dubName })); }
@@ -3663,7 +3713,7 @@ async function submitSave(it, stream = null) {
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     it.save = jobState(job, quality); paintSaved();
   } catch (e) {
-    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved();
+    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
     toast(t('toast.saveFail', { why: e.message }));
   }
 }
@@ -3671,10 +3721,11 @@ async function submitSave(it, stream = null) {
 function jobState(job, quality = null) {
   const q = jobQuality(job) || quality;
   const pick = job.streamId ? { id: job.streamId, level: job.level || null } : null;
-  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, pick };
-  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, pick };
+  const dubName = job.dubName || null;
+  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, dubName, pick };
+  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, dubName, pick };
   if (job.state === 'done') return null;
-  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q, pick };
+  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q, dubName, pick };
 }
 
 /* rows taken out of this page's line go back to what they were before they were asked */
@@ -3750,7 +3801,7 @@ async function pauseItems(items, whole = false) {
     if (whole) await post('/api/saves/pause');
     else await Promise.all(jobs.map(it => post('/api/save/pause?id=' + encodeURIComponent(it.save.jobId))));
   } catch (e) { toast(t('toast.pauseFail', { why: e.message })); return; }
-  for (const it of jobs) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
+  for (const it of jobs) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null, dubName: it.save.dubName || null };
   paintSaved();
   clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }

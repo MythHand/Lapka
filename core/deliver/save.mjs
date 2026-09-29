@@ -188,7 +188,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
   const ctxOf = new Map();         // what each job saves, kept out of the job (the job is sent as JSON)
   const stops = new Map();         // the abort of each job working
   let held = false;                // the loading as a whole is on hold: the resume loop stops at the next record
-  const noteFor = (job, ctx, extra = {}) => state && state.setSave(job.key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, quality: job.quality, phase: job.phase, done: job.done, total: job.total, unit: job.unit || null, error: job.error, paused: false, ...extra });
+  const noteFor = (job, ctx, extra = {}) => state && state.setSave(job.key, { seriesUrl: ctx.series.sourceUrl, seriesId: ctx.series.id, episode: ctx.episode.number, dubKey: ctx.dub.key, dubName: ctx.dub.name || null, quality: job.quality, phase: job.phase, done: job.done, total: job.total, unit: job.unit || null, error: job.error, paused: false, ...extra });
 
   /* level: the height to take out of an adaptive stream; the job is then
      named by it, so a pause and a resume keep to the same quality */
@@ -198,7 +198,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
     if (same) { if (first) promote(same.id); return same; }
     const id = `${streamId}-${Date.now().toString(36)}`;
     level = Number(level) || null;
-    const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, quality: level ? `${level}p` : ctx.stream.quality || 'auto', level, state: 'queued', phase: 'fetch', done: 0, total: 0, unit: null, file: null, error: null, started: Date.now() };
+    const job = { id, key, streamId, seriesId: ctx.series.id, episode: ctx.episode.number, dub: ctx.dub.key, dubName: ctx.dub.name || null, quality: level ? `${level}p` : ctx.stream.quality || 'auto', level, state: 'queued', phase: 'fetch', done: 0, total: 0, unit: null, file: null, error: null, started: Date.now() };
     jobs.set(id, job);
     ctxOf.set(id, { ...ctx, level });
     noteFor(job, ctx);

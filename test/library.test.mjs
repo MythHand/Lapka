@@ -92,6 +92,7 @@ describe('saving', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
 
   test('an mp4 stream is fetched whole', async () => {
     let job = await (await post(`/api/save?stream=${mp4.id}`)).json();
+    assert.equal(job.dubName, 'AniLibria', 'a job names its dub, so a row can say it before the episode is opened');
     for (let i = 0; i < 200 && job.state === 'working'; i++) { await new Promise(r => setTimeout(r, 100)); job = await (await get(`/api/save/${job.id}`)).json(); }
     assert.equal(job.state, 'done', job.error);
     const whole = Buffer.from(await (await fetch(site.base + '/media/native.mp4')).arrayBuffer());
@@ -224,6 +225,10 @@ describe('the links pasted', () => {
     await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc123', ordinal: 1 }, { id: 'abc124', ordinal: 2 }, { id: 'abc125', ordinal: 5 }]) }));
     const merged = (await (await get('/api/history')).json()).history;
     assert.deepEqual(merged.map(h => h.url), [site.base + '/s/links/ep-1', s5], 'one row per franchise, the newest link');
+    /* a part keeps its season and kind, so where watching stopped is said by the season, not by a number of Lapka's */
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv' }, { id: 'abc126', ordinal: 3, title: 'Фильм', kind: 'movie' }, { id: 'abc125', ordinal: 5 }]) }));
+    const kept = (await (await get('/api/history')).json()).history.at(-1).parts;
+    assert.deepEqual(kept.slice(0, 2).map(p => [p.season, p.kind]), [[2, 'tv'], [null, 'movie']]);
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);
     assert.equal((await get('/api/history/cover/abc123')).status, 404);
