@@ -1134,7 +1134,7 @@ function paintHistoryList() {
   for (const h of shown) list.append(historyRow(h));
   /* the height of what is shown, up to the window; the bottom stays at the button, the newest rows beside it */
   placeHistory();
-  histPop.scrollTop = histPop.scrollHeight;
+  list.scrollTop = list.scrollHeight;
 }
 /* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
 function placeHistory() {
