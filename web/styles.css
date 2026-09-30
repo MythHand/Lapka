@@ -1060,6 +1060,8 @@ svg.ph{ fill:currentColor; stroke:none; }
   position:absolute; top:6px; right:6px; width:26px; height:26px;
   display:grid; place-items:center; color:var(--tx-3); opacity:0;   /* part of the row's hover: no pace of its own */
 }
+.histpop__x svg{ opacity:.55; }                                      /* quiet until the pointer is on it */
+.histpop__x:hover svg{ opacity:1; }
 .histpop__row:hover .histpop__x, .histpop__x:focus-visible{ opacity:1; }
 .histpop__x:hover{ color:var(--tx-1); }
 .histpop__x svg{ width:14px; height:14px; }
@@ -1774,12 +1776,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .scroll-own{ scrollbar-width:none; }
 .scroll-own::-webkit-scrollbar{ display:none; width:0; height:0; }
 .scroll-own > .bar{
-  position:absolute; top:0; right:3px; width:6px; border-radius:3px;
-  background:rgba(255,255,255,.28); opacity:0; pointer-events:none; z-index:5;
+  position:absolute; top:0; right:3px; width:6px;                 /* square ends: a block, in the project's own manner */
+  background:rgba(255,255,255,.14); opacity:0; pointer-events:none; z-index:5;
   transition:opacity .22s ease, width .15s ease, background .15s ease; will-change:transform;
 }
 .scroll-own > .bar.is-on{ opacity:1; pointer-events:auto; }
-.scroll-own > .bar:hover, .scroll-own > .bar.is-drag{ width:10px; background:rgba(255,255,255,.55); }
+.scroll-own > .bar:hover, .scroll-own > .bar.is-drag{ width:10px; background:rgba(255,255,255,.45); }
 .scroll-own > .bar[hidden]{ display:none; }
 @media (prefers-reduced-motion: reduce){ .scroll-own > .bar{ transition:none; } }
 
