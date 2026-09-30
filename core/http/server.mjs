@@ -232,6 +232,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
         return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
       }
+      if (state && store && mutating && p === '/api/history/forget') {
+        const gone = state.forgetLink(url.searchParams.get('url'));
+        if (!gone) return json(res, 404, { error: 'no such link' });
+        if (gone.coverFile) await fsp.rm(path.join(store.own, 'covers', gone.coverFile), { force: true }).catch(() => {});
+        return json(res, 200, { ok: true });
+      }
       if (state && store && req.method === 'GET' && p.startsWith('/api/history/cover/')) {
         const id = decodeURIComponent(p.slice('/api/history/cover/'.length));
         const rec = state.history().find(h => h.seriesId === id && h.coverFile);

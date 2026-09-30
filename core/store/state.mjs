@@ -119,6 +119,15 @@ export async function openState(own) {
       soon();
       return entry;
     },
+    /* one link forgotten: the row goes, and the name of its cover file is
+       given back to be removed; what was watched stays, it is the series'
+       own memory, not the link's */
+    forgetLink(url) {
+      const h = data.history[String(url || '').trim()];
+      if (!h) return null;
+      delete data.history[h.url]; soon();
+      return { coverFile: h.coverFile || null };
+    },
     /* what was noted about watching: positions, watched marks, dub choices, the links pasted. Settings and save records stay. */
     notes() { return Object.keys(data.positions).length + Object.keys(data.watched).length + Object.keys(data.dubs).length + Object.keys(data.history).length; },
     forget() { data.positions = {}; data.watched = {}; data.dubs = {}; data.history = {}; soon(); },

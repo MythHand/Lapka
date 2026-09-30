@@ -230,6 +230,12 @@ describe('the links pasted', () => {
     await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv' }, { id: 'abc126', ordinal: 3, title: 'Фильм', kind: 'movie' }, { id: 'abc125', ordinal: 5 }]) }));
     const kept = (await (await get('/api/history')).json()).history.at(-1).parts;
     assert.deepEqual(kept.slice(0, 2).map(p => [p.season, p.kind]), [[2, 'tv'], [null, 'movie']]);
+    /* one link forgotten: its row and cover go, the other row stays, and what was watched stays with the series */
+    await post('/api/state/position?series=abc125&episode=7&t=300&d=1400');
+    assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 200);
+    assert.deepEqual((await (await get('/api/history')).json()).history.map(h => h.url), [site.base + '/s/links/ep-1']);
+    assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 404);
+    assert.equal(lapka.state.position('abc125', 7), 300, 'the place kept in the series stays');
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);
     assert.equal((await get('/api/history/cover/abc123')).status, 404);

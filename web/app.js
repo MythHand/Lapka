@@ -1114,7 +1114,20 @@ function historyRow(h) {
   }
   /* the link as pasted, unless the settings keep it out of sight */
   if (state.set.histLinks !== 'off') { const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url; body.append(link); }
-  row.append(cover, body);
+  /* the cross in the corner, seen on hover: the link leaves the history, and only the
+     history (what was watched is the series' memory); pasted again, it is a new row */
+  const x = document.createElement('span');
+  x.className = 'histpop__x'; x.setAttribute('role', 'button'); x.tabIndex = 0; x.title = t('hist.forget');
+  x.innerHTML = phSvg(PH.x);
+  const forget = async ev => {
+    ev.stopPropagation(); ev.preventDefault();
+    try { await post('/api/history/forget?url=' + encodeURIComponent(h.url)); } catch (_) { return; }
+    histList = histList.filter(o => o.url !== h.url);
+    paintHistoryList();
+  };
+  x.onclick = forget;
+  x.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') forget(ev); };
+  row.append(cover, body, x);
   /* the link opens where it was left: the episode stopped in, or the one after the last finished */
   row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
   return row;

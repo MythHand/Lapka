@@ -1052,10 +1052,22 @@ svg.ph{ fill:currentColor; stroke:none; }
 .histpop__clear svg{ width:14px; height:14px; }
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
 .histpop__row{
+  position:relative;
   display:flex; gap:12px; align-items:flex-start; width:100%; padding:8px 6px; border-radius:8px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
 .histpop__row:hover{ background:var(--glass-hi); color:var(--tx-1); }
+/* the cross that forgets the link: in the row's top right corner, over the
+   row but not over its words (the title keeps the corner free), shown while
+   the pointer is on the row or the cross has the focus */
+.histpop__x{
+  position:absolute; top:6px; right:6px; width:26px; height:26px; border-radius:6px;
+  display:grid; place-items:center; color:var(--tx-3); opacity:0; transition:opacity .12s, color .12s, background .12s;
+}
+.histpop__row:hover .histpop__x, .histpop__x:focus-visible{ opacity:1; }
+.histpop__x:hover{ color:var(--tx-1); background:var(--glass-hi); }
+.histpop__x svg{ width:14px; height:14px; }
+.histpop__title{ padding-right:30px; }
 .histpop__cover{ flex:none; width:44px; height:62px; border-radius:6px; background:var(--glass-soft); object-fit:cover; }
 .histpop__cover--none{ display:flex; align-items:center; justify-content:center; color:var(--tx-3); }
 .histpop__cover--none svg{ width:18px; height:18px; }
