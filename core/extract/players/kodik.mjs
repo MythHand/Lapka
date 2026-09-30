@@ -89,6 +89,18 @@ export function readEmbed(page) {
   };
 }
 
+/* The parameters the player carries from page to page when it switches
+   translation or season by itself (the site's domain and its signatures,
+   the referer): the page keeps them as a JSON string, and the switch puts
+   them into the next address as they are, unencoded. */
+export function readParams(page) {
+  const m = /urlParams\s*=\s*'(\{[^']*\})'/.exec(page);
+  if (!m) return '';
+  try { return Object.entries(JSON.parse(m[1])).map(([k, v]) => `${k}=${v}`).join('&'); } catch { return ''; }
+}
+/* an address the player made for itself: it carries the site's signatures */
+const innerSwitch = u => { try { return new URL(u).searchParams.has('d_sign'); } catch { return false; } };
+
 export default {
   name: 'kodik',
   match: url => { try { return HOSTS.test(new URL(url).hostname); } catch { return false; } },
@@ -110,7 +122,13 @@ export default {
     const ser = readSerial(res.body);
     const origin = new URL(res.url || embedUrl).origin;
     const season = ser.seasons.length > 1 ? ser.seasons.find(s => s.selected)?.number ?? null : null;
-    const at = (t, n) => `${origin}/${t.mediaType}/${t.mediaId}/${t.mediaHash}/720p?${season !== null ? `season=${season}&` : ''}episode=${n}`;
+    /* Another translation is opened the way the player opens it: its own
+       address, with the site's signatures carried along as parameters and
+       the player itself as the referer. Asked with the site as the referer,
+       the player answers with the site's preferred translation instead,
+       whatever serial the address names. */
+    const params = readParams(res.body);
+    const at = (t, n) => `${origin}/${t.mediaType}/${t.mediaId}/${t.mediaHash}/720p?${season !== null ? `season=${season}&` : ''}episode=${n}${params ? '&' + params : ''}`;
     /* the translation shown, when the embed names no others */
     const own = /^\/(serial|season)\/(\d+)\/([a-f0-9]+)\//.exec(u.pathname);
     const translations = ser.translations.length ? ser.translations
@@ -126,6 +144,8 @@ export default {
   },
 
   async extract(embedUrl, { referer = null } = {}, session) {
+    /* a switch the player would make itself comes from the player, not from the site */
+    if (innerSwitch(embedUrl)) referer = new URL(embedUrl).origin + '/';
     const res = await session.fetch(embedUrl, { referer });
     if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
     const base = new URL(res.url || embedUrl);
