@@ -66,7 +66,7 @@ const SRC = src(2);
 const TONE = f => tone(f, 2);
 
 export async function build() {
-  const dir = path.join(os.tmpdir(), 'pip-player-test-media');
+  const dir = path.join(os.tmpdir(), process.env.SITE_VIDEO === 'black' ? 'pip-player-test-media-black' : 'pip-player-test-media');   // the black picture is built and kept apart
   const show = path.join(dir, 'Show', 'S01');
   await fsp.mkdir(show, { recursive: true });
 
