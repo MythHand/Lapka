@@ -3293,8 +3293,9 @@ function groupPickOf(scope, items) {
   const cov = dubCoverage(items);
   const playing = cur();
   const key = (playing && playing.dub && playing.dub.key) || state.dubKey;
-  const d = cov.find(x => x.key === key) || [...cov].sort((a, b) => b.n - a.n)[0];
-  return d ? { dubKey: d.key, dubName: d.name, quality: null } : null;
+  const played = cov.find(x => x.key === key), d = played || [...cov].sort((a, b) => b.n - a.n)[0];
+  /* implied, not chosen: the player's own dub when the part has it (said as "as played"), else the part's most common dub, named */
+  return d ? { dubKey: d.key, dubName: d.name, quality: null, implied: true, played: !!played } : null;
 }
 /* the quality of a pick in words: the label chosen, else the settings' rule */
 const qualityWords = quality => quality || ({ max: t('pop.qBest'), played: t('pop.qPlayed') })[saveQualityWanted()] || saveQualityWanted();
@@ -3757,7 +3758,9 @@ function paintSavePop() {
   put(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '', dur > 0);
   /* the pick, and the rows it leaves out for want of the dub */
   const pick = groupPickOf(popScope, items);
-  put(r.pickRow, pick ? `${pick.dubName} · ${qualityWords(pick.quality)}` : '', '', !!pick);
+  /* nothing chosen yet: one phrase, "as played", for the dub and the quality both; a dub the
+     player's is not in this part is named, since it is Lapka's pick, not the player's */
+  put(r.pickRow, !pick ? '' : pick.implied && pick.played ? t('pop.qPlayed') : `${pick.dubName} · ${qualityWords(pick.quality)}`, '', !!pick);
   const lacking = pick ? left.filter(it => lacksDub(it, pick.dubKey)) : [];
   put(r.without, lacking.length ? `${pick.dubName} · ${t('pop.episodes', { n: lacking.length })}` : '', '', lacking.length > 0);
   /* the buttons: start or take up what is not saved here and has the dub; pause what loads here */
