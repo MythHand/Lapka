@@ -1123,7 +1123,7 @@ function historyRow(h) {
     ev.stopPropagation(); ev.preventDefault();
     try { await post('/api/history/forget?url=' + encodeURIComponent(h.url)); } catch (_) { return; }
     histList = histList.filter(o => o.url !== h.url);
-    paintHistoryList();
+    await leaveHistoryRow(row);
   };
   x.onclick = forget;
   x.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') forget(ev); };
@@ -1131,6 +1131,33 @@ function historyRow(h) {
   /* the link opens where it was left: the episode stopped in, or the one after the last finished */
   row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
   return row;
+}
+/* A row leaves the list from the top down: it folds to nothing while the
+   list's scroll gives back the same height, so the rows under it stand
+   still and the rows above come down into its place; the frame keeps its
+   bottom at the button meanwhile. The list answers no pointer until it
+   has settled. */
+function leaveHistoryRow(row) {
+  const list = row.parentElement;
+  if (!list) return Promise.resolve();
+  const h = row.offsetHeight, st0 = list.scrollTop, count = histPop.querySelector('.histpop__count');
+  list.classList.add('is-settling'); row.classList.add('is-leaving');
+  row.style.height = h + 'px';
+  const ease = t => 1 - Math.pow(1 - t, 3), T = 260, t0 = performance.now();
+  return new Promise(done => {
+    const frame = now => {
+      const f = Math.min(1, (now - t0) / T), k = ease(f);
+      row.style.height = (h * (1 - k)) + 'px'; row.style.opacity = String(1 - Math.min(1, k * 1.6));
+      list.scrollTop = st0 - h * k;
+      placeHistory();
+      if (f < 1) return requestAnimationFrame(frame);
+      row.remove(); list.classList.remove('is-settling');
+      if (count) count.textContent = String(histList.length);
+      if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); list.append(e); }
+      placeHistory(); done();
+    };
+    requestAnimationFrame(frame);
+  });
 }
 const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.parts || []).map(p => p.title)].some(x => String(x || '').toLowerCase().includes(q));
 function paintHistoryList() {
