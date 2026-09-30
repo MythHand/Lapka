@@ -1776,12 +1776,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .scroll-own{ scrollbar-width:none; }
 .scroll-own::-webkit-scrollbar{ display:none; width:0; height:0; }
 .scroll-own > .bar{
-  position:absolute; top:0; right:3px; width:6px;                 /* square ends: a block, in the project's own manner */
-  background:rgba(255,255,255,.14); opacity:0; pointer-events:none; z-index:5;
-  transition:opacity .22s ease, width .15s ease, background .15s ease; will-change:transform;
+  position:absolute; top:0; right:4px; width:4px;                 /* square ends: a block, in the project's own manner */
+  background:rgba(131,132,140,.22); opacity:0; pointer-events:none; z-index:5;   /* the grey of quiet text, mostly see-through */
+  transition:opacity .22s ease, width .15s ease, right .15s ease, background .15s ease; will-change:transform;
 }
 .scroll-own > .bar.is-on{ opacity:1; pointer-events:auto; }
-.scroll-own > .bar:hover, .scroll-own > .bar.is-drag{ width:10px; background:rgba(255,255,255,.45); }
+.scroll-own > .bar:hover, .scroll-own > .bar.is-drag{ width:10px; right:2px; background:rgba(255,255,255,.4); }
 .scroll-own > .bar[hidden]{ display:none; }
 @media (prefers-reduced-motion: reduce){ .scroll-own > .bar{ transition:none; } }
 
