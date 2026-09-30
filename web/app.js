@@ -1226,11 +1226,16 @@ addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
    its best stream. A stream that just failed is passed in so that its
    source is marked dead and another one is picked. */
 async function resolveItem(it, { avoid = null } = {}) {
-  if (it.opening) return it.opening;
-  it.opening = (async () => {
-    const q = new URLSearchParams({ series: it.seriesId, episode: String(it.number) });
-    if (state.dubKey) q.set('dub', state.dubKey);
-    if (avoid) q.set('avoid', avoid);
+  /* the same question already asked is not asked twice; a different one
+     (another dub chosen while the first answer is on its way) is, and the
+     newer answer is the one kept */
+  const q = new URLSearchParams({ series: it.seriesId, episode: String(it.number) });
+  if (state.dubKey) q.set('dub', state.dubKey);
+  if (avoid) q.set('avoid', avoid);
+  const ask = q.toString();
+  if (it.opening && it.opening.ask === ask) return it.opening.promise;
+  const opening = { ask, promise: null };
+  opening.promise = (async () => {
     const r = await api('/api/resolve?' + q);
     it.dubs = r.dubs; it.dub = r.dub; it.source = r.source;
     it.streams = r.streams || [];
@@ -1245,7 +1250,8 @@ async function resolveItem(it, { avoid = null } = {}) {
     if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode, state.seasons.find(s => s.series.id === it.seriesId)?.series); }
     return r;
   })();
-  try { return await it.opening; } finally { it.opening = null; }
+  it.opening = opening;
+  try { return await opening.promise; } finally { if (it.opening === opening) it.opening = null; }
 }
 
 /* ── which quality plays ─────────────────────────────────────
