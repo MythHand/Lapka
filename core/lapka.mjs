@@ -52,7 +52,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const { ask, season } = seasonOff(url);
     const site = siteFor(sites, ask);
     const res = site && site.fetch ? await site.fetch(ask, { referer }, session) : await session.fetch(ask, { referer });
-    if (res.status >= 400) throw new Error(`${ask} answered ${res.status}`);
+    if (res.status >= 400) throw Object.assign(new Error(`${ask} answered ${res.status}`), { status: res.status });
     return discover({ html: res.body, url: seasonOn(res.url || ask, season), profile: profileFor(ask) });
   }
 
@@ -351,14 +351,24 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const host = (() => { try { return new URL(url).hostname; } catch { return url; } })();
     onStep({ phase: 'page' });
     onStep({ key: 'page', host });
-    const first = await readPage(url);
+    /* a site Lapka knows through its API may say everything the page
+       would: when the page itself refuses (a site that turns a script's
+       request for its HTML away), the adapter is asked before giving up,
+       and the report goes on without the page */
+    const site = siteFor(sites, url);
+    let extra = null, first;
+    try { first = await readPage(url); }
+    catch (e) {
+      if (site) { try { extra = await site.look(url, session); } catch { /* the page's refusal is the reason said */ } }
+      if (!extra) throw e;
+      first = discover({ html: '', url, profile: profileFor(url) });
+      first.steps = [{ key: 'pageRefused', status: e.status || 0 }, { key: 'siteKnown', site: site.name }];   // the empty page's own word is not the story here
+    }
     for (const s of first.steps) onStep(s);
     reports.push(first);
 
     /* a site Lapka knows through its API adds what the page cannot say */
-    const site = siteFor(sites, url);
-    let extra = null;
-    if (site) {
+    if (site && !extra) {
       try { extra = await site.look(url, session); if (extra) first.steps.push({ key: 'siteKnown', site: site.name }); }
       catch (e) { first.steps.push({ key: 'siteFail', site: site.name, why: e.message }); }
     }
