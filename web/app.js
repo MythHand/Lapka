@@ -3561,6 +3561,63 @@ document.addEventListener('pointerover', e => {
 document.addEventListener('pointerdown', hideTips);
 queueList.addEventListener('scroll', hideTips, { passive: true });
 
+/* ── Lapka's own scrollbar ─────────────────────────────────────
+   The system's bar depends on a setting of the system: as an overlay
+   it is fine, shown always it is a wide grey strip that takes room.
+   Every place that scrolls hides it and gets this one instead: a thin
+   thumb over the content, seen while the content moves or the pointer
+   comes to the edge, gone a moment later; under the pointer it grows
+   and brightens, and it can be dragged. One look everywhere. */
+const SCROLLERS = '.menu, .queue__list, .histpop__list, .savepop, .menu__col';
+const OWN_BAR = { min: 28, edge: 28, linger: 900 };
+function ownScroll(el) {
+  if (el.__bar) return;
+  el.classList.add('scroll-own');
+  const bar = document.createElement('i'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
+  el.append(bar); el.__bar = bar;
+  let hideT = 0, near = false, drag = null;
+  const place = () => {
+    if (!bar.isConnected) el.append(bar);            // a menu redrawn whole took the bar with it
+    const sh = el.scrollHeight, ch = el.clientHeight;
+    if (sh <= ch + 1) { bar.hidden = true; return false; }
+    bar.hidden = false;
+    const len = Math.max(OWN_BAR.min, Math.round(ch * ch / sh));
+    const top = el.scrollTop + (el.scrollTop / (sh - ch)) * (ch - len);
+    bar.style.height = len + 'px'; bar.style.transform = `translateY(${top}px)`;
+    return true;
+  };
+  const show = () => { if (!place()) return; bar.classList.add('is-on'); clearTimeout(hideT); if (!near && !drag) hideT = setTimeout(() => bar.classList.remove('is-on'), OWN_BAR.linger); };
+  el.addEventListener('scroll', show, { passive: true });
+  el.addEventListener('pointermove', e => {
+    const r = el.getBoundingClientRect();
+    const was = near; near = r.right - e.clientX <= OWN_BAR.edge;
+    if (near) show(); else if (was) { clearTimeout(hideT); hideT = setTimeout(() => bar.classList.remove('is-on'), OWN_BAR.linger); }
+  });
+  el.addEventListener('pointerleave', () => { near = false; if (!drag) { clearTimeout(hideT); hideT = setTimeout(() => bar.classList.remove('is-on'), 300); } });
+  /* the thumb dragged moves the content by the same share */
+  bar.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    const sh = el.scrollHeight, ch = el.clientHeight, len = bar.offsetHeight;
+    drag = { y: e.clientY, top: el.scrollTop, k: (sh - ch) / Math.max(1, ch - len) };
+    bar.classList.add('is-drag'); bar.setPointerCapture(e.pointerId);
+  });
+  bar.addEventListener('pointermove', e => { if (drag) el.scrollTop = drag.top + (e.clientY - drag.y) * drag.k; });
+  const drop = () => { if (!drag) return; drag = null; bar.classList.remove('is-drag'); show(); };
+  bar.addEventListener('pointerup', drop); bar.addEventListener('pointercancel', drop);
+  bar.addEventListener('click', e => e.stopPropagation());
+  /* the content changes its height: the thumb follows, seen or not */
+  if (typeof ResizeObserver === 'function') new ResizeObserver(place).observe(el);
+  new MutationObserver(() => requestAnimationFrame(place)).observe(el, { childList: true, subtree: true });
+  place();
+}
+for (const el of document.querySelectorAll(SCROLLERS)) ownScroll(el);
+new MutationObserver(muts => {
+  for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) {
+    if (n.matches(SCROLLERS)) ownScroll(n);
+    for (const el of n.querySelectorAll(SCROLLERS)) ownScroll(el);
+  }
+}).observe(document.body, { childList: true, subtree: true });
+
 function paintGroupSave(li) {
   const items = state.list.filter(it => it.group === li.dataset.group);
   const done = items.filter(isSaved).length;

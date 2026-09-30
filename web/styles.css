@@ -894,11 +894,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   opacity:0; transition:opacity var(--select);
 }
 .tile.active .tile__eq{ opacity:1; }
-.queue__list{ flex:1; overflow-y:auto; overflow-x:hidden; list-style:none; }
-.queue__list::-webkit-scrollbar{ width:10px; }
-.queue__list::-webkit-scrollbar-track{ background:transparent; }
-.queue__list::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.16); border-radius:99px; border:3px solid transparent; background-clip:padding-box; }
-.queue__list::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.24); }
+.queue__list{ flex:1; overflow-y:auto; overflow-x:hidden; list-style:none; position:relative; }
 
 /* A row is a solid line across the full width: with rounded corners and
    side padding the insertion marker looked like a stub. */
@@ -1038,7 +1034,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   padding:16px 18px 10px;
 }
 .histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
-.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px; }
+.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px; position:relative; }
 .histpop__bottom{ flex:none; padding:10px 12px 12px; }
 .histpop__field{ position:relative; display:flex; }
 .histpop__search{ width:100%; padding:0 40px 0 12px; }
@@ -1392,7 +1388,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   overflow:hidden;
 }
 .menu--split.open{ display:flex; }
-.menu__col{ flex:1 1 0; min-width:0; min-height:0; overflow-y:auto; }
+.menu__col{ flex:1 1 0; min-width:0; min-height:0; overflow-y:auto; position:relative; }
 /* a divider on every column but the first, so the rule does not depend
    on whether a given menu has two columns or three */
 .menu--split .menu__col + .menu__col{
@@ -1771,6 +1767,21 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .queue--empty .toolgrp--save{ display:none; }
 .saveall__count{ font-variant-numeric:tabular-nums; }
 .saveall__count:empty{ display:none; }
+
+/* ── Lapka's own scrollbar: the system's is hidden, a thin thumb over the
+   content stands in, seen while the content moves or the pointer is at the
+   edge; wider and brighter under the pointer; dragged, it moves the content ── */
+.scroll-own{ scrollbar-width:none; }
+.scroll-own::-webkit-scrollbar{ display:none; width:0; height:0; }
+.scroll-own > .bar{
+  position:absolute; top:0; right:3px; width:6px; border-radius:3px;
+  background:rgba(255,255,255,.28); opacity:0; pointer-events:none; z-index:5;
+  transition:opacity .22s ease, width .15s ease, background .15s ease; will-change:transform;
+}
+.scroll-own > .bar.is-on{ opacity:1; pointer-events:auto; }
+.scroll-own > .bar:hover, .scroll-own > .bar.is-drag{ width:10px; background:rgba(255,255,255,.55); }
+.scroll-own > .bar[hidden]{ display:none; }
+@media (prefers-reduced-motion: reduce){ .scroll-own > .bar{ transition:none; } }
 
 /* ── the tooltip: at once, under the pointer, alive while it is shown ── */
 .tip{
