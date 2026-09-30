@@ -46,7 +46,7 @@ export function rankSources(dub, { preferPlayer = null, now = Date.now() } = {})
 export const pickSource = (dub, opts) => rankSources(dub, opts)[0] || null;
 
 export function markHealth(source, ok, error = null) {
-  source.health = { ok: !!ok, checkedAt: Date.now(), error: ok ? null : (error && String(error)) || null };
+  source.health = { ok: !!ok, checkedAt: Date.now(), error: ok ? null : error || null };   // a reason { key, …parts } or a code word
   return source;
 }
 

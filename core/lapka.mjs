@@ -15,6 +15,7 @@ import { loadExtractors, extractorFor, closedDoor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
 import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS, dubKey } from './catalog/index.mjs';
+import { refuse, reasonOf } from './reasons.mjs';
 
 export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), sites: await loadSites(), profiles: await loadProfiles(), ...opts });
@@ -52,7 +53,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const { ask, season } = seasonOff(url);
     const site = siteFor(sites, ask);
     const res = site && site.fetch ? await site.fetch(ask, { referer }, session) : await session.fetch(ask, { referer });
-    if (res.status >= 400) throw Object.assign(new Error(`${ask} answered ${res.status}`), { status: res.status });
+    if (res.status >= 400) throw Object.assign(refuse('pageStatus', { status: res.status }, `${ask} answered ${res.status}`), { status: res.status });
     return discover({ html: res.body, url: seasonOn(res.url || ask, season), profile: profileFor(ask) });
   }
 
@@ -65,16 +66,16 @@ export function createLapka({ session = createSession(), profiles = [], extracto
      itself, or with the bare address. */
   async function followDeferred(url, pageUrl) {
     const res = await session.fetch(url, { referer: pageUrl, headers: { 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01' } });
-    if (res.status >= 400) throw new Error(`the site answered ${res.status} for the player`);
+    if (res.status >= 400) throw refuse('siteStatus', { status: res.status });
     const found = deferredAnswer(String(res.body || ''));
-    if (!found || typeof found !== 'string') throw new Error('the site did not say where the player is');
+    if (!found || typeof found !== 'string') throw refuse('noPlayerAddress');
     return new URL(found.replace(/&amp;/g, '&'), pageUrl).toString();
   }
 
   async function openPlayer(player, number, pageUrl) {
     if (player.kind === 'deferred') {
       try { const url = await followDeferred(player.url, pageUrl); player = { ...player, url, id: playerId(url, pageUrl), kind: 'iframe', followed: true }; }
-      catch (e) { return { player, error: e.message }; }
+      catch (e) { return { player, error: reasonOf(e) }; }
     }
     const shut = closedDoor(player.url);
     if (shut) return { player, error: shut };
@@ -102,16 +103,16 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       /* the site's own player on a page that names no episode and lists
          none holds the whole thing: a film, its one episode. A decorative
          iframe on such a page is left alone. */
-      if (number === null) { if (!player.followed) return { player, extractor: x.name, error: 'the page names no episode' }; number = 1; }
+      if (number === null) { if (!player.followed) return { player, extractor: x.name, error: { key: 'noEpisode' } }; number = 1; }
       const got = await x.extract(player.url, { referer: pageUrl }, session);
       const source = streams => ({ player: player.id, embedUrl: player.url, extractor: x.name, streams, subs: got.subs || [] });
       let dubs;
       if (got.dubs?.length) dubs = got.dubs.map(d => ({ name: d.name, sources: [source(d.streams)] }));
       else if (got.streams?.length) dubs = [{ name: player.dubLabel || UNNAMED_DUB, sources: [source(got.streams)] }];
-      else return { player, extractor: x.name, error: 'no streams' };
+      else return { player, extractor: x.name, error: { key: 'noStreams' } };
       return { player, extractor: x.name, contribution: { origin: `extract:${x.name}`, episodes: [{ number, dubs }] } };
     } catch (e) {
-      return { player, extractor: x.name, error: e.message };
+      return { player, extractor: x.name, error: reasonOf(e) };
     }
   }
 
@@ -224,10 +225,10 @@ export function createLapka({ session = createSession(), profiles = [], extracto
         if (report.episode.value === null) report.episode.value = ep.number;
         merge(s, toContribution(report));
         const fresh = source.streams.length && source.streams.map(st => st.url).join('\n') !== before;
-        markHealth(source, !!source.streams.length, source.streams.length ? null : 'no streams');
+        markHealth(source, !!source.streams.length, source.streams.length ? null : { key: 'noStreams' });
         registerStreams(s);
         return fresh;
-      } catch (e) { markHealth(source, false, e.message); return false; }
+      } catch (e) { markHealth(source, false, reasonOf(e)); return false; }
     }
     const x = (source.extractor && extractors.find(e => e.name === source.extractor)) || extractorFor(extractors, source.embedUrl);
     if (!x) { markHealth(source, false, 'no extractor'); return false; }
@@ -237,14 +238,14 @@ export function createLapka({ session = createSession(), profiles = [], extracto
       const mine = ep.dubs.find(x => x.sources.includes(source));
       const own = got.dubs?.length && mine ? (got.dubs.find(d => dubKey(d.name) === mine.key) || null) : null;
       const streams = got.dubs?.length ? (own ? own.streams : got.dubs.flatMap(d => d.streams)) : (got.streams || []);
-      if (!streams.length) { markHealth(source, false, 'no streams'); return false; }
+      if (!streams.length) { markHealth(source, false, { key: 'noStreams' }); return false; }
       source.extractor = source.extractor || x.name;
       source.streams = streams.map(st => ({ ...st, headers: { ...(st.headers || {}) } }));
       source.subs = (got.subs || []).map(sb => ({ ...sb, headers: { ...(sb.headers || {}) } }));
       markHealth(source, true);
       registerStreams(s);
       return true;
-    } catch (e) { markHealth(source, false, e.message); return false; }
+    } catch (e) { markHealth(source, false, reasonOf(e)); return false; }
   }
 
   const stale = source => source.streams.length && source.streams.every(st => st.expiresAt && st.expiresAt < Date.now());
@@ -257,8 +258,8 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     if (avoid) for (const d of ep.dubs) for (const src of d.sources) if (src.streams.some(st => st.id === avoid)) {
       /* one fresh try after a failure; a second failure soon after means the source, not the links */
       const again = src.health.retriedAt && Date.now() - src.health.retriedAt < RETRY_MS;
-      if (again || !(await refreshSource(src, ep, s))) markHealth(src, false, 'playback failed');
-      else if (src.streams.some(st => st.id === avoid)) markHealth(src, false, 'playback failed');
+      if (again || !(await refreshSource(src, ep, s))) markHealth(src, false, { key: 'playbackFailed' });
+      else if (src.streams.some(st => st.id === avoid)) markHealth(src, false, { key: 'playbackFailed' });
       else src.health.retriedAt = Date.now();
     }
     const dub = pickDub(ep, dubKey ? { name: dubKey } : null);
@@ -370,7 +371,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     /* a site Lapka knows through its API adds what the page cannot say */
     if (site && !extra) {
       try { extra = await site.look(url, session); if (extra) first.steps.push({ key: 'siteKnown', site: site.name }); }
-      catch (e) { first.steps.push({ key: 'siteFail', site: site.name, why: e.message }); }
+      catch (e) { first.steps.push({ key: 'siteFail', site: site.name, why: reasonOf(e) }); }
     }
 
     /* The adapter knows the series page best. Without one, an
@@ -384,7 +385,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     const series = createSeries({ sourceUrl: seriesUrl });
 
     if (certain && seriesUrl !== first.url && !(extra && extra.seriesUrl)) {
-      try { reports.push(await readPage(seriesUrl, first.url)); } catch (e) { first.steps.push({ key: 'seriesFail', why: e.message }); }
+      try { reports.push(await readPage(seriesUrl, first.url)); } catch (e) { first.steps.push({ key: 'seriesFail', why: reasonOf(e) }); }
     }
     /* the adapter names things best, then the series page, then the episode page */
     if (extra) merge(series, extra);

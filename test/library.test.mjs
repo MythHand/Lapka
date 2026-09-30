@@ -24,7 +24,7 @@ import { VERSION } from '../core/update.mjs';
 import { openState } from '../core/store/state.mjs';
 import { fileNameFor, safeName } from '../core/store/library.mjs';
 import { pickVariant } from '../core/deliver/save.mjs';
-import { reasonOf, originReason } from '../core/deliver/reasons.mjs';
+import { reasonOf, originReason } from '../core/reasons.mjs';
 
 const ffmpeg = await haveFfmpeg();
 let site, lapka, home, movedWrap, sideWrap;

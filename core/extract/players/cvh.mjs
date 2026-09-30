@@ -12,6 +12,7 @@
    The publisher and the aggregator are read from the embed's script
    when it can be read; the last known values stand in otherwise.
    ═══════════════════════════════════════════════════════════ */
+import { refuse } from '../../reasons.mjs';
 
 const API = 'https://plapi.cdnvideohub.com/api/v1';
 const FALLBACK = { publisher: 745, aggregator: 'mali' };
@@ -73,7 +74,7 @@ export function readModule(js) {
 
 async function json(session, url, referer) {
   const res = await session.fetch(url, { referer, headers: { accept: 'application/json' } });
-  if (res.status >= 400) throw new Error(`player answered ${res.status}`);
+  if (res.status >= 400) throw refuse('playerStatus', { status: res.status });
   if (res.status === 204 || !res.body) return null;
   return JSON.parse(res.body);
 }
@@ -131,17 +132,17 @@ export default {
         ids = scripts.get(key) || FALLBACK;
       }
     } catch { /* the fallback stands in */ }
-    if (!want.titleId) throw new Error('no title on the embed');
+    if (!want.titleId) throw refuse('emptyEmbed');
 
     const list = await playlistOf(session, ids, want.titleId, base.origin + '/');
     const items = (list && list.items) || [];
-    if (!items.length) throw new Error('player answered without videos');
+    if (!items.length) throw refuse('noLinks');
 
     /* the wanted episode and voice; failing the voice, the episode alone */
     const sameEp = items.filter(i => want.episode === null || Number(i.episode) === want.episode).filter(i => want.season === null || i.season == null || Number(i.season) === want.season);
     const same = v => String(v || '').replace(/[^a-zа-я0-9]/gi, '').toLowerCase();
     const item = sameEp.find(i => want.voice && same(i.voiceStudio) === same(want.voice)) || sameEp[0];
-    if (!item || !item.vkId) throw new Error('no such episode in the player');
+    if (!item || !item.vkId) throw refuse('noSuchEpisode');
 
     const video = await json(session, `${API}/player/sv/video/${encodeURIComponent(item.vkId)}`, base.origin + '/');
     const s = (video && video.sources) || {};
@@ -150,7 +151,7 @@ export default {
     const streams = [];
     if (s.hlsUrl) streams.push({ kind: 'hls', url: s.hlsUrl, quality: null, headers, expiresAt });
     for (const [k, quality] of Object.entries(MP4)) if (s[k]) streams.push({ kind: 'mp4', url: s[k], quality, headers, expiresAt });
-    if (!streams.length) throw new Error('player answered without links');
+    if (!streams.length) throw refuse('noLinks');
     return { streams, dubs: [], duration: video.duration || null };
   },
 };

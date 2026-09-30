@@ -15,6 +15,7 @@
    and are asked for again when it passes.
    ═══════════════════════════════════════════════════════════ */
 import { unescape } from '../../discover/text.mjs';
+import { refuse } from '../../reasons.mjs';
 
 const HOSTS = /(^|\.)(kodik\.(info|cc|biz)|kodikplayer\.com|aniqit\.com|anivod\.com)$/i;
 const FALLBACK = { endpoint: '/ftor', shift: 18 };
@@ -118,7 +119,7 @@ export default {
     let u; try { u = new URL(embedUrl); } catch { return null; }
     if (!/^\/(serial|season)\//.test(u.pathname) || /only_episode=true/.test(u.search)) return null;
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const ser = readSerial(res.body);
     const origin = new URL(res.url || embedUrl).origin;
     const season = ser.seasons.length > 1 ? ser.seasons.find(s => s.selected)?.number ?? null : null;
@@ -147,10 +148,10 @@ export default {
     /* a switch the player would make itself comes from the player, not from the site */
     if (innerSwitch(embedUrl)) referer = new URL(embedUrl).origin + '/';
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const base = new URL(res.url || embedUrl);
     const embed = readEmbed(res.body);
-    if (!embed.hash || !embed.id) throw new Error('no video on the embed page');
+    if (!embed.hash || !embed.id) throw refuse('emptyEmbed');
     const cookie = (res.cookies || []).map(c => c.split(';')[0]).join('; ');
 
     let how = FALLBACK;
@@ -172,8 +173,8 @@ export default {
       method: 'POST', body: form.toString(), referer: base.toString(),
       headers: { origin: base.origin, 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8', ...(cookie ? { cookie } : {}) },
     });
-    if (answer.status >= 400) throw new Error(`player answered ${answer.status}`);
-    let data; try { data = JSON.parse(answer.body); } catch { throw new Error('player answered without links'); }
+    if (answer.status >= 400) throw refuse('playerStatus', { status: answer.status });
+    let data; try { data = JSON.parse(answer.body); } catch { throw refuse('noLinks'); }
 
     const expiresAt = Date.now() + TTL_MS;
     const streams = [];
@@ -185,7 +186,7 @@ export default {
         streams.push({ kind: /m3u8/i.test(url) || /mpegurl/i.test(l.type || '') ? 'hls' : 'mp4', url, quality: /^\d+$/.test(q) ? `${q}p` : null, headers: { referer: base.origin + '/' }, expiresAt });
       }
     }
-    if (!streams.length) throw new Error('player answered without links');
+    if (!streams.length) throw refuse('noLinks');
     return { streams, dubs: [] };
   },
 };

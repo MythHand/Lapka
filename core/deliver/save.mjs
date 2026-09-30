@@ -15,7 +15,7 @@ import fsp from 'node:fs/promises';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
-import { originReason, reasonOf } from './reasons.mjs';
+import { originReason, reasonOf } from '../reasons.mjs';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 

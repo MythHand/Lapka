@@ -1,7 +1,13 @@
-/* Why a save broke off, as a code the page puts into words (save.err.* in
-   the dictionaries): the server says no sentence of its own. A reason is
-   { key, …parts }; a thrown error may carry one ready (err.reason), else
-   it is read from what the error is. */
+/* Why something refused, as a code the page puts into words: the server
+   says no sentence of its own. A reason is { key, …parts }; an error
+   thrown by Lapka's own code carries one ready (err.reason, made with
+   refuse()), an error from elsewhere is read by what it is: the network,
+   the disk, the folder's access; anything unforeseen keeps its text as a
+   detail, shown for what it is. The page words the keys under save.err.*
+   for a save and why.* for a look. */
+
+/* an error with its reason on it: refuse('noLinks'), refuse('embedStatus', { status: 404 }) */
+export const refuse = (key, parts = {}, text = key) => Object.assign(new Error(text), { reason: { key, ...parts } });
 
 /* the source's answer, by its status: gone, refused, or another error */
 export const originReason = status => ({

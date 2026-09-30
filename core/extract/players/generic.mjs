@@ -22,6 +22,7 @@ const abs = (v, base) => { try { return new URL(v, base).toString(); } catch { r
    JSON before parsing. One flat object at a time; nested ones are
    found by the outer scan as their own flat objects. */
 import { objectsIn, unpacked } from '../../discover/objects.mjs';
+import { refuse } from '../../reasons.mjs';
 
 /* the language a label names, for the common ones; else nothing */
 const LANGS = [['en', /^(english|eng|англ)/i], ['ru', /^(russian|rus|русск)/i], ['ja', /^(japanese|jpn|япон)/i], ['es', /^(spanish|spa|espa)/i], ['pt', /^(portug)/i], ['fr', /^(french|fra|franç)/i], ['de', /^(german|deu|deutsch)/i], ['it', /^(italian|ita)/i], ['ar', /^(arabic|ara)/i], ['uk', /^(ukrain|укра)/i], ['tr', /^(turkish|tur)/i], ['zh', /^(chinese|zho|中文)/i], ['ko', /^(korean|kor)/i]];
@@ -118,7 +119,7 @@ export default {
      source is the same embed opened at that episode. */
   async unfold(embedUrl, { referer = null } = {}, session) {
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const base = res.url || embedUrl;
     const { document: doc } = parseHTML(res.body);
     let pl = null;
@@ -137,7 +138,7 @@ export default {
 
   async extract(embedUrl, { referer = null } = {}, session) {
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const base = res.url || embedUrl;
     const headers = { referer: base };
     /* the player's script holds the playlist: the episode this embed

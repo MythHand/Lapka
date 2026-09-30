@@ -1280,6 +1280,7 @@ body.pip-body::before{ display:none; }
 .cmd__line{ white-space:pre-wrap; overflow-wrap:anywhere; }
 .cmd__line::before{ content:'› '; color:var(--tx-3); }
 .cmd__line:last-child{ color:var(--tx-1); }
+.cmd__detail{ color:var(--tx-3); }   /* the machine's own word, quieter than Lapka's */
 /* The wait for a link holds its shape from the first moment: a wider
    sheet, the address on one line, three phases always there, and a log
    ten lines tall whether it holds one line or ten, with a prompt at its

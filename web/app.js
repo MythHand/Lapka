@@ -731,7 +731,7 @@ function prepStep(step) {
     prepPhase(step.phase, 'active', step.n ? `0 / ${step.n}` : '');
     return;
   }
-  prepLog(stepText(step));
+  prepLog(stepText(step), detailOf(step));
 }
 /* The server says what it does as a key with its parts, never in words
    of one language: the words are the page's, in the language chosen
@@ -746,16 +746,28 @@ function stepText(step) {
   if (v.why) v.why = whyText(v.why);
   return t('log.' + v.key, v);
 }
+/* why something refused, in words: a code word, or a reason { key, …parts }
+   from the server; a reason no key is known for, or one that keeps the
+   machine's own text, is named as unforeseen, and its text goes separately */
+const WHY = { embedStatus: 'why.embedStatus', playerStatus: 'why.playerStatus', siteStatus: 'why.siteStatus', pageStatus: 'why.pageStatus', emptyEmbed: 'why.emptyEmbed', noLinks: 'why.noLinks', noSuchEpisode: 'why.noSuchEpisode', noPlayerAddress: 'why.noPlayerAddress', noFragment: 'why.noFragment', noEpisode: 'why.noEpisode', noStreams: 'why.noStreams', playbackFailed: 'why.playbackFailed', network: 'why.network', disk: 'why.disk', access: 'why.access', other: 'why.other' };
 function whyText(error) {
-  if (error === 'no extractor') return t('log.noExtractor');
-  if (error === 'closed door') return t('log.closedDoor');
-  return error;
+  if (!error) return '';
+  if (typeof error === 'string') {
+    if (error === 'no extractor') return t('log.noExtractor');
+    if (error === 'closed door') return t('log.closedDoor');
+    return error;
+  }
+  return t(WHY[error.key] || 'why.other', { status: error.status ?? '' });
 }
+/* the machine's own text behind an unforeseen reason, to stand apart from the words */
+const detailOf = step => step && typeof step === 'object' && step.why && typeof step.why === 'object' && step.why.key === 'other' ? String(step.why.detail || '') : '';
 const PREP_LINES = 10;
-function prepLog(text) {
+function prepLog(text, detail = '') {
   const line = document.createElement('div');
   line.className = 'cmd__line';
   line.textContent = text;
+  /* the machine's own word, when there is one: after the words, quieter, seen for what it is */
+  if (detail) { const d = document.createElement('span'); d.className = 'cmd__detail'; d.textContent = ' ' + detail; line.append(d); }
   prepCmd.append(line);
   while (prepCmd.children.length > PREP_LINES) prepCmd.firstElementChild.remove();
 }
@@ -1372,7 +1384,7 @@ async function sourceFor(it) {
   if (it !== cur()) return null;
   if (!r.stream) {
     /* no live source: the reason stands on the stage, a closed player named as such */
-    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : d.error === 'closed door' ? t('why.closedDoor', { player: d.player }) : `${d.player}: ${d.error}`).join('; ');
+    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : d.error === 'closed door' ? t('why.closedDoor', { player: d.player }) : `${d.player}: ${whyText(d.error)}${d.error && d.error.key === 'other' && d.error.detail ? ' ' + d.error.detail : ''}`).join('; ');
     it.err = true; it.why = why; render();
     showNotice(t('notice.noOpen', { name: it.name, why }), { mid: true });
     return null;

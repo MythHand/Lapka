@@ -174,9 +174,9 @@ describe('picking', () => {
     assert.equal(pickSource(dub).player, 'alpha');
     markHealth(beta, true);
     assert.equal(pickSource(dub).player, 'beta');
-    markHealth(beta, false, new Error('403'));
+    markHealth(beta, false, { key: 'playerStatus', status: 403 });   // a reason, kept whole for the page to word
     assert.equal(pickSource(dub).player, 'alpha');
-    assert.equal(beta.health.error, 'Error: 403');
+    assert.deepEqual(beta.health.error, { key: 'playerStatus', status: 403 });
     /* a failure is forgotten after a while */
     assert.equal(rankSources(dub, { now: Date.now() + RETRY_MS + 1 })[0].player, 'alpha');
     markHealth(alpha, false);

@@ -111,7 +111,7 @@ describe('from an address to streams', { skip: !ffmpeg && 'ffmpeg not installed'
     const ep = series.episodes.find(e => e.number === 1);
     const ghost = ep.dubs.find(d => d.name === 'Ghost Studio');
     assert.equal(ghost.sources[0].health.ok, false);
-    assert.match(ghost.sources[0].health.error, /404/);
+    assert.deepEqual(ghost.sources[0].health.error, { key: 'embedStatus', status: 404 }, 'the refusal is a code with its status, not a sentence');
     assert.equal(ep.dubs.find(d => d.key === 'anilibria').sources[0].health.ok, true);
     assert.ok(steps.some(s => s.key === 'opened' && s.ok === 1 && s.asked === 2), JSON.stringify(steps));
   });

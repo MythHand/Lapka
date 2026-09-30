@@ -17,6 +17,7 @@ const FRAGMENT = /^\/player\/(?:\d+(?:\/episodes)?|videos\/\d+)$/;
 const XHR = { 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01' };
 
 import { unescape } from '../discover/text.mjs';
+import { refuse } from '../reasons.mjs';
 
 /* the HTML inside the site's JSON answer; null when the answer is not that */
 export function unwrap(body) {
@@ -39,9 +40,9 @@ export function readEpisodes(html) {
 
 async function fragment(session, url, referer) {
   const res = await session.fetch(url, { referer, headers: XHR });
-  if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
+  if (res.status >= 400) throw refuse('pageStatus', { status: res.status }, `${url} answered ${res.status}`);
   const html = unwrap(res.body);
-  if (html === null) throw new Error(`${url} answered with no fragment`);
+  if (html === null) throw refuse('noFragment', {}, `${url} answered with no fragment`);
   return html;
 }
 

@@ -10,6 +10,7 @@
 
 const HOSTS = /(^|\.)aniboom\.[a-z]+$/i;
 import { unescape } from '../../discover/text.mjs';
+import { refuse } from '../../reasons.mjs';
 
 /* what the embed page says about the video */
 export function readEmbed(page) {
@@ -27,15 +28,15 @@ export default {
 
   async extract(embedUrl, { referer = null } = {}, session) {
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const e = readEmbed(res.body);
-    if (!e) throw new Error('no player on the embed page');
+    if (!e) throw refuse('emptyEmbed');
     const origin = new URL(res.url || embedUrl).origin;
     const headers = { referer: origin + '/', origin };
     const streams = [];
     const hls = e.hls?.src || e.fallbackHls?.src;
     if (hls) streams.push({ kind: 'hls', url: hls, quality: null, headers });
-    if (!streams.length) throw new Error('player answered without links');
+    if (!streams.length) throw refuse('noLinks');
     return { streams, dubs: [], duration: e.duration };
   },
 };

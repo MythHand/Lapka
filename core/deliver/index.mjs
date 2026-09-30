@@ -15,7 +15,7 @@
    here: a whole file is fetched once at saving time instead.
    ═══════════════════════════════════════════════════════════ */
 import { createHash } from 'node:crypto';
-import { originReason } from './reasons.mjs';
+import { originReason } from '../reasons.mjs';
 
 const hash = s => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const ATTR_URI = /URI="([^"]+)"/g;
