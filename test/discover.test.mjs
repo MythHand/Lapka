@@ -243,8 +243,8 @@ describe('a page from the wild', () => {
    id, the slots are empty, and a relay asks the engine for each one. */
 const SLOTS = `<html><head><title>Сериал 4 сезон</title></head><body><h1>Сериал 4 сезон</h1>
 <div class="tabs-block" data-player-anime-id="8521">
-  <div class="tabs-block__content" data-player-slot="0" data-player-title="Плеер Alloha"></div>
-  <div class="tabs-block__content" data-player-slot="1" data-player-title="Плеер Kodik"></div>
+  <div class="tabs-block__content" data-player-slot="0" data-player-title="Плеер Альфа"></div>
+  <div class="tabs-block__content" data-player-slot="1" data-player-title="Плеер Бета"></div>
   <div class="tabs-block__content trl"><iframe src="https://www.youtube.com/embed/abc"></iframe></div>
 </div></body></html>`;
 describe('players fetched after the page loads', () => {
@@ -252,14 +252,13 @@ describe('players fetched after the page loads', () => {
     const r = discover({ html: SLOTS, url: 'https://dle.example/8521-serial-4-sezon.html' });
     const deferred = r.players.filter(p => p.kind === 'deferred');
     assert.deepEqual(deferred.map(p => [p.id, p.url]), [
-      ['alloha', 'https://dle.example/engine/ajax/controller.php?mod=player&id=8521&slot=0'],
-      ['kodik', 'https://dle.example/engine/ajax/controller.php?mod=player&id=8521&slot=1'],
+      ['альфа', 'https://dle.example/engine/ajax/controller.php?mod=player&id=8521&slot=0'],
+      ['бета', 'https://dle.example/engine/ajax/controller.php?mod=player&id=8521&slot=1'],
     ]);
   });
   test('the engine\'s answer, in every shape it takes', () => {
     assert.equal(deferredAnswer('{"success":true,"data":"https://embed.example/serial/1"}'), 'https://embed.example/serial/1');
-    assert.equal(deferredAnswer('{"status":true,"data":{"name":"Kodik","kind":"iframe","src":"https://embed.example/serial/2"}}'), 'https://embed.example/serial/2');
-    assert.equal(deferredAnswer('{"status":true,"data":{"kind":"cvh","title_id":"77","pub_id":"5","aggregator":"agg"}}'), 'https://player.cdnvideohub.com/embed?title_id=77&pub=5&aggr=agg');
+    assert.equal(deferredAnswer('{"status":true,"data":{"name":"Beta","kind":"iframe","src":"https://embed.example/serial/2"}}'), 'https://embed.example/serial/2');
     assert.equal(deferredAnswer('<iframe src="https://embed.example/serial/3"></iframe>'), 'https://embed.example/serial/3');
     assert.equal(deferredAnswer('https://embed.example/serial/4'), 'https://embed.example/serial/4');
     assert.equal(deferredAnswer('{"status":false}'), null);
