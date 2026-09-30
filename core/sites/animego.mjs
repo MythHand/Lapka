@@ -16,7 +16,7 @@ const ANIME = /^\/anime\/[^/?#]*?-(\d+)\/?$/;
 const FRAGMENT = /^\/player\/(?:\d+(?:\/episodes)?|videos\/\d+)$/;
 const XHR = { 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01' };
 
-const unescape = s => String(s || '').replace(/&quot;/g, '"').replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d))).replace(/&amp;/g, '&');
+import { unescape } from '../discover/text.mjs';
 
 /* the HTML inside the site's JSON answer; null when the answer is not that */
 export function unwrap(body) {

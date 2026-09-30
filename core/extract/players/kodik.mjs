@@ -14,6 +14,7 @@
    The links are signed for a few hours: the streams carry an expiry
    and are asked for again when it passes.
    ═══════════════════════════════════════════════════════════ */
+import { unescape } from '../../discover/text.mjs';
 
 const HOSTS = /(^|\.)(kodik\.(info|cc|biz)|kodikplayer\.com|aniqit\.com|anivod\.com)$/i;
 const FALLBACK = { endpoint: '/ftor', shift: 18 };
@@ -50,7 +51,7 @@ export function readScript(js) {
    the media id and hash of its own serial and its episode count, the
    seasons of the translation shown, the episodes of its season. */
 export function readSerial(page) {
-  const attrs = tag => Object.fromEntries([...tag.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(m => [m[1], m[2] ?? '']));
+  const attrs = tag => Object.fromEntries([...tag.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(m => [m[1], unescape(m[2] ?? '')]));
   const box = name => {
     const i = page.indexOf(`class="${name}`); if (i < 0) return [];
     const j = page.indexOf('</select>', i);

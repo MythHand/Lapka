@@ -10,7 +10,7 @@
    ═══════════════════════════════════════════════════════════ */
 import { createSession } from './session/index.mjs';
 import { discover, toContribution, UNNAMED_DUB } from './discover/index.mjs';
-import { playerId } from './discover/players.mjs';
+import { playerId, deferredAnswer } from './discover/players.mjs';
 import { loadExtractors, extractorFor, closedDoor } from './extract/index.mjs';
 import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
@@ -66,10 +66,7 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   async function followDeferred(url, pageUrl) {
     const res = await session.fetch(url, { referer: pageUrl, headers: { 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01' } });
     if (res.status >= 400) throw new Error(`the site answered ${res.status} for the player`);
-    const body = String(res.body || '').trim();
-    let found = null;
-    try { const j = JSON.parse(body); found = typeof j === 'string' ? j : j.data || j.url || j.src || j.iframe || null; } catch { /* not JSON */ }
-    if (!found) found = /<iframe[^>]+src=["']([^"']+)["']/i.exec(body)?.[1] || (/^(https?:)?\/\/\S+$/.test(body) ? body : null);
+    const found = deferredAnswer(String(res.body || ''));
     if (!found || typeof found !== 'string') throw new Error('the site did not say where the player is');
     return new URL(found.replace(/&amp;/g, '&'), pageUrl).toString();
   }

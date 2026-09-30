@@ -9,7 +9,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 const HOSTS = /(^|\.)aniboom\.[a-z]+$/i;
-const unescape = s => String(s || '').replace(/&quot;/g, '"').replace(/&#x27;|&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+import { unescape } from '../../discover/text.mjs';
 
 /* what the embed page says about the video */
 export function readEmbed(page) {
