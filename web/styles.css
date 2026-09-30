@@ -1406,8 +1406,8 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   top:var(--gear-pad-y); bottom:auto;
   right:calc(100% - var(--gear-pad-x) + 24px);
   /* four columns and the band of keys under them */
-  min-width:min(1236px, calc(100vw - 60px));
-  max-width:min(1236px, calc(100vw - 60px));
+  min-width:min(1267px, calc(100vw - 60px));
+  max-width:min(1267px, calc(100vw - 60px));
   /* the height is the sheet's own; the window alone caps it, and then the
      whole sheet scrolls, not a column of it */
   max-height:calc(100vh - 44px);
@@ -1424,7 +1424,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    and with the columns on the class the content collapsed into one
    column before the sheet had left. */
 .menu--gear{
-  grid-template-columns:minmax(0,21fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
+  /* the first column is 15% wider than it was (21fr → 24.15fr) and the sheet
+     wider by the same 31px, so the three others keep their width */
+  grid-template-columns:minmax(0,24.15fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
   grid-template-areas:'left ui player place' 'keys keys keys place';
   align-items:stretch;
 }
