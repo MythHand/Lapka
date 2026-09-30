@@ -2492,9 +2492,13 @@ function buildGearMenu() {
   const status = document.createElement('div');
   status.className = 'menu__row status';
   status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div>';
+  /* two paragraphs: what Lapka is and what the button does, then how to start it again */
   const quitNote = document.createElement('div');
   quitNote.className = 'cache__note quit__note';
   quitNote.textContent = t('set.quitNote');
+  const quitStart = document.createElement('div');
+  quitStart.className = 'cache__note quit__note';
+  quitStart.textContent = t('set.quitStart');
   const quitGuide = document.createElement('a');
   quitGuide.className = 'quit__guide';
   quitGuide.target = '_blank'; quitGuide.rel = 'noopener';
@@ -2519,7 +2523,7 @@ function buildGearMenu() {
     video.pause();
     showNotice(t('notice.quitHead'), { mid: true, more: startAgain() });
   };
-  status.append(quitNote, quitGuide, quit);
+  status.append(quitNote, quitStart, quitGuide, quit);
   left.append(status);
   paintStatus(); checkServer();
 
@@ -2535,7 +2539,7 @@ function buildGearMenu() {
   const ui = document.createElement('div');
   ui.className = 'menu__col menu__col--ui';
   menuTitle(ui, t('set.iface'));
-  const iface = SETTINGS.filter(r => r.key === 'queueMode' || r.key === 'font');
+  const iface = SETTINGS.filter(r => r.key === 'queueMode' || r.key === 'font' || r.key === 'histLinks');
   const settingRow = (col, row) => segRow(col, t(row.label), state.set[row.key],
     row.opts.map(([val, key]) => [val, t(key)]), val => {
       state.set[row.key] = val;
@@ -2566,7 +2570,7 @@ function buildGearMenu() {
   langRow.append(langLab, chips);
   ui.append(langRow);
   settingRow(ui, iface.find(r => r.key === 'font'));
-  settingRow(ui, SETTINGS.find(r => r.key === 'histLinks'));   // the links as pasted, shown in the history list or not
+  settingRow(ui, iface.find(r => r.key === 'histLinks'));   // the links as pasted, shown in the history list or not
 
   /* ─ middle: the player ─ */
   const player = document.createElement('div');
