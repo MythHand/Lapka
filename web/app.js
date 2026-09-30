@@ -1132,31 +1132,50 @@ function historyRow(h) {
   row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
   return row;
 }
-/* A row leaves the list from the top down: it folds to nothing while the
-   list's scroll gives back the same height, so the rows under it stand
-   still and the rows above come down into its place; the frame keeps its
-   bottom at the button meanwhile. The list answers no pointer until it
-   has settled. */
+/* A row leaves the list from the top down. It is taken out of the flow at
+   once, the scroll gives back its height where it can, and the frame takes
+   its new place at the button; then everything that moved (the rows, the
+   frame's top edge) slides from where it was to where it is, together and
+   at one pace. So the rows above come down into the gap and the rows below
+   stand still, whether or not the list scrolls. A fading copy of the row
+   stays where it was meanwhile. The list answers no pointer until settled. */
+const LEAVE_MS = 450, LEAVE_EASE = 'cubic-bezier(.2,.8,.3,1)';
 function leaveHistoryRow(row) {
   const list = row.parentElement;
   if (!list) return Promise.resolve();
-  const h = row.offsetHeight, st0 = list.scrollTop, count = histPop.querySelector('.histpop__count');
-  list.classList.add('is-settling'); row.classList.add('is-leaving');
-  row.style.height = h + 'px';
-  const ease = t => 1 - Math.pow(1 - t, 3), T = 260, t0 = performance.now();
+  const rows = [...list.querySelectorAll('.histpop__row')].filter(r => r !== row);
+  const seen = r => r.offsetTop - list.scrollTop;                 // where a row stands in the list's window
+  const before = new Map(rows.map(r => [r, seen(r)]));
+  const popTop0 = histPop.getBoundingClientRect().top, st0 = list.scrollTop, h = row.offsetHeight, was = row.getBoundingClientRect();
+  const ghost = row.cloneNode(true);
+  ghost.classList.add('histpop__ghost');
+  list.classList.add('is-settling');
+  row.remove();
+  const count = histPop.querySelector('.histpop__count');
+  if (count) count.textContent = String(histList.length);
+  if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); list.append(e); }
+  list.scrollTop = Math.max(0, st0 - h);
+  placeHistory();
+  const pop1 = histPop.getBoundingClientRect(), popTop1 = pop1.top;
+  /* the fading copy: in the frame, where the row stood on the screen, moving with the frame's edge so it stays there */
+  ghost.style.left = (was.left - pop1.left) + 'px'; ghost.style.top = (was.top - pop1.top) + 'px'; ghost.style.width = was.width + 'px';
+  histPop.append(ghost);
+  /* first frame: everything held at its old place */
+  for (const r of rows) { r.style.transition = 'none'; r.style.transform = `translateY(${before.get(r) - seen(r)}px)`; }
+  ghost.style.transition = 'none'; ghost.style.transform = `translateY(${popTop1 - popTop0}px)`;
+  histPop.style.transition = 'none'; histPop.style.top = popTop0 + 'px';
+  void histPop.offsetHeight;
   return new Promise(done => {
-    const frame = now => {
-      const f = Math.min(1, (now - t0) / T), k = ease(f);
-      row.style.height = (h * (1 - k)) + 'px'; row.style.opacity = String(1 - Math.min(1, k * 1.6));
-      list.scrollTop = st0 - h * k;
-      placeHistory();
-      if (f < 1) return requestAnimationFrame(frame);
-      row.remove(); list.classList.remove('is-settling');
-      if (count) count.textContent = String(histList.length);
-      if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); list.append(e); }
-      placeHistory(); done();
-    };
-    requestAnimationFrame(frame);
+    requestAnimationFrame(() => {
+      for (const r of rows) { r.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}`; r.style.transform = ''; }
+      histPop.style.transition = `top ${LEAVE_MS}ms ${LEAVE_EASE}`; histPop.style.top = popTop1 + 'px';
+      ghost.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}, opacity 220ms ease`; ghost.style.transform = ''; ghost.style.opacity = '0';
+      setTimeout(() => {
+        for (const r of rows) { r.style.transition = ''; r.style.transform = ''; }
+        histPop.style.transition = ''; ghost.remove(); list.classList.remove('is-settling');
+        placeHistory(); done();
+      }, LEAVE_MS + 20);
+    });
   });
 }
 const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.parts || []).map(p => p.title)].some(x => String(x || '').toLowerCase().includes(q));
