@@ -63,5 +63,9 @@ export function pickDub(episode, pref = null) {
     const near = dubs.find(d => d.kind === pref.kind && d.lang === pref.lang && d.lang);
     if (near) return near;
   }
-  return dubs[0];
+  /* nothing asked for: the first dub in the page's order that still has a
+     source not known to be dead; a dub whose every source refused is passed
+     over, the way a dead source is passed over inside a dub */
+  const dead = d => d.sources.length > 0 && d.sources.every(x => x.health && x.health.ok === false);
+  return dubs.find(d => !dead(d)) || dubs[0];
 }
