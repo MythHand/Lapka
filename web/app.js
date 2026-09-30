@@ -2396,10 +2396,11 @@ function homeRow(col) {
    the storage on the right, the keys along the bottom. The server is
    asked how it is while the sheet is open. */
 let serverState = 'checking';         // up | down | off | checking
+let serverPlatform = '';              // darwin | win32 | linux: which launcher the stop notice names
 let serverVersion = '';               // "1.1.0", as the package says; shown as v1.1
 async function checkServer() {
   if (serverState === 'off' || serverState === 'updating') return paintStatus();
-  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; } catch (_) { serverState = 'down'; }
+  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; if (p.platform) serverPlatform = p.platform; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
 /* "v1.1.0", as the tag on GitHub reads */
@@ -2516,7 +2517,7 @@ function buildGearMenu() {
     serverState = 'off';
     closeMenus();
     video.pause();
-    showNotice(t('notice.quit'), { mid: true });
+    showNotice(t('notice.quitHead'), { mid: true, more: startAgain() });
   };
   status.append(quitNote, quitGuide, quit);
   left.append(status);
@@ -2666,8 +2667,9 @@ let noticeDo = null, noticeUndo = null, noticeKind = null;
    spinner, so a pause never reads as a dead player */
 /* mid: the line stands in the middle of the picture, where a question is
    seen at once; a busy line always stands there */
-function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false } = {}) {
+function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {
   noticeText.textContent = text;
+  if (more) noticeText.append(more);
   const btn = $('#noticeAction');
   btn.hidden = !action;
   btn.textContent = action || '';
@@ -2675,6 +2677,33 @@ function showNotice(text, { action = null, onAction = null, onClose = null, kind
   notice.classList.toggle('notice--busy', busy);
   notice.classList.toggle('notice--mid', busy || mid);
   notice.classList.add('show');
+}
+/* How to start Lapka again, told whole for the system it runs on: through
+   npx, and from the folder it was downloaded to (the launcher of this
+   system, then npm start). Each way says which install it belongs to: npx
+   typed by one who downloaded the folder would start another Lapka, with
+   another folder of its own. Commands stand in the mono face. */
+function startAgain() {
+  const said = (key, cmd) => {
+    const [a, b = ''] = t(key, { cmd: '\u0001', file: '\u0001' }).split('\u0001');
+    const line = document.createDocumentFragment();
+    line.append(a); if (cmd) { line.append(el('code', 'notice__cmd', cmd), b); }
+    return line;
+  };
+  const item = (lines) => {
+    const li = el('div', 'notice__way');
+    lines.forEach((l, i) => { const row = el('div'); row.append(l, i < lines.length - 1 ? ',' : ''); li.append(row); });
+    return li;
+  };
+  const folder = serverPlatform === 'win32'
+    ? [said('notice.quitClick', 'start.bat'), said('notice.quitOrHere', 'npm start')]
+    : serverPlatform === 'linux'
+      ? [said('notice.quitThere', './start.sh'), said('notice.quitOrHere', 'npm start')]
+      : [said('notice.quitClick', 'start.command'), said('notice.quitOrHere', './start.command'), said('notice.quitOrHere', 'npm start')];
+  const first = document.createDocumentFragment(); first.append(t('notice.quitFolder') + ' ', folder[0]);
+  const how = el('div', 'notice__how');
+  how.append(el('div', 'notice__howhead', t('notice.quitHow')), item([said('notice.quitNpx', 'npx -y lapka')]), item([first, ...folder.slice(1)]));
+  return how;
 }
 function hideNotice(kind = null) {
   if (kind && noticeKind !== kind) return;   // another line is up: leave it

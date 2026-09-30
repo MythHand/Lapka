@@ -320,6 +320,13 @@ svg.ph{ fill:currentColor; stroke:none; }
   background:#fff; color:#0b0b0c; font-size:calc(12.5px + var(--fs)); font-weight:520;
 }
 .notice__act:hover{ background:#e6e6e8; }
+.notice__how{ margin-top:8px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2); }
+.notice__howhead{ margin-bottom:4px; }
+/* a way to start, as a bulleted item; the lines after its first hang under its text */
+.notice__way{ position:relative; padding-left:14px; }
+.notice__way + .notice__way{ margin-top:4px; }
+.notice__way::before{ content:'·'; position:absolute; left:3px; color:var(--tx-3); }
+.notice__cmd{ font-family:var(--mono); letter-spacing:0; color:var(--tx-1); }
 .notice__x{ flex:none; color:var(--tx-3); display:grid; place-items:center; }
 .notice__x:hover{ color:var(--tx-1); }
 .notice__x svg{ width:16px; height:16px; }
