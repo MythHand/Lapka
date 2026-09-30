@@ -159,7 +159,7 @@ export function findPlayers(doc, url, { profile } = {}) {
      id (data-player-anime-id, data-player-post-id…) and holds empty
      slots (data-player-slot="0", "1"…) that a relay frame fills after
      the page loads, asking the engine for mod=player&id=…&slot=N. The
-     slot's title names the player ("Плеер Kodik") when it has one. */
+     slot's title names the player ("Плеер …") when it has one. */
   for (const slot of doc.querySelectorAll('[data-player-slot]')) {
     const block = slot.closest('[data-player-anime-id], [data-player-post-id], [data-player-news-id], [data-player-id]');
     const id = block && [...block.attributes].find(at => /^data-player-(?:[\w-]+-)?id$/.test(at.name))?.value;

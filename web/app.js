@@ -1211,13 +1211,13 @@ document.addEventListener('click', e => {
   e.stopPropagation(); e.preventDefault();
   closeHistory();
 }, true);
-/* Esc: a search typed is cleared first, then the list closes */
-document.addEventListener('keydown', e => {
-  if (e.key !== 'Escape' || histPop.hidden) return;
+/* Esc in the history: a search typed is cleared first, then the list closes */
+function escapeHistory() {
+  if (histPop.hidden) return false;
   const search = histPop.querySelector('.histpop__search');
-  if (search && search.value) { search.value = ''; histQuery = ''; const x = histPop.querySelector('.histpop__clear'); if (x) x.hidden = true; paintHistoryList(); e.stopPropagation(); return; }
-  closeHistory();
-});
+  if (search && search.value) { search.value = ''; histQuery = ''; const x = histPop.querySelector('.histpop__clear'); if (x) x.hidden = true; paintHistoryList(); return true; }
+  closeHistory(); return true;
+}
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
@@ -3344,7 +3344,6 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.item__save, #savePop')) { e.stopPropagation(); e.preventDefault(); }
   closeSaveMenu();
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !saveMenu.hidden) closeSaveMenu(); });
 
 /* the stream of a named quality, for taking a save up again the way it was started */
 const streamOfQuality = (it, quality) => (quality && (saveQualities(it).find(o => o.label === quality) || {}).stream) || null;
@@ -3821,7 +3820,6 @@ document.addEventListener('click', e => {
   if (!anchor) { e.stopPropagation(); e.preventDefault(); }
   unpinSavePop();
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned) unpinSavePop(); });
 /* the header's button and a group's mark open their popovers; nothing starts from the click itself */
 let popClosedAt = 0;
 btnSaveAll.onclick = () => { if (Date.now() - popClosedAt < 50 && popClosedScope === null) return; pinSavePop(null); };
@@ -4813,14 +4811,25 @@ function onKey(e) {
     case 'KeyQ': toggleQueue(); break;
     case 'Home': e.preventDefault(); seekTo(0); break;
     case 'End':  e.preventDefault(); seekTo(duration() - 2); break;
-    case 'Escape':
-      if (anyMenuOpen()) closeMenus();
-      else if (state.pipWin) state.pipWin.close();
-      else if (state.queueOpen) toggleQueue(false);
-      break;
   }
   poke();
 }
+/* Esc closes one layer, the topmost, and stops: the save window over the
+   popover, the history list, the pinned popover, a menu of the deck, the
+   PiP window, the queue. Another Esc takes the next. It works from an
+   input too, so a search in the history can be cleared and closed. */
+function onEscape(e) {
+  if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!saveMenu.hidden) closeSaveMenu();
+  else if (escapeHistory()) { /* cleared or closed */ }
+  else if (popPinned) unpinSavePop();
+  else if (anyMenuOpen()) closeMenus();
+  else if (state.pipWin) state.pipWin.close();
+  else if (state.queueOpen) toggleQueue(false);
+  else return;
+  e.preventDefault(); e.stopPropagation(); poke();
+}
+document.addEventListener('keydown', onEscape);
 document.addEventListener('keydown', onKey);
 document.addEventListener('keyup', e => {
   if (e.key === ' ' && e.target && e.target.tagName === 'BUTTON') e.target.blur();
