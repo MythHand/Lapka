@@ -39,6 +39,15 @@ export const CASES = [
     layout: { episodes: 'select', dubs: 'per-player', player: 'iframe-switch' },
   },
   {
+    id: 'subs',
+    title: 'Сериал Субтитры',
+    device: 'episodes as links; one dub; one embed with the stream in a script and two subtitle tracks, each named by its language',
+    episodes: 2,
+    players: ['beta'],
+    dubs: { beta: ['AniLibria'] },
+    layout: { episodes: 'links', dubs: 'page-tabs', player: 'iframe', subs: ['Русские', 'English'] },
+  },
+  {
     id: 'seasons',
     title: 'Сериал Сезоны',
     device: 'a series in two seasons: the page of each season links to the other by name ("1 сезон", "2 сезон"); episodes as links; one player with dub tabs',
