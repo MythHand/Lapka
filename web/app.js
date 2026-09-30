@@ -1031,8 +1031,15 @@ async function loadHistory() {
   try { histList = (await api('/api/history')).history || []; } catch (_) { histList = []; }
   if (!histPop.hidden) paintHistoryList();
 }
+/* when a link was last pasted: today and yesterday by name, else the day
+   and the month; a year other than this one is named too */
 function whenWords(at) {
-  try { return new Date(at).toLocaleString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; }
+  const d = new Date(at), now = new Date();
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const gone = Math.round((day(now) - day(d)) / 86400000);
+  if (gone === 0) return t('hist.today');
+  if (gone === 1) return t('hist.yesterday');
+  try { return d.toLocaleDateString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }); } catch (_) { return ''; }
 }
 /* The frame of the list, once per opening: on top the title and, at the
    right edge, how many links the history holds, whatever is searched;
