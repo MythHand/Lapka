@@ -2547,6 +2547,7 @@ function buildGearMenu() {
       applySettings();
     });
   settingRow(ui, iface.find(r => r.key === 'queueMode'));
+  settingRow(ui, iface.find(r => r.key === 'histLinks'));   // the links as pasted, shown in the history list or not
   /* the language: chips as wide as their names */
   const langRow = document.createElement('div');
   langRow.className = 'menu__row';
@@ -2570,7 +2571,6 @@ function buildGearMenu() {
   langRow.append(langLab, chips);
   ui.append(langRow);
   settingRow(ui, iface.find(r => r.key === 'font'));
-  settingRow(ui, iface.find(r => r.key === 'histLinks'));   // the links as pasted, shown in the history list or not
 
   /* ─ middle: the player ─ */
   const player = document.createElement('div');
