@@ -1406,8 +1406,8 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   top:var(--gear-pad-y); bottom:auto;
   right:calc(100% - var(--gear-pad-x) + 24px);
   /* four columns and the band of keys under them */
-  min-width:min(1267px, calc(100vw - 60px));
-  max-width:min(1267px, calc(100vw - 60px));
+  min-width:min(1317px, calc(100vw - 60px));
+  max-width:min(1317px, calc(100vw - 60px));
   /* the height is the sheet's own; the window alone caps it, and then the
      whole sheet scrolls, not a column of it */
   max-height:calc(100vh - 44px);
@@ -1424,9 +1424,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    and with the columns on the class the content collapsed into one
    column before the sheet had left. */
 .menu--gear{
-  /* the first column is 15% wider than it was (21fr → 24.15fr) and the sheet
-     wider by the same 31px, so the three others keep their width */
-  grid-template-columns:minmax(0,24.15fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
+  /* the first column is 15% wider than it once was (21fr → 24.15fr), the three
+     others 5% wider (34fr → 35.7fr), and the sheet wider by both, so no column
+     paid for another */
+  grid-template-columns:minmax(0,24.15fr) minmax(0,35.7fr) minmax(0,35.7fr) minmax(0,35.7fr);
   grid-template-areas:'left ui player place' 'keys keys keys place';
   align-items:stretch;
 }
@@ -1735,7 +1736,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .btn--quiet.is-armed{ color:#e0a24a; border-color:rgba(224,162,74,.5); background:rgba(224,162,74,.08); }
 /* the way out of Lapka, under the state: note, the guide, the button; quiet until armed */
 .quit__note{ margin:0; }
-.quit__note + .quit__note{ margin-top:6px; }   /* how to start again: a paragraph of its own */
+.quit__note + .quit__note{ margin-top:3px; }   /* how to start again: a paragraph of its own */
 .quit__guide{ display:inline-block; align-self:flex-start; font-size:calc(12px + var(--fs)); color:var(--tx-3); text-decoration:underline; padding:2px 2px 4px; }
 .quit__guide:hover{ color:var(--tx-1); }
 .quit{ color:var(--tx-3); height:auto; min-height:var(--ctl-h); white-space:normal; line-height:1.3; padding:6px 12px; }
