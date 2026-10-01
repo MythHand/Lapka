@@ -60,7 +60,7 @@ const SRT_LONG = [
    runs on and the durations stop matching between fixtures. */
 /* the picture: the test pattern, or plain black when a shot of the player
    should show no picture at all (SITE_VIDEO=black on npm run dev) */
-const src = d => ['-f', 'lavfi', '-i', `${process.env.SITE_VIDEO === 'black' ? 'color=c=black' : 'testsrc'}:size=320x180:rate=10:duration=${d}`];
+const src = d => ['-f', 'lavfi', '-i', (process.env.SITE_VIDEO === 'black' ? 'color=c=black:' : 'testsrc=') + `size=320x180:rate=10:duration=${d}`];
 const tone = (f, d) => ['-f', 'lavfi', '-i', `sine=frequency=${f}:duration=${d}`];
 const SRC = src(2);
 const TONE = f => tone(f, 2);
