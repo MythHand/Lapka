@@ -3010,7 +3010,7 @@ function aboutBlock() {
     return box;
   };
   const how = section('about.how', [['', 'about.step1'], ['', 'about.step2'], ['', 'about.step3']], true);
-  const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'watched', 'save', 'finish', 'folder', 'sources', 'log'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
+  const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'watched', 'history', 'save', 'finish', 'folder', 'sources', 'log'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
   const rules = section('about.rules', ['local', 'fair', 'general', 'doors', 'open'].map(k => [`about.p.${k}.k`, `about.p.${k}`]));
 
   const doors = el('section', 'about__section about__doors');

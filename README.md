@@ -35,13 +35,16 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
 
 - **Queue.** The episodes of every season, film and spin-off of a franchise, in the order they came
   out, even when the site keeps every season in one player.
-- **Dubs.** Switched on the fly, without a reload; the choice is kept for the whole series.
+- **Dubs.** Switched on the fly, without a reload; the choice is kept for the whole franchise,
+  and another season starts in it.
 - **Quality.** Any variant a source offers, the levels inside one stream included.
 - **Subtitles.** As a track of their own, when the source offers them; their look is adjustable.
 - **Openings.** A skip button when the site knows the timings; by itself too, with six seconds to
   say Watch.
-- **Resume.** From where you stopped, for every episode and dub; an episode watched to the end is
-  marked, and the frame shows where you stopped.
+- **Resume.** From where you stopped, for every episode, whatever the dub; an episode watched to
+  the end is marked, and the frame shows where you stopped.
+- **History.** The links you pasted, at hand in the queue's footer: searched by title or link, each
+  saying where you stopped and opening from there; a link you no longer want is removed from the list.
 - **Saving.** An episode as one file in your folder, with the chosen dub and the subtitles inside.
   Saves go in a queue, one after another: a pause holds an episode where it got to and continues
   from there, a waiting one can be made the current one, any can be cancelled, and saved files can
