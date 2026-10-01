@@ -59,10 +59,17 @@ export function createDelivery({ session, cache }) {
     return out.join('\n');
   }
 
+  /* An origin that takes the connection and then says nothing would hold
+     the request for ever; it is given a quarter of a minute to begin its
+     answer. Only the beginning: a long body on a slow line is let through. */
+  const FIRST_BYTE_MS = 15000;
   async function fetchOrigin(entry, url, extra = {}, { signal = undefined } = {}) {
     const headers = { ...(entry.stream.headers || {}), ...extra };
-    const res = await fetch(url, { headers: { 'user-agent': session.ua || 'Mozilla/5.0', ...headers }, redirect: 'follow', signal });
-    return res;
+    const ac = new AbortController();
+    const clock = setTimeout(() => ac.abort(Object.assign(new Error('the origin did not begin to answer'), { name: 'TimeoutError' })), FIRST_BYTE_MS);
+    try {
+      return await fetch(url, { headers: { 'user-agent': session.ua || 'Mozilla/5.0', ...headers }, redirect: 'follow', signal: signal ? AbortSignal.any([signal, ac.signal]) : ac.signal });
+    } finally { clearTimeout(clock); }   // the answer has begun: its body may take as long as it takes
   }
 
   /* A subtitle track: fetched from the origin and given as WebVTT,

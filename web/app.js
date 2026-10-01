@@ -1255,7 +1255,9 @@ async function resolveItem(it, { avoid = null } = {}) {
   if (it.opening && it.opening.ask === ask) return it.opening.promise;
   const opening = { ask, promise: null };
   opening.promise = (async () => {
-    const r = await api('/api/resolve?' + q);
+    const t0 = performance.now();
+    let r; try { r = await api('/api/resolve?' + q); } catch (e) { diary('resolve', `episode ${it.number}: failed in ${Math.round(performance.now() - t0)}ms: ${e.message.slice(0, 80)}`); throw e; }
+    diary('resolve', `episode ${it.number}${state.dubKey ? ' dub ' + state.dubKey : ''}${avoid ? ' avoiding one' : ''}: ${Math.round(performance.now() - t0)}ms, ${r.stream ? 'a stream' : 'no stream'} from ${(r.source && r.source.player) || '?'}, ${(r.streams || []).length} streams, ${(r.dead || []).length} dead`);
     it.dubs = r.dubs; it.dub = r.dub; it.source = r.source;
     it.streams = r.streams || [];
     it.stream = pickStream(it.streams, r.stream) || r.stream;
@@ -1434,6 +1436,7 @@ let playToken = 0;
    under the pointer, and scrolling would move it away from there */
 async function playItem(it, autoplay = true, glide = true) {
   if (!it) return;
+  diary('play', `episode ${it.number}${autoplay ? '' : ' (no autoplay)'}${it.switching ? ' switching try ' + it.switching.n : ''}${it.avoid ? ' avoiding a stream' : ''}`);
   if (loaded) markPos(loaded, video.currentTime);   // where the episode before was left
   loaded = null;
   state.current = it;
@@ -1499,6 +1502,7 @@ async function playItem(it, autoplay = true, glide = true) {
    comes last. A refused play() is not reported: it also fails on every
    interrupted start, and the play button shows the state anyway. */
 function loadSource(it, src, token, onMeta, play) {
+  diary('load', `${src.kind || '?'} ${src.quality || 'auto'} from ${(it.source && it.source.player) || '?'}, play ${play}`);
   it.loadedSrc = src.play;
   loaded = null;
   attachSource(src);
@@ -1507,7 +1511,7 @@ function loadSource(it, src, token, onMeta, play) {
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
   video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); } }, { once: true });
-  if (play) video.play().catch(() => {});
+  if (play) video.play().catch(e => diary('play() refused', e && e.name));
 }
 
 /* The quality the user wants, applied inside an adaptive stream: the
@@ -1546,14 +1550,21 @@ function attachSource(stream) {
     /* fewer silent retries than the defaults: a source that does not
        answer is given up on in seconds, not in a minute, and its
        trouble is said on the stage as soon as it starts */
-    hls = new Hls({ enableWorker: true, manifestLoadingTimeOut: 8000, manifestLoadingMaxRetry: 1, levelLoadingTimeOut: 8000, levelLoadingMaxRetry: 1, fragLoadingTimeOut: 12000, fragLoadingMaxRetry: 2 });
+    const policy = (firstByte, whole, retries) => ({ default: { maxTimeToFirstByteMs: firstByte, maxLoadTimeMs: whole, timeoutRetry: { maxNumRetry: retries, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: retries, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } });
+    hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2) });
     hls.on(Hls.Events.ERROR, (_, d) => {
+      diary('hls', `${d.type}/${d.details}${d.fatal ? ' fatal' : ''}${d.response && d.response.code ? ' code ' + d.response.code : ''}`);
       if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
       const it = cur();
       /* a network error while the picture still moves is nothing to say; stalled, it is said at once */
       if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) { if (video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); else sayStalled(it); }
     });
     hls.on(Hls.Events.MANIFEST_PARSED, () => { applyLevelPref(); syncQualityButton(); pickAudioTrack(stream); });
+    /* the first steps of a stream, for the diary: the manifest, the level, the first pieces */
+    hls.on(Hls.Events.MANIFEST_PARSED, (_, d) => diary('hls', `manifest parsed, ${(d.levels || []).length} levels`));
+    hls.on(Hls.Events.LEVEL_LOADED, (_, d) => diary('hls', `level loaded, ${d.details ? d.details.fragments.length : '?'} fragments`));
+    hls.on(Hls.Events.FRAG_LOADING, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loading`); });
+    hls.on(Hls.Events.FRAG_LOADED, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loaded`); });
     hls.on(Hls.Events.LEVEL_SWITCHED, () => { syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu(); });
     hls.loadSource(stream.play);
     hls.attachMedia(video);
@@ -2755,6 +2766,34 @@ let noticeDo = null, noticeUndo = null, noticeKind = null;
    spinner, so a pause never reads as a dead player */
 /* mid: the line stands in the middle of the picture, where a question is
    seen at once; a busy line always stands there */
+/* ── the diary of playback ─────────────────────────────────────
+   The last events of the player, kept in memory: an episode asked for,
+   the server's answer and how long it took, what hls.js reported, what
+   the video element did, a refused play(). Nothing leaves the page
+   unless a wait does not end: a busy notice that stands for half a
+   minute sends the diary to the journal beside the settings, once per
+   such wait, so a hang can be read later. Names of players and dubs
+   go; addresses never do. */
+const DIARY_KEEP = 60, STALL_MS = Number(new URLSearchParams(location.search).get('stallMs')) || 30000;   // ?stallMs= shortens the wait for a check
+const diaryLines = [];
+let diaryT0 = performance.now(), stallWatchT = 0, stallSent = false;
+function diary(what, more = '') {
+  const at = ((performance.now() - diaryT0) / 1000).toFixed(1).padStart(7);
+  diaryLines.push(`${at}s ${what}${more ? ' ' + more : ''}`);
+  if (diaryLines.length > DIARY_KEEP) diaryLines.shift();
+}
+function stallWatch(on) {
+  if (!on) { clearTimeout(stallWatchT); stallWatchT = 0; stallSent = false; return; }
+  if (stallWatchT) return;                       // counted from the first busy notice, not from its every repaint
+  stallWatchT = setTimeout(() => {
+    stallWatchT = 0;
+    if (!notice.classList.contains('show') || noticeKind !== 'busy' || stallSent) return;
+    stallSent = true;
+    const it = cur();
+    diary('stall', `${STALL_MS / 1000}s with the busy notice up; readyState ${video.readyState} paused ${video.paused} networkState ${video.networkState}`);
+    api('/api/log', { method: 'POST', body: JSON.stringify({ head: `playback stalled: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+  }, STALL_MS);
+}
 function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {
   noticeText.textContent = text;
   if (more) noticeText.append(more);
@@ -2765,6 +2804,8 @@ function showNotice(text, { action = null, onAction = null, onClose = null, kind
   notice.classList.toggle('notice--busy', busy);
   notice.classList.toggle('notice--mid', busy || mid);
   notice.classList.add('show');
+  diary('notice', `${kind || 'plain'}: ${text.slice(0, 60)}`);
+  if (kind === 'busy') stallWatch(true);
 }
 /* How to start Lapka again, told whole for the system it runs on: through
    npx, and from the folder it was downloaded to (the launcher of this
@@ -2795,6 +2836,7 @@ function startAgain() {
 }
 function hideNotice(kind = null) {
   if (kind && noticeKind !== kind) return;   // another line is up: leave it
+  if (noticeKind === 'busy') stallWatch(false);
   notice.classList.remove('show', 'notice--busy', 'notice--mid'); noticeDo = null; noticeUndo = null; noticeKind = null;
 }
 /* the busy lines: what is being opened, a source that is slow to answer */
@@ -4599,7 +4641,8 @@ video.addEventListener('playing', () => {
     it.retries = 0;                  // it plays: the count of tries starts over
   }
 });
-video.addEventListener('waiting', () => { const it = cur(); if (it && it.loadedSrc) sayStalled(it); });
+video.addEventListener('waiting', () => { diary('video', 'waiting'); const it = cur(); if (it && it.loadedSrc) sayStalled(it); });
+for (const ev of ['stalled', 'canplay', 'playing', 'ended', 'loadedmetadata', 'emptied', 'suspend']) video.addEventListener(ev, () => diary('video', ev));
 video.addEventListener('canplay', () => { clearTimeout(stallT); hideNotice('busy'); });
 video.addEventListener('timeupdate', () => { if (noticeKind === 'busy' && !video.paused && video.readyState >= 3) hideNotice('busy'); });   // the picture moves: nothing is waiting
 video.addEventListener('ended', () => {
@@ -4623,6 +4666,7 @@ video.addEventListener('ended', () => {
    which marks its source dead and picks again. Only when that has
    been tried does the episode count as broken and the queue moves on. */
 video.addEventListener('error', () => {
+  diary('video', `error${video.error ? ' ' + video.error.code : ''}`);
   stage.classList.remove('fading');
   const it = cur();
   if (!it || !it.loadedSrc) return;

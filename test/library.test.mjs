@@ -25,6 +25,7 @@ import { openState } from '../core/store/state.mjs';
 import { fileNameFor, safeName } from '../core/store/library.mjs';
 import { pickVariant } from '../core/deliver/save.mjs';
 import { reasonOf, originReason } from '../core/reasons.mjs';
+import { appendJournal, cleanLines, JOURNAL_FILE } from '../core/store/journal.mjs';
 
 const ffmpeg = await haveFfmpeg();
 let site, lapka, home, movedWrap, sideWrap;
@@ -239,6 +240,29 @@ describe('the links pasted', () => {
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);
     assert.equal((await get('/api/history/cover/abc123')).status, 404);
+  });
+});
+
+/* ── the journal beside the settings ── */
+describe('the journal', () => {
+  test('lines are kept clean of addresses and cut to a length; the file is capped at a line boundary', async () => {
+    assert.deepEqual(cleanLines(['  12.0s load hls 720p from kodik, see https://cdn.example/a/b.m3u8 now', 42, '', null, 'x'.repeat(500)]).map(l => l.length <= 400 ? l.slice(0, 60) : 'long'), ['12.0s load hls 720p from kodik, see [url] now', '42', 'x'.repeat(60)]);
+    const file = path.join(os.tmpdir(), `lapka-journal-${process.pid}.log`);
+    await fsp.rm(file, { force: true });
+    for (let i = 0; i < 40; i++) await appendJournal(`stall ${i}`, Array.from({ length: 20 }, (_, k) => `line ${i}.${k} ` + 'y'.repeat(60)), { file, cap: 20000 });
+    const text = await fsp.readFile(file, 'utf8');
+    assert.ok(text.length <= 20000, `capped: ${text.length}`);
+    assert.ok(text.endsWith('\n') && /^\d{4}-\d{2}-\d{2}T/.test(text), 'whole lines, each entry stamped');
+    assert.ok(text.includes('stall 39') && !text.includes('stall 0\n'), 'the newest stays, the oldest went');
+    await fsp.rm(file, { force: true });
+  });
+  test('the page sends its diary through the route; the journal stands beside the settings file', async () => {
+    assert.equal(path.dirname(JOURNAL_FILE), path.dirname(process.env.LAPKA_CONFIG), 'in the tests, beside the temporary settings file');
+    const r = await fetch(lapka.base + '/api/log', { method: 'POST', headers: { 'x-lapka': '1', 'content-type': 'application/json' }, body: JSON.stringify({ head: 'playback stalled: episode 3', lines: ['0.1s play episode 3', '2.6s notice busy: Источник kodik не отвечает'] }) });
+    assert.equal(r.status, 200); assert.equal((await r.json()).lines, 2);
+    const text = await fsp.readFile(JOURNAL_FILE, 'utf8');
+    assert.ok(text.includes('playback stalled: episode 3') && text.includes('  2.6s notice busy'), text.slice(-300));
+    assert.equal((await fetch(lapka.base + '/api/log', { method: 'POST', headers: { 'x-lapka': '1' }, body: '{bad' })).status, 400);
   });
 });
 

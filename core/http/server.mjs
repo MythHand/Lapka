@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
+import { appendJournal } from '../store/journal.mjs';
 import { VERSION, checkUpdate, checkNpm, runUpdate, restartAfterExit, installKind } from '../update.mjs';
 export { VERSION };
 
@@ -121,6 +122,13 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         catch (e) { return json(res, 500, { error: e.message }); }
       }
       if (ctx.quit && mutating && p === '/api/quit') { ctx.quit(); return json(res, 200, { ok: true }); }
+      /* the page's account of a wait that did not end, into the journal beside the settings */
+      if (mutating && p === '/api/log') {
+        let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 65536) return json(res, 413, { error: 'too long' }); }
+        let body = {}; try { body = JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'bad json' }); }
+        try { return json(res, 200, { ok: true, lines: await appendJournal(body.head, body.lines) }); }
+        catch (e) { return json(res, 500, { error: e.message }); }
+      }
 
       /* Updating: GitHub is asked only here, on the button. The update itself
          is a stream of steps like the live look; it starts with a one-time
