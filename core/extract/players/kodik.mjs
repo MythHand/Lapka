@@ -14,6 +14,8 @@
    The links are signed for a few hours: the streams carry an expiry
    and are asked for again when it passes.
    ═══════════════════════════════════════════════════════════ */
+import { unescape } from '../../discover/text.mjs';
+import { refuse } from '../../reasons.mjs';
 
 const HOSTS = /(^|\.)(kodik\.(info|cc|biz)|kodikplayer\.com|aniqit\.com|anivod\.com)$/i;
 const FALLBACK = { endpoint: '/ftor', shift: 18 };
@@ -50,7 +52,7 @@ export function readScript(js) {
    the media id and hash of its own serial and its episode count, the
    seasons of the translation shown, the episodes of its season. */
 export function readSerial(page) {
-  const attrs = tag => Object.fromEntries([...tag.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(m => [m[1], m[2] ?? '']));
+  const attrs = tag => Object.fromEntries([...tag.matchAll(/([\w-]+)(?:="([^"]*)")?/g)].map(m => [m[1], unescape(m[2] ?? '')]));
   const box = name => {
     const i = page.indexOf(`class="${name}`); if (i < 0) return [];
     const j = page.indexOf('</select>', i);
@@ -88,6 +90,18 @@ export function readEmbed(page) {
   };
 }
 
+/* The parameters the player carries from page to page when it switches
+   translation or season by itself (the site's domain and its signatures,
+   the referer): the page keeps them as a JSON string, and the switch puts
+   them into the next address as they are, unencoded. */
+export function readParams(page) {
+  const m = /urlParams\s*=\s*'(\{[^']*\})'/.exec(page);
+  if (!m) return '';
+  try { return Object.entries(JSON.parse(m[1])).map(([k, v]) => `${k}=${v}`).join('&'); } catch { return ''; }
+}
+/* an address the player made for itself: it carries the site's signatures */
+const innerSwitch = u => { try { return new URL(u).searchParams.has('d_sign'); } catch { return false; } };
+
 export default {
   name: 'kodik',
   match: url => { try { return HOSTS.test(new URL(url).hostname); } catch { return false; } },
@@ -105,11 +119,17 @@ export default {
     let u; try { u = new URL(embedUrl); } catch { return null; }
     if (!/^\/(serial|season)\//.test(u.pathname) || /only_episode=true/.test(u.search)) return null;
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const ser = readSerial(res.body);
     const origin = new URL(res.url || embedUrl).origin;
     const season = ser.seasons.length > 1 ? ser.seasons.find(s => s.selected)?.number ?? null : null;
-    const at = (t, n) => `${origin}/${t.mediaType}/${t.mediaId}/${t.mediaHash}/720p?${season !== null ? `season=${season}&` : ''}episode=${n}`;
+    /* Another translation is opened the way the player opens it: its own
+       address, with the site's signatures carried along as parameters and
+       the player itself as the referer. Asked with the site as the referer,
+       the player answers with the site's preferred translation instead,
+       whatever serial the address names. */
+    const params = readParams(res.body);
+    const at = (t, n) => `${origin}/${t.mediaType}/${t.mediaId}/${t.mediaHash}/720p?${season !== null ? `season=${season}&` : ''}episode=${n}${params ? '&' + params : ''}`;
     /* the translation shown, when the embed names no others */
     const own = /^\/(serial|season)\/(\d+)\/([a-f0-9]+)\//.exec(u.pathname);
     const translations = ser.translations.length ? ser.translations
@@ -125,11 +145,13 @@ export default {
   },
 
   async extract(embedUrl, { referer = null } = {}, session) {
+    /* a switch the player would make itself comes from the player, not from the site */
+    if (innerSwitch(embedUrl)) referer = new URL(embedUrl).origin + '/';
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const base = new URL(res.url || embedUrl);
     const embed = readEmbed(res.body);
-    if (!embed.hash || !embed.id) throw new Error('no video on the embed page');
+    if (!embed.hash || !embed.id) throw refuse('emptyEmbed');
     const cookie = (res.cookies || []).map(c => c.split(';')[0]).join('; ');
 
     let how = FALLBACK;
@@ -151,8 +173,8 @@ export default {
       method: 'POST', body: form.toString(), referer: base.toString(),
       headers: { origin: base.origin, 'x-requested-with': 'XMLHttpRequest', accept: 'application/json, text/javascript, */*; q=0.01', 'content-type': 'application/x-www-form-urlencoded; charset=UTF-8', ...(cookie ? { cookie } : {}) },
     });
-    if (answer.status >= 400) throw new Error(`player answered ${answer.status}`);
-    let data; try { data = JSON.parse(answer.body); } catch { throw new Error('player answered without links'); }
+    if (answer.status >= 400) throw refuse('playerStatus', { status: answer.status });
+    let data; try { data = JSON.parse(answer.body); } catch { throw refuse('noLinks'); }
 
     const expiresAt = Date.now() + TTL_MS;
     const streams = [];
@@ -164,7 +186,7 @@ export default {
         streams.push({ kind: /m3u8/i.test(url) || /mpegurl/i.test(l.type || '') ? 'hls' : 'mp4', url, quality: /^\d+$/.test(q) ? `${q}p` : null, headers: { referer: base.origin + '/' }, expiresAt });
       }
     }
-    if (!streams.length) throw new Error('player answered without links');
+    if (!streams.length) throw refuse('noLinks');
     return { streams, dubs: [] };
   },
 };

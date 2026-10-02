@@ -22,6 +22,7 @@ import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
+import { appendJournal } from '../store/journal.mjs';
 import { VERSION, checkUpdate, checkNpm, runUpdate, restartAfterExit, installKind } from '../update.mjs';
 export { VERSION };
 
@@ -82,7 +83,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
     try {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
-      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', version: VERSION, home: store?.home || null });
+      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', version: VERSION, home: store?.home || null, platform: process.platform });
       if (req.method === 'GET' && p === '/api/home' && library) {
         const series = await library.list();
         return json(res, 200, { home: store.home, series: series.length, files: series.reduce((n, s) => n + s.episodes.length, 0), filesBytes: series.reduce((n, s) => n + s.episodes.reduce((m, e) => m + (e.size || 0), 0), 0), bytes: await store.weigh(), notes: state ? state.notes() : 0, notesBytes: await store.weigh(store.own), cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
@@ -121,6 +122,13 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         catch (e) { return json(res, 500, { error: e.message }); }
       }
       if (ctx.quit && mutating && p === '/api/quit') { ctx.quit(); return json(res, 200, { ok: true }); }
+      /* the page's account of a wait that did not end, into the journal beside the settings */
+      if (mutating && p === '/api/log') {
+        let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 65536) return json(res, 413, { error: 'too long' }); }
+        let body = {}; try { body = JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'bad json' }); }
+        try { return json(res, 200, { ok: true, lines: await appendJournal(body.head, body.lines) }); }
+        catch (e) { return json(res, 500, { error: e.message }); }
+      }
 
       /* Updating: GitHub is asked only here, on the button. The update itself
          is a stream of steps like the live look; it starts with a one-time
@@ -178,7 +186,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       }
       if (saver && mutating && p === '/api/save') {
         const ctx = lapka.context(url.searchParams.get('stream') || '');
-        if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first' });
+        if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first', reason: { key: 'noStream' } });
         return json(res, 202, saver.start(ctx.stream.id, ctx, { first: url.searchParams.get('first') === '1', level: Number(url.searchParams.get('level')) || null }));
       }
       if (saver && mutating && p === '/api/saves/pause') return json(res, 200, { paused: saver.pauseAll().map(j => j.id) });
@@ -232,6 +240,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
         return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
       }
+      if (state && store && mutating && p === '/api/history/forget') {
+        const gone = state.forgetLink(url.searchParams.get('url'));
+        if (!gone) return json(res, 404, { error: 'no such link' });
+        if (gone.coverFile) await fsp.rm(path.join(store.own, 'covers', gone.coverFile), { force: true }).catch(() => {});
+        return json(res, 200, { ok: true });
+      }
       if (state && store && req.method === 'GET' && p.startsWith('/api/history/cover/')) {
         const id = decodeURIComponent(p.slice('/api/history/cover/'.length));
         const rec = state.history().find(h => h.seriesId === id && h.coverFile);
@@ -255,7 +269,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return job ? json(res, 200, job) : json(res, 404, { error: 'unknown job' });
       }
       if (saver && req.method === 'GET' && p === '/api/saves') {
-        const active = [...saver.jobs.values()].filter(j => j.state === 'working' || j.state === 'queued').map(j => ({ id: j.id, state: j.state, key: j.key, seriesId: j.seriesId, episode: j.episode, dub: j.dub, quality: j.quality, phase: j.phase, done: j.done, total: j.total, unit: j.unit || null }));
+        const active = [...saver.jobs.values()].filter(j => j.state === 'working' || j.state === 'queued').map(j => ({ id: j.id, state: j.state, key: j.key, seriesId: j.seriesId, episode: j.episode, dub: j.dub, dubName: j.dubName, quality: j.quality, phase: j.phase, done: j.done, total: j.total, unit: j.unit || null }));
         return json(res, 200, { pending: state ? state.saves() : {}, active });
       }
       if (saver && mutating && p === '/api/saves/resume') {
@@ -282,12 +296,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (state && req.method === 'GET' && p === '/api/state') return json(res, 200, state.get());
       if (state && mutating && p === '/api/state/position') {
         const q = url.searchParams;
-        state.setPosition(q.get('series'), Number(q.get('episode')), q.has('t') ? Number(q.get('t')) : null, Number(q.get('d')) || 0);   // a place is the episode's, whatever the dub
+        state.setPosition(q.get('series'), Number(q.get('episode')), q.has('t') ? Number(q.get('t')) : null, Number(q.get('d')) || 0, q.get('dubName'));   // a place is the episode's, whatever the dub; the dub's name goes along to be said
         return json(res, 200, { ok: true });
       }
       if (state && mutating && p === '/api/state/watched') {
         const q = url.searchParams;
-        state.setWatched(q.get('series'), Number(q.get('episode')), q.get('on') !== '0');
+        state.setWatched(q.get('series'), Number(q.get('episode')), q.get('on') !== '0', q.get('dubName'));
         return json(res, 200, { ok: true });
       }
       if (state && mutating && p === '/api/state/dub') {

@@ -24,6 +24,8 @@ import { VERSION } from '../core/update.mjs';
 import { openState } from '../core/store/state.mjs';
 import { fileNameFor, safeName } from '../core/store/library.mjs';
 import { pickVariant } from '../core/deliver/save.mjs';
+import { reasonOf, originReason } from '../core/reasons.mjs';
+import { appendJournal, cleanLines, JOURNAL_FILE } from '../core/store/journal.mjs';
 
 const ffmpeg = await haveFfmpeg();
 let site, lapka, home, movedWrap, sideWrap;
@@ -92,6 +94,7 @@ describe('saving', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
 
   test('an mp4 stream is fetched whole', async () => {
     let job = await (await post(`/api/save?stream=${mp4.id}`)).json();
+    assert.equal(job.dubName, 'AniLibria', 'a job names its dub, so a row can say it before the episode is opened');
     for (let i = 0; i < 200 && job.state === 'working'; i++) { await new Promise(r => setTimeout(r, 100)); job = await (await get(`/api/save/${job.id}`)).json(); }
     assert.equal(job.state, 'done', job.error);
     const whole = Buffer.from(await (await fetch(site.base + '/media/native.mp4')).arrayBuffer());
@@ -201,9 +204,9 @@ describe('the links pasted', () => {
     assert.equal(list.at(-1).last, null, 'nothing watched yet');
     /* a position noted in a part the link opened: the row says where watching stopped */
     await post('/api/history?' + new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', episodes: '4', parts: JSON.stringify([{ id: 'abc123', ordinal: 1, title: 'Сериал Селект' }, { id: 'abc124', ordinal: 2, title: 'Сериал Селект 2' }]) }));
-    await post('/api/state/position?series=abc124&episode=3&dub=anilibria&t=734&d=1400');
+    await post('/api/state/position?series=abc124&episode=3&t=734&d=1400&dubName=AniLibria');
     const withStop = (await (await get('/api/history')).json()).history.at(-1);
-    assert.deepEqual({ seriesId: withStop.last.seriesId, episode: withStop.last.episode, t: withStop.last.t, done: withStop.last.done }, { seriesId: 'abc124', episode: 3, t: 734, done: false });
+    assert.deepEqual({ seriesId: withStop.last.seriesId, episode: withStop.last.episode, t: withStop.last.t, done: withStop.last.done, dub: withStop.last.dub }, { seriesId: 'abc124', episode: 3, t: 734, done: false, dub: 'AniLibria' });
     await post('/api/state/watched?series=abc124&episode=3&on=1');
     await post('/api/state/position?series=abc124&episode=3&dub=anilibria');
     const finished = (await (await get('/api/history')).json()).history.at(-1);
@@ -219,9 +222,62 @@ describe('the links pasted', () => {
     const again = (await (await get('/api/history')).json()).history;
     assert.deepEqual(again.map(h => h.title), ['Сериал Ссылки', 'Сериал Селект']);
     assert.ok((await (await get('/api/home')).json()).notes >= 2, 'the links count among the notes');
+    /* another season of the same franchise pasted: its parts meet the row's, and it takes the row's place */
+    const s5 = site.base + '/s/select/season-5';
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc123', ordinal: 1 }, { id: 'abc124', ordinal: 2 }, { id: 'abc125', ordinal: 5 }]) }));
+    const merged = (await (await get('/api/history')).json()).history;
+    assert.deepEqual(merged.map(h => h.url), [site.base + '/s/links/ep-1', s5], 'one row per franchise, the newest link');
+    /* a part keeps its season and kind, so where watching stopped is said by the season, not by a number of Lapka's */
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv' }, { id: 'abc126', ordinal: 3, title: 'Фильм', kind: 'movie' }, { id: 'abc125', ordinal: 5 }]) }));
+    const kept = (await (await get('/api/history')).json()).history.at(-1).parts;
+    assert.deepEqual(kept.slice(0, 2).map(p => [p.season, p.kind]), [[2, 'tv'], [null, 'movie']]);
+    /* one link forgotten: its row and cover go, the other row stays, and what was watched stays with the series */
+    await post('/api/state/position?series=abc125&episode=7&t=300&d=1400');
+    assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 200);
+    assert.deepEqual((await (await get('/api/history')).json()).history.map(h => h.url), [site.base + '/s/links/ep-1']);
+    assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 404);
+    assert.equal(lapka.state.position('abc125', 7), 300, 'the place kept in the series stays');
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);
     assert.equal((await get('/api/history/cover/abc123')).status, 404);
+  });
+});
+
+/* ── the journal beside the settings ── */
+describe('the journal', () => {
+  test('lines are kept clean of addresses and cut to a length; the file is capped at a line boundary', async () => {
+    assert.deepEqual(cleanLines(['  12.0s load hls 720p from kodik, see https://cdn.example/a/b.m3u8 now', 42, '', null, 'x'.repeat(500)]).map(l => l.length <= 400 ? l.slice(0, 60) : 'long'), ['12.0s load hls 720p from kodik, see [url] now', '42', 'x'.repeat(60)]);
+    const file = path.join(os.tmpdir(), `lapka-journal-${process.pid}.log`);
+    await fsp.rm(file, { force: true });
+    for (let i = 0; i < 40; i++) await appendJournal(`stall ${i}`, Array.from({ length: 20 }, (_, k) => `line ${i}.${k} ` + 'y'.repeat(60)), { file, cap: 20000 });
+    const text = await fsp.readFile(file, 'utf8');
+    assert.ok(text.length <= 20000, `capped: ${text.length}`);
+    assert.ok(text.endsWith('\n') && /^\d{4}-\d{2}-\d{2}T/.test(text), 'whole lines, each entry stamped');
+    assert.ok(text.includes('stall 39') && !text.includes('stall 0\n'), 'the newest stays, the oldest went');
+    await fsp.rm(file, { force: true });
+  });
+  test('the page sends its diary through the route; the journal stands beside the settings file', async () => {
+    assert.equal(path.dirname(JOURNAL_FILE), path.dirname(process.env.LAPKA_CONFIG), 'in the tests, beside the temporary settings file');
+    const r = await fetch(lapka.base + '/api/log', { method: 'POST', headers: { 'x-lapka': '1', 'content-type': 'application/json' }, body: JSON.stringify({ head: 'playback stalled: episode 3', lines: ['0.1s play episode 3', '2.6s notice busy: Источник kodik не отвечает'] }) });
+    assert.equal(r.status, 200); assert.equal((await r.json()).lines, 2);
+    const text = await fsp.readFile(JOURNAL_FILE, 'utf8');
+    assert.ok(text.includes('playback stalled: episode 3') && text.includes('  2.6s notice busy'), text.slice(-300));
+    assert.equal((await fetch(lapka.base + '/api/log', { method: 'POST', headers: { 'x-lapka': '1' }, body: '{bad' })).status, 400);
+  });
+});
+
+/* ── why a save broke off, as a code ── */
+describe('the reason of a broken save', () => {
+  test('the source by its status, the network, the disk, a code given ready, anything else with its detail', () => {
+    assert.deepEqual(originReason(404), { key: 'gone', status: 404 });
+    assert.deepEqual(originReason(403), { key: 'denied', status: 403 });
+    assert.deepEqual(originReason(500), { key: 'origin', status: 500 });
+    assert.equal(reasonOf(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } })).key, 'network');
+    assert.equal(reasonOf(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })).key, 'network');
+    assert.equal(reasonOf(Object.assign(new Error('no space left'), { code: 'ENOSPC' })).key, 'disk');
+    assert.equal(reasonOf(Object.assign(new Error('x'), { code: 'EACCES' })).key, 'access');
+    assert.deepEqual(reasonOf(Object.assign(new Error('origin answered 410'), { reason: originReason(410) })), { key: 'gone', status: 410 });
+    assert.deepEqual(reasonOf(new Error('odd')), { key: 'other', detail: 'odd' });
   });
 });
 
@@ -406,7 +462,8 @@ describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     lapka.state.setSave('nope/1/x', { seriesUrl: site.base + '/s/nope/', seriesId: 'nope', episode: 1, dubKey: 'x', quality: 'auto' });
     const out2 = await lapka.saver.resume(lapka.lapka);
     assert.equal(out2[0].state, 'error');
-    assert.ok((await (await get('/api/saves')).json()).pending['nope/1/x'].error);
+    const why = (await (await get('/api/saves')).json()).pending['nope/1/x'].error;
+    assert.equal(typeof why.key, 'string', 'a save that broke off keeps a code for the page to word, not a sentence');
     assert.equal((await post('/api/saves/forget?key=nope/1/x')).status, 200);
     assert.equal(Object.keys((await (await get('/api/saves')).json()).pending).length, 0);
     /* a setting through its route */

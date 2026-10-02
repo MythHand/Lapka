@@ -321,6 +321,8 @@ const SETTINGS = [
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'font', def: 'fixel', label: 'set.font',
     opts: [['fixel', 'set.font.fixel'], ['inter', 'set.font.inter']] },
+  { key: 'histLinks', def: 'on', label: 'set.histLinks',
+    opts: [['on', 'common.on'], ['off', 'common.off']] },
 ];
 const SETTINGS_V = '6';   // the defaults changed, so what was saved is dropped
 
@@ -419,7 +421,7 @@ function markPos(it, sec, send = true) {
   if (send) {
     clearTimeout(posTimers[k]);
     const [series, episode] = k.split('/');
-    const path = `/api/state/position?series=${series}&episode=${episode}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0)}`;
+    const path = `/api/state/position?series=${series}&episode=${episode}${gone ? '' : '&t=' + Math.round(sec) + '&d=' + (Math.round(d) || 0) + (it.dub ? '&dubName=' + encodeURIComponent(it.dub.name) : '')}`;
     /* at once when the page is leaving (a timer would never fire), with the request kept alive past the page; else a moment later, the ticks of one second folded into one request */
     if (send === 'now') fetch(path, { method: 'POST', headers: { 'x-lapka': '1' }, keepalive: true }).catch(() => {});
     else posTimers[k] = setTimeout(() => post(path).catch(() => {}), 800);
@@ -439,7 +441,7 @@ function markWatched(it) {
   if (!k || state.watched[k]) return;
   state.watched[k] = true;
   const [series, episode] = k.split('/');
-  post(`/api/state/watched?series=${series}&episode=${episode}`).catch(() => {});
+  post(`/api/state/watched?series=${series}&episode=${episode}${it.dub ? '&dubName=' + encodeURIComponent(it.dub.name) : ''}`).catch(() => {});
   for (const li of queueList.children) if (byId(li.dataset.id) === it) paintPos(li, it);
 }
 
@@ -635,7 +637,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function api(path, opts) {
   const r = await fetch(path, opts);
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || String(r.status));
+  if (!r.ok) throw Object.assign(new Error(d.error || String(r.status)), { reason: d.reason || null });   // a reason, when given, is a code for the page to word
   return d;
 }
 /* the look of a page told as it goes: every step to onStep, the answer at the end */
@@ -729,7 +731,7 @@ function prepStep(step) {
     prepPhase(step.phase, 'active', step.n ? `0 / ${step.n}` : '');
     return;
   }
-  prepLog(stepText(step));
+  prepLog(stepText(step), detailOf(step));
 }
 /* The server says what it does as a key with its parts, never in words
    of one language: the words are the page's, in the language chosen
@@ -744,16 +746,28 @@ function stepText(step) {
   if (v.why) v.why = whyText(v.why);
   return t('log.' + v.key, v);
 }
+/* why something refused, in words: a code word, or a reason { key, …parts }
+   from the server; a reason no key is known for, or one that keeps the
+   machine's own text, is named as unforeseen, and its text goes separately */
+const WHY = { embedStatus: 'why.embedStatus', playerStatus: 'why.playerStatus', siteStatus: 'why.siteStatus', pageStatus: 'why.pageStatus', emptyEmbed: 'why.emptyEmbed', noLinks: 'why.noLinks', noSuchEpisode: 'why.noSuchEpisode', noPlayerAddress: 'why.noPlayerAddress', noFragment: 'why.noFragment', noEpisode: 'why.noEpisode', noStreams: 'why.noStreams', playbackFailed: 'why.playbackFailed', network: 'why.network', disk: 'why.disk', access: 'why.access', other: 'why.other' };
 function whyText(error) {
-  if (error === 'no extractor') return t('log.noExtractor');
-  if (error === 'closed door') return t('log.closedDoor');
-  return error;
+  if (!error) return '';
+  if (typeof error === 'string') {
+    if (error === 'no extractor') return t('log.noExtractor');
+    if (error === 'closed door') return t('log.closedDoor');
+    return error;
+  }
+  return t(WHY[error.key] || 'why.other', { status: error.status ?? '' });
 }
+/* the machine's own text behind an unforeseen reason, to stand apart from the words */
+const detailOf = step => step && typeof step === 'object' && step.why && typeof step.why === 'object' && step.why.key === 'other' ? String(step.why.detail || '') : '';
 const PREP_LINES = 10;
-function prepLog(text) {
+function prepLog(text, detail = '') {
   const line = document.createElement('div');
   line.className = 'cmd__line';
   line.textContent = text;
+  /* the machine's own word, when there is one: after the words, quieter, seen for what it is */
+  if (detail) { const d = document.createElement('span'); d.className = 'cmd__detail'; d.textContent = ' ' + detail; line.append(d); }
   prepCmd.append(line);
   while (prepCmd.children.length > PREP_LINES) prepCmd.firstElementChild.remove();
 }
@@ -978,7 +992,8 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
       state.list.push(it);
     }
   }
-  state.dubKey = (state.remote.dubs || {})[got.series.id] || null;
+  /* the dub is the franchise's: the one noted for the part to start in, else the part pasted, else any part */
+  state.dubKey = franchiseDub([at && at.seriesId, got.series.id, ...state.seasons.map(s => s.series.id)]);
   linkInput.value = '';
   render(); paintTitle();
   loadLibrary(); watchSaves();
@@ -1006,6 +1021,12 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
    paste and is not written. The list stands beside the history button
    in the queue's footer: as tall as the window allows, the newest at
    the bottom, nearest the button; a row opens its link again. */
+/* the dub noted for the first of these parts that has one */
+function franchiseDub(ids) {
+  const dubs = state.remote.dubs || {};
+  for (const id of ids) if (id && dubs[id]) return dubs[id];
+  return null;
+}
 function rememberLink(url, series) {
   const q = new URLSearchParams({ url, series: series.id, title: series.title || '', episodes: String(series.episodes.length) });
   if (series.cover) q.set('cover', series.cover);
@@ -1013,54 +1034,185 @@ function rememberLink(url, series) {
   if (series.year) q.set('year', String(series.year));
   if (series.season) q.set('season', String(series.season));
   /* the parts the link opened: where watching stops is looked for across them */
-  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '' }))));
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null }))));
   post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
 }
 let histList = [];
+let histQuery = '';
 async function loadHistory() {
   try { histList = (await api('/api/history')).history || []; } catch (_) { histList = []; }
-  if (!histPop.hidden) buildHistory();
+  if (!histPop.hidden) paintHistoryList();
 }
+/* when a link was last pasted: today and yesterday by name, else the day
+   and the month; a year other than this one is named too */
 function whenWords(at) {
-  try { return new Date(at).toLocaleString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; }
+  const d = new Date(at), now = new Date();
+  const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const gone = Math.round((day(now) - day(d)) / 86400000);
+  if (gone === 0) return t('hist.today');
+  if (gone === 1) return t('hist.yesterday');
+  try { return d.toLocaleDateString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }); } catch (_) { return ''; }
 }
+/* The frame of the list, once per opening: on top the title and, at the
+   right edge, how many links the history holds, whatever is searched;
+   under it the rows; at the bottom the search, next to the button the
+   list came from. Top and bottom stay while the rows scroll between
+   them. A search narrows the rows as it is typed, by the title, the
+   link, the year or the name of any part the link opened, and the frame
+   takes the height of what is left, up to the window. */
 function buildHistory() {
   histPop.replaceChildren();
-  const head = document.createElement('div'); head.className = 'histpop__head'; head.textContent = t('queue.history'); histPop.append(head);
-  if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); histPop.append(e); }
-  for (const h of histList) {
-    const row = document.createElement('button');
-    row.className = 'histpop__row';
-    row.type = 'button';
-    const cover = h.cover ? document.createElement('img') : document.createElement('span');
-    cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
-    if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
-    const body = document.createElement('div'); body.className = 'histpop__body';
-    const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
-    /* what the series is on the left, when it was pasted on the right */
-    const meta = document.createElement('div'); meta.className = 'histpop__meta';
-    const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
-    const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
-    meta.append(about, when);
-    body.append(title, meta);
-    /* where watching stopped, across the parts the link opened; a part other than the link's is named */
-    const last = h.last;
-    if (last) {
-      const stop = document.createElement('div'); stop.className = 'histpop__stop';
-      const part = (h.parts || []).find(x => x.id === last.seriesId);
-      const where = part && last.seriesId !== h.seriesId ? `${part.ordinal ? part.ordinal + ' · ' : ''}${part.title} · ` : '';
-      stop.textContent = where + (last.done ? t('hist.finished', { n: last.episode }) : t('hist.stopped', { n: last.episode, time: fmt(last.t) }));
-      body.append(stop);
-    }
-    const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url;
-    body.append(link);
-    row.append(cover, body);
-    /* the link opens where it was left: the episode stopped in, or the one after the last finished */
-    row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
-    histPop.append(row);
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.history');
+  const count = document.createElement('span'); count.className = 'histpop__count';
+  top.append(head, count);
+  const list = document.createElement('div'); list.className = 'histpop__list';
+  const bottom = document.createElement('div'); bottom.className = 'histpop__bottom';
+  const wrap = document.createElement('span'); wrap.className = 'histpop__field';
+  const search = document.createElement('input');
+  search.className = 'linkform__in histpop__search';
+  search.type = 'text'; search.spellcheck = false; search.autocomplete = 'off';
+  search.placeholder = t('hist.search');
+  search.value = histQuery;
+  /* the project's own cross, not the browser's: it clears the search and gives the field back */
+  const clear = document.createElement('button');
+  clear.type = 'button'; clear.className = 'histpop__clear'; clear.title = t('queue.clear');
+  clear.innerHTML = phSvg(PH.x);
+  clear.hidden = !histQuery;
+  search.oninput = () => { histQuery = search.value; clear.hidden = !histQuery; paintHistoryList(); };
+  clear.onclick = ev => { ev.stopPropagation(); search.value = ''; histQuery = ''; clear.hidden = true; paintHistoryList(); search.focus({ preventScroll: true }); };
+  wrap.append(search, clear);
+  bottom.append(wrap);
+  histPop.append(top, list, bottom);
+  paintHistoryList();
+  search.focus({ preventScroll: true });
+}
+/* a title without its season: "2 сезон", "Season 2", "TV-2", "Part 2", a
+   closing number equal to the season; what is left says whose season it is */
+const SEASON_MARKS = [/\d{1,2}\s*-?\s*(?:й|ой|ый)?\s*сезон/giu, /сезон\s*№?\s*\d{1,2}(?!\d)/giu, /season\s*\d{1,2}/gi, /\d{1,2}(?:st|nd|rd|th)\s+season/gi, /(?:^|\s)(?:part|часть)\s*\d{1,2}(?!\d)/giu, /\bS\d{1,2}\b(?!\d)/g, /(?:ТВ|TV)-\d{1,2}(?!\d)/giu];
+function titleBase(title, season) {
+  let s = String(title || '');
+  for (const re of SEASON_MARKS) s = s.replace(re, ' ');
+  s = s.replace(/[\s\p{P}]+/gu, ' ').trim();
+  if (season) s = s.replace(new RegExp(`(?:^|\\s)${Number(season)}$`), '');
+  return s.trim().toLowerCase();
+}
+function historyRow(h) {
+  const row = document.createElement('button');
+  row.className = 'histpop__row';
+  row.type = 'button';
+  const cover = h.cover ? document.createElement('img') : document.createElement('span');
+  cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
+  if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
+  const body = document.createElement('div'); body.className = 'histpop__body';
+  const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+  /* what the series is on the left, when it was pasted on the right */
+  const meta = document.createElement('div'); meta.className = 'histpop__meta';
+  const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
+  const when = document.createElement('span'); when.className = 'histpop__when'; when.textContent = whenWords(h.at);
+  meta.append(about, when);
+  body.append(title, meta);
+  /* where watching stopped, across the parts the link opened: the head
+     names the part, the tail says the episode, the time and the dub. The
+     tail never breaks: it stands at the end of the line while it fits,
+     else it goes whole to the next one. The link's own part needs no name;
+     a film is named by its title; a part whose title is the row's with
+     only the season changed is named by the season; any other part (a
+     branch, a title of its own) by its title, as the site calls it. */
+  const last = h.last;
+  if (last) {
+    const stop = document.createElement('div'); stop.className = 'histpop__stop';
+    const part = last.seriesId !== h.seriesId ? (h.parts || []).find(x => x.id === last.seriesId) : null;
+    const film = part ? part.kind === 'movie' : h.kind === 'movie';
+    const name = !part ? '' : !film && part.season && titleBase(part.title, part.season) === titleBase(h.title, h.season) ? t('queue.season', { n: part.season }) : part.title;
+    const head = [t(last.done ? 'hist.finishedAt' : 'hist.stoppedAt'), name].filter(Boolean).join(' · ');
+    const tail = document.createElement('span'); tail.className = 'histpop__tail';
+    tail.textContent = [film ? '' : t('hist.ep', { n: last.episode }), last.done ? '' : fmt(last.t), last.dub || ''].filter(Boolean).join(' · ');
+    stop.append(tail.textContent ? head + ' · ' : head, tail);
+    body.append(stop);
   }
+  /* the link as pasted, unless the settings keep it out of sight */
+  if (state.set.histLinks !== 'off') { const link = document.createElement('div'); link.className = 'histpop__url'; link.textContent = h.url; body.append(link); }
+  /* the cross in the corner, seen on hover: the link leaves the history, and only the
+     history (what was watched is the series' memory); pasted again, it is a new row */
+  const x = document.createElement('span');
+  x.className = 'histpop__x'; x.setAttribute('role', 'button'); x.tabIndex = 0; x.title = t('hist.forget');
+  x.innerHTML = phSvg(PH.x);
+  const forget = async ev => {
+    ev.stopPropagation(); ev.preventDefault();
+    try { await post('/api/history/forget?url=' + encodeURIComponent(h.url)); } catch (_) { return; }
+    histList = histList.filter(o => o.url !== h.url);
+    await leaveHistoryRow(row);
+  };
+  x.onclick = forget;
+  x.onkeydown = ev => { if (ev.key === 'Enter' || ev.key === ' ') forget(ev); };
+  row.append(cover, body, x);
+  /* the link opens where it was left: the episode stopped in, or the one after the last finished */
+  row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
+  return row;
+}
+/* A row leaves the list from the top down. It is taken out of the flow at
+   once, the scroll gives back its height where it can, and the frame takes
+   its new place at the button; then everything that moved (the rows, the
+   frame's top edge) slides from where it was to where it is, together and
+   at one pace. So the rows above come down into the gap and the rows below
+   stand still, whether or not the list scrolls. A fading copy of the row
+   stays where it was meanwhile. The list answers no pointer until settled. */
+const LEAVE_MS = 450, LEAVE_EASE = 'cubic-bezier(.2,.8,.3,1)';
+function leaveHistoryRow(row) {
+  const list = row.parentElement;
+  if (!list) return Promise.resolve();
+  const rows = [...list.querySelectorAll('.histpop__row')].filter(r => r !== row);
+  const seen = r => r.offsetTop - list.scrollTop;                 // where a row stands in the list's window
+  const before = new Map(rows.map(r => [r, seen(r)]));
+  const popTop0 = histPop.getBoundingClientRect().top, st0 = list.scrollTop, h = row.offsetHeight, was = row.getBoundingClientRect();
+  const ghost = row.cloneNode(true);
+  ghost.classList.add('histpop__ghost');
+  list.classList.add('is-settling');
+  row.remove();
+  const count = histPop.querySelector('.histpop__count');
+  if (count) count.textContent = String(histList.length);
+  if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); list.append(e); }
+  list.scrollTop = Math.max(0, st0 - h);
   placeHistory();
-  histPop.scrollTop = histPop.scrollHeight;
+  const pop1 = histPop.getBoundingClientRect(), popTop1 = pop1.top;
+  /* the fading copy: in the frame, where the row stood on the screen, moving with the frame's edge so it stays there */
+  ghost.style.left = (was.left - pop1.left) + 'px'; ghost.style.top = (was.top - pop1.top) + 'px'; ghost.style.width = was.width + 'px';
+  histPop.append(ghost);
+  /* first frame: everything held at its old place */
+  for (const r of rows) { r.style.transition = 'none'; r.style.transform = `translateY(${before.get(r) - seen(r)}px)`; }
+  ghost.style.transition = 'none'; ghost.style.transform = `translateY(${popTop1 - popTop0}px)`;
+  histPop.style.transition = 'none'; histPop.style.top = popTop0 + 'px';
+  void histPop.offsetHeight;
+  return new Promise(done => {
+    requestAnimationFrame(() => {
+      for (const r of rows) { r.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}`; r.style.transform = ''; }
+      histPop.style.transition = `top ${LEAVE_MS}ms ${LEAVE_EASE}`; histPop.style.top = popTop1 + 'px';
+      ghost.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}, opacity 220ms ease`; ghost.style.transform = ''; ghost.style.opacity = '0';
+      setTimeout(() => {
+        for (const r of rows) { r.style.transition = ''; r.style.transform = ''; }
+        histPop.style.transition = ''; ghost.remove(); list.classList.remove('is-settling');
+        placeHistory(); done();
+      }, LEAVE_MS + 20);
+    });
+  });
+}
+const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.parts || []).map(p => p.title)].some(x => String(x || '').toLowerCase().includes(q));
+function paintHistoryList() {
+  const list = histPop.querySelector('.histpop__list');
+  if (!list) return;
+  const count = histPop.querySelector('.histpop__count');
+  if (count) count.textContent = String(histList.length);
+  const q = histQuery.trim().toLowerCase();
+  const shown = q ? histList.filter(h => histMatches(h, q)) : histList;
+  list.replaceChildren();
+  const say = text => { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = text; list.append(e); };
+  if (!histList.length) say(t('hist.empty'));
+  else if (!shown.length) say(t('hist.nothing'));
+  for (const h of shown) list.append(historyRow(h));
+  /* the height of what is shown, up to the window; the bottom stays at the button, the newest rows beside it */
+  placeHistory();
+  list.scrollTop = list.scrollHeight;
 }
 /* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
 function placeHistory() {
@@ -1068,17 +1220,23 @@ function placeHistory() {
   histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
   histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
 }
-function openHistory() { histPop.hidden = false; buildHistory(); loadHistory(); }
+function openHistory() { histQuery = ''; histPop.hidden = false; buildHistory(); loadHistory(); }
 function closeHistory() { histPop.hidden = true; }
 btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
 histPop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
-  if (histPop.hidden || e.target.closest('#histPop')) return;
-  /* the click closes the list and does nothing else; the button toggles it itself */
-  if (!e.target.closest('#btnHistory')) { e.stopPropagation(); e.preventDefault(); }
+  /* the button toggles the list itself; any other click closes it and does nothing else */
+  if (histPop.hidden || e.target.closest('#histPop, #btnHistory')) return;
+  e.stopPropagation(); e.preventDefault();
   closeHistory();
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !histPop.hidden) closeHistory(); });
+/* Esc in the history: a search typed is cleared first, then the list closes */
+function escapeHistory() {
+  if (histPop.hidden) return false;
+  const search = histPop.querySelector('.histpop__search');
+  if (search && search.value) { search.value = ''; histQuery = ''; const x = histPop.querySelector('.histpop__clear'); if (x) x.hidden = true; paintHistoryList(); return true; }
+  closeHistory(); return true;
+}
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
@@ -1087,12 +1245,19 @@ addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
    its best stream. A stream that just failed is passed in so that its
    source is marked dead and another one is picked. */
 async function resolveItem(it, { avoid = null } = {}) {
-  if (it.opening) return it.opening;
-  it.opening = (async () => {
-    const q = new URLSearchParams({ series: it.seriesId, episode: String(it.number) });
-    if (state.dubKey) q.set('dub', state.dubKey);
-    if (avoid) q.set('avoid', avoid);
-    const r = await api('/api/resolve?' + q);
+  /* the same question already asked is not asked twice; a different one
+     (another dub chosen while the first answer is on its way) is, and the
+     newer answer is the one kept */
+  const q = new URLSearchParams({ series: it.seriesId, episode: String(it.number) });
+  if (state.dubKey) q.set('dub', state.dubKey);
+  if (avoid) q.set('avoid', avoid);
+  const ask = q.toString();
+  if (it.opening && it.opening.ask === ask) return it.opening.promise;
+  const opening = { ask, promise: null };
+  opening.promise = (async () => {
+    const t0 = performance.now();
+    let r; try { r = await api('/api/resolve?' + q); } catch (e) { diary('resolve', `episode ${it.number}: failed in ${Math.round(performance.now() - t0)}ms: ${e.message.slice(0, 80)}`); throw e; }
+    diary('resolve', `episode ${it.number}${state.dubKey ? ' dub ' + state.dubKey : ''}${avoid ? ' avoiding one' : ''}: ${Math.round(performance.now() - t0)}ms, ${r.stream ? 'a stream' : 'no stream'} from ${(r.source && r.source.player) || '?'}, ${(r.streams || []).length} streams, ${(r.dead || []).length} dead`);
     it.dubs = r.dubs; it.dub = r.dub; it.source = r.source;
     it.streams = r.streams || [];
     it.stream = pickStream(it.streams, r.stream) || r.stream;
@@ -1106,7 +1271,8 @@ async function resolveItem(it, { avoid = null } = {}) {
     if (r.episode.title && !it.title) { it.title = r.episode.title; it.name = nameFor(r.episode, state.seasons.find(s => s.series.id === it.seriesId)?.series); }
     return r;
   })();
-  try { return await it.opening; } finally { it.opening = null; }
+  it.opening = opening;
+  try { return await opening.promise; } finally { if (it.opening === opening) it.opening = null; }
 }
 
 /* ── which quality plays ─────────────────────────────────────
@@ -1184,6 +1350,9 @@ function pickQuality(opt) {
   if (!it) return;
   if (opt.level !== undefined) {           // a level inside one HLS stream
     if (hls) hls.currentLevel = opt.level;
+    /* the choice is kept, as a quality picked any other way is: the next episode starts in it */
+    const wanted = opt.level === -1 ? 'auto' : /^\d{3,4}p$/.test(opt.main) ? opt.main : null;
+    if (wanted) { state.quality = wanted; saveStr('lapka.quality', wanted); }
     toast(t('quality.current', { name: opt.main }));
     setTimeout(syncQualityButton, 300);
     return;
@@ -1217,7 +1386,7 @@ async function sourceFor(it) {
   if (it !== cur()) return null;
   if (!r.stream) {
     /* no live source: the reason stands on the stage, a closed player named as such */
-    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : d.error === 'closed door' ? t('why.closedDoor', { player: d.player }) : `${d.player}: ${d.error}`).join('; ');
+    const why = (r.dead || []).map(d => d.error === 'no extractor' ? t('why.closedPlayer', { player: d.player }) : d.error === 'closed door' ? t('why.closedDoor', { player: d.player }) : `${d.player}: ${whyText(d.error)}${d.error && d.error.key === 'other' && d.error.detail ? ' ' + d.error.detail : ''}`).join('; ');
     it.err = true; it.why = why; render();
     showNotice(t('notice.noOpen', { name: it.name, why }), { mid: true });
     return null;
@@ -1267,6 +1436,7 @@ let playToken = 0;
    under the pointer, and scrolling would move it away from there */
 async function playItem(it, autoplay = true, glide = true) {
   if (!it) return;
+  diary('play', `episode ${it.number}${autoplay ? '' : ' (no autoplay)'}${it.switching ? ' switching try ' + it.switching.n : ''}${it.avoid ? ' avoiding a stream' : ''}`);
   if (loaded) markPos(loaded, video.currentTime);   // where the episode before was left
   loaded = null;
   state.current = it;
@@ -1332,6 +1502,7 @@ async function playItem(it, autoplay = true, glide = true) {
    comes last. A refused play() is not reported: it also fails on every
    interrupted start, and the play button shows the state anyway. */
 function loadSource(it, src, token, onMeta, play) {
+  diary('load', `${src.kind || '?'} ${src.quality || 'auto'} from ${(it.source && it.source.player) || '?'}, play ${play}`);
   it.loadedSrc = src.play;
   loaded = null;
   attachSource(src);
@@ -1340,7 +1511,7 @@ function loadSource(it, src, token, onMeta, play) {
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
   video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); } }, { once: true });
-  if (play) video.play().catch(() => {});
+  if (play) video.play().catch(e => diary('play() refused', e && e.name));
 }
 
 /* The quality the user wants, applied inside an adaptive stream: the
@@ -1379,14 +1550,21 @@ function attachSource(stream) {
     /* fewer silent retries than the defaults: a source that does not
        answer is given up on in seconds, not in a minute, and its
        trouble is said on the stage as soon as it starts */
-    hls = new Hls({ enableWorker: true, manifestLoadingTimeOut: 8000, manifestLoadingMaxRetry: 1, levelLoadingTimeOut: 8000, levelLoadingMaxRetry: 1, fragLoadingTimeOut: 12000, fragLoadingMaxRetry: 2 });
+    const policy = (firstByte, whole, retries) => ({ default: { maxTimeToFirstByteMs: firstByte, maxLoadTimeMs: whole, timeoutRetry: { maxNumRetry: retries, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: retries, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } });
+    hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2) });
     hls.on(Hls.Events.ERROR, (_, d) => {
+      diary('hls', `${d.type}/${d.details}${d.fatal ? ' fatal' : ''}${d.response && d.response.code ? ' code ' + d.response.code : ''}`);
       if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
       const it = cur();
       /* a network error while the picture still moves is nothing to say; stalled, it is said at once */
       if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) { if (video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); else sayStalled(it); }
     });
     hls.on(Hls.Events.MANIFEST_PARSED, () => { applyLevelPref(); syncQualityButton(); pickAudioTrack(stream); });
+    /* the first steps of a stream, for the diary: the manifest, the level, the first pieces */
+    hls.on(Hls.Events.MANIFEST_PARSED, (_, d) => diary('hls', `manifest parsed, ${(d.levels || []).length} levels`));
+    hls.on(Hls.Events.LEVEL_LOADED, (_, d) => diary('hls', `level loaded, ${d.details ? d.details.fragments.length : '?'} fragments`));
+    hls.on(Hls.Events.FRAG_LOADING, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loading`); });
+    hls.on(Hls.Events.FRAG_LOADED, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loaded`); });
     hls.on(Hls.Events.LEVEL_SWITCHED, () => { syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu(); });
     hls.loadSource(stream.play);
     hls.attachMedia(video);
@@ -1705,7 +1883,10 @@ function pickAudio(opt, quality = null) {
     return;
   }
   state.dubKey = opt.id;
-  post(`/api/state/dub?series=${it.seriesId}&dub=${encodeURIComponent(opt.id)}`).catch(() => {});
+  /* noted for every part of the franchise open, so another part, or the same link pasted again, starts in it */
+  const ids = [...new Set([it.seriesId, ...state.seasons.map(s => s.series.id)])];
+  state.remote.dubs = state.remote.dubs || {};
+  for (const id of ids) { state.remote.dubs[id] = opt.id; post(`/api/state/dub?series=${id}&dub=${encodeURIComponent(opt.id)}`).catch(() => {}); }
   hideNotice();
   toast(t('audio.current', { name: opt.main }));
   switchTrack(it);
@@ -2310,10 +2491,11 @@ function homeRow(col) {
    the storage on the right, the keys along the bottom. The server is
    asked how it is while the sheet is open. */
 let serverState = 'checking';         // up | down | off | checking
+let serverPlatform = '';              // darwin | win32 | linux: which launcher the stop notice names
 let serverVersion = '';               // "1.1.0", as the package says; shown as v1.1
 async function checkServer() {
   if (serverState === 'off' || serverState === 'updating') return paintStatus();
-  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; } catch (_) { serverState = 'down'; }
+  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; if (p.platform) serverPlatform = p.platform; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
 /* "v1.1.0", as the tag on GitHub reads */
@@ -2405,9 +2587,13 @@ function buildGearMenu() {
   const status = document.createElement('div');
   status.className = 'menu__row status';
   status.innerHTML = '<div class="status__head"><i class="status__dot"></i><span class="menu__rowlabel status__label"></span></div>';
+  /* two paragraphs: what Lapka is and what the button does, then how to start it again */
   const quitNote = document.createElement('div');
   quitNote.className = 'cache__note quit__note';
   quitNote.textContent = t('set.quitNote');
+  const quitStart = document.createElement('div');
+  quitStart.className = 'cache__note quit__note';
+  quitStart.textContent = t('set.quitStart');
   const quitGuide = document.createElement('a');
   quitGuide.className = 'quit__guide';
   quitGuide.target = '_blank'; quitGuide.rel = 'noopener';
@@ -2430,9 +2616,9 @@ function buildGearMenu() {
     serverState = 'off';
     closeMenus();
     video.pause();
-    showNotice(t('notice.quit'), { mid: true });
+    showNotice(t('notice.quitHead'), { mid: true, more: startAgain() });
   };
-  status.append(quitNote, quitGuide, quit);
+  status.append(quitNote, quitStart, quitGuide, quit);
   left.append(status);
   paintStatus(); checkServer();
 
@@ -2448,7 +2634,7 @@ function buildGearMenu() {
   const ui = document.createElement('div');
   ui.className = 'menu__col menu__col--ui';
   menuTitle(ui, t('set.iface'));
-  const iface = SETTINGS.filter(r => r.key === 'queueMode' || r.key === 'font');
+  const iface = SETTINGS.filter(r => r.key === 'queueMode' || r.key === 'font' || r.key === 'histLinks');
   const settingRow = (col, row) => segRow(col, t(row.label), state.set[row.key],
     row.opts.map(([val, key]) => [val, t(key)]), val => {
       state.set[row.key] = val;
@@ -2456,6 +2642,7 @@ function buildGearMenu() {
       applySettings();
     });
   settingRow(ui, iface.find(r => r.key === 'queueMode'));
+  settingRow(ui, iface.find(r => r.key === 'histLinks'));   // the links as pasted, shown in the history list or not
   /* the language: chips as wide as their names */
   const langRow = document.createElement('div');
   langRow.className = 'menu__row';
@@ -2485,12 +2672,6 @@ function buildGearMenu() {
   player.className = 'menu__col menu__col--player';
   menuTitle(player, t('set.head'));
   for (const row of SETTINGS) if (!iface.includes(row)) settingRow(player, row);
-  /* the quality a group is saved in: the best there is, the one playing, or the nearest to a named one */
-  segRow(player, t('set.saveQuality'), saveQualityWanted(),
-         [['max', t('quality.max')], ['played', t('quality.played')], null, ['1080p', '1080p'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p']], val => {
-    state.remote.settings = { ...(state.remote.settings || {}), saveQuality: val };
-    post('/api/state/setting?k=saveQuality&v=' + val).catch(() => {});
-  });
   switchRow(player, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
@@ -2585,8 +2766,37 @@ let noticeDo = null, noticeUndo = null, noticeKind = null;
    spinner, so a pause never reads as a dead player */
 /* mid: the line stands in the middle of the picture, where a question is
    seen at once; a busy line always stands there */
-function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false } = {}) {
+/* ── the diary of playback ─────────────────────────────────────
+   The last events of the player, kept in memory: an episode asked for,
+   the server's answer and how long it took, what hls.js reported, what
+   the video element did, a refused play(). Nothing leaves the page
+   unless a wait does not end: a busy notice that stands for half a
+   minute sends the diary to the journal beside the settings, once per
+   such wait, so a hang can be read later. Names of players and dubs
+   go; addresses never do. */
+const DIARY_KEEP = 60, STALL_MS = Number(new URLSearchParams(location.search).get('stallMs')) || 30000;   // ?stallMs= shortens the wait for a check
+const diaryLines = [];
+let diaryT0 = performance.now(), stallWatchT = 0, stallSent = false;
+function diary(what, more = '') {
+  const at = ((performance.now() - diaryT0) / 1000).toFixed(1).padStart(7);
+  diaryLines.push(`${at}s ${what}${more ? ' ' + more : ''}`);
+  if (diaryLines.length > DIARY_KEEP) diaryLines.shift();
+}
+function stallWatch(on) {
+  if (!on) { clearTimeout(stallWatchT); stallWatchT = 0; stallSent = false; return; }
+  if (stallWatchT) return;                       // counted from the first busy notice, not from its every repaint
+  stallWatchT = setTimeout(() => {
+    stallWatchT = 0;
+    if (!notice.classList.contains('show') || noticeKind !== 'busy' || stallSent) return;
+    stallSent = true;
+    const it = cur();
+    diary('stall', `${STALL_MS / 1000}s with the busy notice up; readyState ${video.readyState} paused ${video.paused} networkState ${video.networkState}`);
+    api('/api/log', { method: 'POST', body: JSON.stringify({ head: `playback stalled: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+  }, STALL_MS);
+}
+function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {
   noticeText.textContent = text;
+  if (more) noticeText.append(more);
   const btn = $('#noticeAction');
   btn.hidden = !action;
   btn.textContent = action || '';
@@ -2594,9 +2804,39 @@ function showNotice(text, { action = null, onAction = null, onClose = null, kind
   notice.classList.toggle('notice--busy', busy);
   notice.classList.toggle('notice--mid', busy || mid);
   notice.classList.add('show');
+  diary('notice', `${kind || 'plain'}: ${text.slice(0, 60)}`);
+  if (kind === 'busy') stallWatch(true);
+}
+/* How to start Lapka again, told whole for the system it runs on: through
+   npx, and from the folder it was downloaded to (the launcher of this
+   system, then npm start). Each way says which install it belongs to: npx
+   typed by one who downloaded the folder would start another Lapka, with
+   another folder of its own. Commands stand in the mono face. */
+function startAgain() {
+  const said = (key, cmd) => {
+    const [a, b = ''] = t(key, { cmd: '\u0001', file: '\u0001' }).split('\u0001');
+    const line = document.createDocumentFragment();
+    line.append(a); if (cmd) { line.append(el('code', 'notice__cmd', cmd), b); }
+    return line;
+  };
+  const item = (lines) => {
+    const li = el('div', 'notice__way');
+    lines.forEach((l, i) => { const row = el('div'); row.append(l, i < lines.length - 1 ? ',' : ''); li.append(row); });
+    return li;
+  };
+  const folder = serverPlatform === 'win32'
+    ? [said('notice.quitClick', 'start.bat'), said('notice.quitOrHere', 'npm start')]
+    : serverPlatform === 'linux'
+      ? [said('notice.quitThere', './start.sh'), said('notice.quitOrHere', 'npm start')]
+      : [said('notice.quitClick', 'start.command'), said('notice.quitOrHere', './start.command'), said('notice.quitOrHere', 'npm start')];
+  const first = document.createDocumentFragment(); first.append(t('notice.quitFolder') + ' ', folder[0]);
+  const how = el('div', 'notice__how');
+  how.append(el('div', 'notice__howhead', t('notice.quitHow')), item([said('notice.quitNpx', 'npx -y lapka')]), item([first, ...folder.slice(1)]));
+  return how;
 }
 function hideNotice(kind = null) {
   if (kind && noticeKind !== kind) return;   // another line is up: leave it
+  if (noticeKind === 'busy') stallWatch(false);
   notice.classList.remove('show', 'notice--busy', 'notice--mid'); noticeDo = null; noticeUndo = null; noticeKind = null;
 }
 /* the busy lines: what is being opened, a source that is slow to answer */
@@ -2812,7 +3052,7 @@ function aboutBlock() {
     return box;
   };
   const how = section('about.how', [['', 'about.step1'], ['', 'about.step2'], ['', 'about.step3']], true);
-  const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'watched', 'save', 'finish', 'folder', 'sources', 'log'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
+  const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'watched', 'history', 'save', 'finish', 'folder', 'sources', 'log'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
   const rules = section('about.rules', ['local', 'fair', 'general', 'doors', 'open'].map(k => [`about.p.${k}.k`, `about.p.${k}`]));
 
   const doors = el('section', 'about__section about__doors');
@@ -3002,7 +3242,7 @@ const dubsKnown = it => saveInfo && saveInfo.key === `${it.seriesId}/${it.number
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
   /* one dub, one stream of a known quality: nothing to choose */
-  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], it.streams[0]);
+  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], { ...it.streams[0], dubName: it.dub ? it.dub.name : null });
   saveMenuFor = it;
   saveMenu.anchor = btn.getBoundingClientRect();
   saveMenu.hidden = false;
@@ -3064,7 +3304,7 @@ function buildSaveMenu(it) {
   const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
   for (const d of rows) {
     const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
-    saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player }); }, { waiting: !!(d.unopened || !known) }));
+    saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player, dubName: d.name }); }, { waiting: !!(d.unopened || !known) }));
   }
   placeSaveMenu();
 }
@@ -3095,8 +3335,9 @@ function groupPickOf(scope, items) {
   const cov = dubCoverage(items);
   const playing = cur();
   const key = (playing && playing.dub && playing.dub.key) || state.dubKey;
-  const d = cov.find(x => x.key === key) || [...cov].sort((a, b) => b.n - a.n)[0];
-  return d ? { dubKey: d.key, dubName: d.name, quality: null } : null;
+  const played = cov.find(x => x.key === key), d = played || [...cov].sort((a, b) => b.n - a.n)[0];
+  /* implied, not chosen: the player's own dub when the part has it (said as "as played"), else the part's most common dub, named */
+  return d ? { dubKey: d.key, dubName: d.name, quality: null, implied: true, played: !!played } : null;
 }
 /* the quality of a pick in words: the label chosen, else the settings' rule */
 const qualityWords = quality => quality || ({ max: t('pop.qBest'), played: t('pop.qPlayed') })[saveQualityWanted()] || saveQualityWanted();
@@ -3165,15 +3406,15 @@ document.addEventListener('click', e => {
   if (!e.target.closest('.item__save, #savePop')) { e.stopPropagation(); e.preventDefault(); }
   closeSaveMenu();
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && !saveMenu.hidden) closeSaveMenu(); });
 
 /* the stream of a named quality, for taking a save up again the way it was started */
 const streamOfQuality = (it, quality) => (quality && (saveQualities(it).find(o => o.label === quality) || {}).stream) || null;
-/* What a group is saved in. 'max' is the best there is; 'played' is what
-   the player has for the episode, or its own preference before it has
-   anything; a named quality takes the nearest one offered, the higher
-   on a tie. The old 'auto' meant the best. */
-const saveQualityWanted = () => ({ auto: 'max' })[state.remote.settings?.saveQuality] || state.remote.settings?.saveQuality || 'max';
+/* What is saved when nothing was picked in the save window: what is
+   watched. The quality the player has for the episode, or its wanted
+   quality before it has anything; the nearest one offered, the higher on
+   a tie, and the best there is when nothing is known. A quality of one's
+   own is picked with a tag in the save window. */
+const saveQualityWanted = () => 'played';
 const streamToSave = it => {
   const want = saveQualityWanted();
   const opts = saveQualities(it);
@@ -3220,6 +3461,10 @@ const isSaving = it => !!(it.save && (it.save.st === 'saving' || it.save.st === 
 const isQueued = it => !!(it.save && it.save.st === 'queued');
 const isPaused = it => !!(it.save && it.save.st === 'paused');
 /* how far a save got, in its own units: sizes for a file fetched whole, a count for pieces */
+/* why a save broke off, in words: the server names it by a code; a
+   sentence kept from before 1.2.0, or made by this page, stays as it is */
+const SAVE_WHY = { gone: 'save.err.gone', denied: 'save.err.denied', origin: 'save.err.origin', network: 'save.err.network', playlist: 'save.err.playlist', noStream: 'save.err.noStream', noFfmpeg: 'save.err.noFfmpeg', ffmpeg: 'save.err.ffmpeg', disk: 'save.err.disk', access: 'save.err.access', other: 'save.err.other' };
+const saveWhy = why => !why ? '' : typeof why === 'string' ? why : t(SAVE_WHY[why.key] || 'save.err.other', { status: why.status || '', detail: why.detail || why.key || '' });
 const progressWords = sv => sv.unit === 'bytes' ? `${fmtSize(sv.done || 0)} / ${fmtSize(sv.total || 0)}` : `${sv.done || 0} / ${sv.total || 0}`;
 const progressPct = sv => sv.phase === 'assemble' ? 100 : sv.total ? Math.round(sv.done / sv.total * 100) : 0;
 const isFailed = it => !!(it.save && it.save.st === 'failed');
@@ -3237,9 +3482,9 @@ async function watchSaves() {
     const key = `${it.seriesId}/${it.number}/${it.dub ? it.dub.key : state.dubKey}`;
     const job = d.active.find(j => j.seriesId === it.seriesId && j.episode === it.number);
     const rec = d.pending[key] || Object.entries(d.pending).find(([k]) => k.startsWith(`${it.seriesId}/${it.number}/`))?.[1];
-    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job), pick: job.streamId ? { id: job.streamId, level: job.level || null } : null }; active = true; }
-    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
-    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null };
+    if (job) { it.save = { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done, total: job.total, unit: job.unit, jobId: job.id, quality: jobQuality(job), dubName: job.dubName || null, pick: job.streamId ? { id: job.streamId, level: job.level || null } : null }; active = true; }
+    else if (rec && rec.error) it.save = { st: 'failed', error: rec.error, done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null, dubName: rec.dubName || null };
+    else if (rec && rec.paused) it.save = { st: 'paused', done: rec.done || 0, total: rec.total || 0, unit: rec.unit, phase: rec.phase, quality: rec.quality || null, dubName: rec.dubName || null };
     else if (it.save) { if (it.save.jobId) finished = true; it.save = null; }   // its job is gone without a record: the file is in the library
   }
   if (finished) await loadLibrary(); else paintSaved();
@@ -3279,9 +3524,9 @@ function paintSaveButton(btn, it) {
   btn.classList.toggle('is-paused', paused);
   btn.classList.toggle('is-failed', failed);
   btn.classList.toggle('is-queued', queued);
-  let tip, sub = '';
+  btn._it = it;
   if (saving || paused || failed || queued) {
-    const pct = progressPct(sv), p = pct / 100;
+    const p = progressPct(sv) / 100;
     let ring = btn.querySelector('.ring');
     if (!ring) {
       btn.innerHTML = `<svg class="ring" viewBox="0 0 24 24"><circle class="ring__track" cx="12" cy="12" r="9"/><circle class="ring__fill" cx="12" cy="12" r="9" style="stroke-dasharray:${RING.toFixed(2)}"/></svg><i class="ring__pause"></i>`;
@@ -3289,21 +3534,62 @@ function paintSaveButton(btn, it) {
     }
     ring.classList.toggle('is-assembling', saving && sv.phase === 'assemble');
     ring.querySelector('.ring__fill').style.strokeDashoffset = (RING * (1 - p)).toFixed(2);
-    const got = t('queue.got', { got: progressWords(sv), pct });
-    if (failed) { tip = t('queue.saveFailed', { why: sv.error }); sub = (sv.total ? got + ' · ' : '') + t('queue.retryHint'); }
-    else if (paused) { tip = t('queue.savePaused', { got }); sub = t('queue.resumeHint'); }
-    else if (queued) { tip = t('queue.queued'); sub = t('queue.promoteHint'); }
-    else if (sv.st === 'opening') { tip = t('queue.opening'); sub = t('queue.pauseHint'); }
-    else if (sv.phase === 'assemble') { tip = t('queue.assembling'); sub = t('queue.pauseHint'); }
-    else { tip = t('queue.saving', { got }); sub = t('queue.pauseHint'); }
-    delete btn.dataset.icon;
+    /* a save under way is told by the card, not by the tooltip */
+    delete btn.dataset.icon; delete btn.dataset.tip; delete btn.dataset.tipSub;
+    btn.dataset.card = '';
   } else {
     const want = saved ? PH.check : PH.download;
     if (btn.dataset.icon !== (saved ? 'check' : 'download')) { btn.innerHTML = phSvg(want); btn.dataset.icon = saved ? 'check' : 'download'; }
-    tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
+    delete btn.dataset.card;
+    btn.dataset.tip = saved ? t('queue.savedAs', { size: fmtSize(sizeOf(it)), dubs: (state.saved.get(savedKey(it)) || []).map(x => x.dub).join(', ') }) : t('queue.save');
+    btn.dataset.tipSub = '';
   }
-  btn.dataset.tip = tip; btn.dataset.tipSub = sub;
   if (tipFor === btn) paintTip(btn);
+}
+
+/* ── the card of a row's save ──────────────────────────────────
+   While a row waits, loads, stands paused or has broken off, its ring
+   says only how far; the card beside it, to the right so the rows stay
+   in sight, says the rest: the state as its heading, the bar, how much
+   of how much, the dub and the quality, what a click does. Built once,
+   filled in place as the save moves. */
+const saveCard = $('#saveCard');
+let card = null;
+const cardParts = () => card || (card = (() => {
+  const head = el('div', 'savepop__head');
+  const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill);
+  const grid = el('div', 'savepop__grid');
+  const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); grid.append(k, v); return { k, v, key }; };
+  const got = row('card.got'), why = row('card.why'), dub = row('card.dub'), quality = row('card.quality');
+  const hint = el('div', 'savecard__hint');
+  saveCard.append(head, bar, grid, hint);
+  return { head, fill, rows: [got, why, dub, quality], got, why, dub, quality, hint };
+})());
+function paintSaveCard(btn) {
+  const it = btn._it, sv = it && it.save;
+  if (!sv || !('card' in btn.dataset)) { saveCard.hidden = true; return; }
+  const card = cardParts();
+  const failed = sv.st === 'failed', paused = sv.st === 'paused', queued = sv.st === 'queued', opening = sv.st === 'opening';
+  const assembling = !failed && !paused && !queued && sv.phase === 'assemble';
+  card.head.textContent = t(failed ? 'card.failed' : paused ? 'card.paused' : queued ? 'card.queued' : opening ? 'queue.opening' : assembling ? 'card.assembling' : 'card.saving');
+  saveCard.classList.toggle('is-failed', failed);
+  saveCard.classList.toggle('is-paused', paused);
+  card.fill.style.width = progressPct(sv) + '%';
+  const put = (r, text) => { r.k.hidden = r.v.hidden = !text; r.v.textContent = text || ''; };
+  for (const r of card.rows) r.k.textContent = t(r.key);
+  put(card.got, sv.total ? `${progressWords(sv)} · ${progressPct(sv)}%` : '');
+  put(card.why, failed ? saveWhy(sv.error) : '');
+  put(card.dub, sv.dubName || '');
+  put(card.quality, sv.quality === 'auto' ? t('pop.qBest') : sv.quality || '');
+  card.hint.textContent = t(failed ? 'queue.retryHint' : paused ? 'queue.resumeHint' : queued ? 'queue.promoteHint' : 'queue.pauseHint');
+  /* past the queue's right edge, level with the ring, so no row or group is covered; on the left only when the window ends first */
+  const r = btn.getBoundingClientRect(), panel = btn.closest('.queue');
+  saveCard.hidden = false;
+  const w = saveCard.offsetWidth, h = saveCard.offsetHeight;
+  let left = (panel ? panel.getBoundingClientRect().right : r.right) + 12;
+  if (left + w > window.innerWidth - 8) left = Math.max(8, r.left - w - 12);
+  const top = Math.max(8, Math.min(r.top + r.height / 2 - h / 2, window.innerHeight - h - 8));
+  saveCard.style.left = left + 'px'; saveCard.style.top = top + 'px';
 }
 
 /* ── Lapka's own tooltip ───────────────────────────────────────
@@ -3312,6 +3598,8 @@ function paintSaveButton(btn, it) {
    repainted with its element while it is up. */
 let tipFor = null;
 function paintTip(el) {
+  if ('card' in el.dataset) { tipEl.hidden = true; return paintSaveCard(el); }
+  saveCard.hidden = true;
   tipEl.textContent = el.dataset.tip || '';
   if (el.dataset.tipSub) { const s = document.createElement('div'); s.className = 'tip__sub'; s.textContent = el.dataset.tipSub; tipEl.append(s); }
   const r = el.getBoundingClientRect();
@@ -3324,14 +3612,72 @@ function paintTip(el) {
   left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
   tipEl.style.left = left + 'px'; tipEl.style.top = top + 'px';
 }
+const hideTips = () => { tipFor = null; tipEl.hidden = true; saveCard.hidden = true; };
 document.addEventListener('pointerover', e => {
-  const el = e.target.closest('[data-tip]');
+  const el = e.target.closest('[data-tip], [data-card]');
   if (el === tipFor) return;
-  tipFor = el;
-  if (el) paintTip(el); else tipEl.hidden = true;
+  if (!el) return hideTips();
+  tipFor = el; paintTip(el);
 });
-document.addEventListener('pointerdown', () => { tipFor = null; tipEl.hidden = true; });
-queueList.addEventListener('scroll', () => { tipFor = null; tipEl.hidden = true; }, { passive: true });
+document.addEventListener('pointerdown', hideTips);
+queueList.addEventListener('scroll', hideTips, { passive: true });
+
+/* ── Lapka's own scrollbar ─────────────────────────────────────
+   The system's bar depends on a setting of the system: as an overlay
+   it is fine, shown always it is a wide grey strip that takes room.
+   Every place that scrolls hides it and gets this one instead: a thin
+   thumb over the content, seen while the content moves or the pointer
+   comes to the edge, gone a moment later; under the pointer it grows
+   and brightens, and it can be dragged. One look everywhere. */
+const SCROLLERS = '.menu, .queue__list, .histpop__list, .savepop, .menu__col';
+const OWN_BAR = { min: 28, edge: 28, linger: 900 };
+function ownScroll(el) {
+  if (el.__bar) return;
+  el.classList.add('scroll-own');
+  const bar = document.createElement('i'); bar.className = 'bar'; bar.setAttribute('aria-hidden', 'true');
+  el.append(bar); el.__bar = bar;
+  let hideT = 0, near = false, drag = null;
+  const place = () => {
+    if (!bar.isConnected) el.append(bar);            // a menu redrawn whole took the bar with it
+    const sh = el.scrollHeight, ch = el.clientHeight;
+    if (sh <= ch + 1) { bar.hidden = true; return false; }
+    bar.hidden = false;
+    const len = Math.max(OWN_BAR.min, Math.round(ch * ch / sh));
+    const top = el.scrollTop + (el.scrollTop / (sh - ch)) * (ch - len);
+    bar.style.height = len + 'px'; bar.style.transform = `translateY(${top}px)`;
+    return true;
+  };
+  const show = () => { if (!place()) return; bar.classList.add('is-on'); clearTimeout(hideT); if (!near && !drag) hideT = setTimeout(() => bar.classList.remove('is-on'), OWN_BAR.linger); };
+  el.addEventListener('scroll', show, { passive: true });
+  el.addEventListener('pointermove', e => {
+    const r = el.getBoundingClientRect();
+    const was = near; near = r.right - e.clientX <= OWN_BAR.edge;
+    if (near) show(); else if (was) { clearTimeout(hideT); hideT = setTimeout(() => bar.classList.remove('is-on'), OWN_BAR.linger); }
+  });
+  el.addEventListener('pointerleave', () => { near = false; if (!drag) { clearTimeout(hideT); hideT = setTimeout(() => bar.classList.remove('is-on'), 300); } });
+  /* the thumb dragged moves the content by the same share */
+  bar.addEventListener('pointerdown', e => {
+    e.preventDefault(); e.stopPropagation();
+    const sh = el.scrollHeight, ch = el.clientHeight, len = bar.offsetHeight;
+    drag = { y: e.clientY, top: el.scrollTop, k: (sh - ch) / Math.max(1, ch - len) };
+    bar.classList.add('is-drag'); bar.setPointerCapture(e.pointerId);
+  });
+  bar.addEventListener('pointermove', e => { if (drag) el.scrollTop = drag.top + (e.clientY - drag.y) * drag.k; });
+  const drop = () => { if (!drag) return; drag = null; bar.classList.remove('is-drag'); show(); };
+  bar.addEventListener('pointerup', drop); bar.addEventListener('pointercancel', drop);
+  bar.addEventListener('click', e => e.stopPropagation());
+  /* the content changes its height: the thumb follows, seen or not */
+  if (typeof ResizeObserver === 'function') new ResizeObserver(place).observe(el);
+  new MutationObserver(() => requestAnimationFrame(place)).observe(el, { childList: true, subtree: true });
+  place();
+}
+for (const el of document.querySelectorAll(SCROLLERS)) ownScroll(el);
+new MutationObserver(muts => {
+  for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) {
+    if (n.matches(SCROLLERS)) ownScroll(n);
+    for (const el of n.querySelectorAll(SCROLLERS)) ownScroll(el);
+  }
+}).observe(document.body, { childList: true, subtree: true });
 
 function paintGroupSave(li) {
   const items = state.list.filter(it => it.group === li.dataset.group);
@@ -3449,12 +3795,14 @@ function paintSavePop() {
   put(r.now, cur1 ? cur1.name : '', cur1 && cur1.save.st === 'saving' ? (cur1.save.total ? `${progressWords(cur1.save)} · ${progressPct(cur1.save)}%` : t('queue.assembling')) : (cur1 ? t('queue.opening') : ''), loading.length > 0);
   put(r.queued, String(queued.length), '', queued.length > 0);
   put(r.paused, String(paused.length), '', paused.length > 0);
-  put(r.failed, String(failed.length), failed[0] ? failed[0].save.error : '', failed.length > 0);
+  put(r.failed, String(failed.length), failed[0] ? saveWhy(failed[0].save.error) : '', failed.length > 0);
   put(r.rest, String(left.length), t('pop.about', { size: fmtSize(estimate) }), estimate > 0 && left.length > 0);
   put(r.dur, fmtLong(dur), known.length < items.length ? t('pop.ofKnown', { n: known.length }) : '', dur > 0);
   /* the pick, and the rows it leaves out for want of the dub */
   const pick = groupPickOf(popScope, items);
-  put(r.pickRow, pick ? `${pick.dubName} · ${qualityWords(pick.quality)}` : '', '', !!pick);
+  /* nothing chosen yet: one phrase, "as played", for the dub and the quality both; a dub the
+     player's is not in this part is named, since it is Lapka's pick, not the player's */
+  put(r.pickRow, !pick ? '' : pick.implied && pick.played ? t('pop.qPlayed') : `${pick.dubName} · ${qualityWords(pick.quality)}`, '', !!pick);
   const lacking = pick ? left.filter(it => lacksDub(it, pick.dubKey)) : [];
   put(r.without, lacking.length ? `${pick.dubName} · ${t('pop.episodes', { n: lacking.length })}` : '', '', lacking.length > 0);
   /* the buttons: start or take up what is not saved here and has the dub; pause what loads here */
@@ -3536,7 +3884,6 @@ document.addEventListener('click', e => {
   if (!anchor) { e.stopPropagation(); e.preventDefault(); }
   unpinSavePop();
 }, true);
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && popPinned) unpinSavePop(); });
 /* the header's button and a group's mark open their popovers; nothing starts from the click itself */
 let popClosedAt = 0;
 btnSaveAll.onclick = () => { if (Date.now() - popClosedAt < 50 && popClosedScope === null) return; pinSavePop(null); };
@@ -3565,7 +3912,7 @@ function enqueueSaves(items, stream = null, { first = false, pick: groupPick = n
     it.saveStream = stream || null;
     /* what was picked stays with the row: a pause and a resume keep the dub and the quality */
     const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
-    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, pick, groupPick: groupPick || before.groupPick || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
+    it.save = { st: 'queued', quality: (stream && stream.quality) || before.quality || null, dubName: (stream && stream.dubName) || (groupPick && groupPick.dubName) || before.dubName || null, pick, groupPick: groupPick || before.groupPick || null, done: before.done || 0, total: before.total || 0, unit: before.unit, phase: before.phase };
     if (first) saveQueue.unshift(it); else saveQueue.push(it);
   }
   paintSaved();
@@ -3588,10 +3935,10 @@ async function submitSave(it, stream = null) {
   const pick = stream ? { id: stream.id, level: stream.level || null } : before.pick || null;
   const first = !!before.first;
   it.pauseWanted = false;
-  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved();
+  it.save = { st: 'opening', phase: 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
   try {
     if (!it.stream) await resolveItem(it);
-    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved(); return; }
+    if (it.pauseWanted) { it.save = { st: 'paused', phase: before.phase || 'fetch', done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved(); return; }
     /* a part's pick names the dub and the quality for every row of it */
     let st = stream || pick || null;
     if (!st && before.groupPick) { st = await streamForPick(it, before.groupPick); if (!st) throw new Error(t('pop.noDub', { dub: before.groupPick.dubName })); }
@@ -3601,18 +3948,19 @@ async function submitSave(it, stream = null) {
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     it.save = jobState(job, quality); paintSaved();
   } catch (e) {
-    it.save = { st: 'failed', error: e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, pick }; paintSaved();
-    toast(t('toast.saveFail', { why: e.message }));
+    it.save = { st: 'failed', error: e.reason || e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
+    toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) }));
   }
 }
 /* a server job as the row's state */
 function jobState(job, quality = null) {
   const q = jobQuality(job) || quality;
   const pick = job.streamId ? { id: job.streamId, level: job.level || null } : null;
-  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, pick };
-  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, pick };
+  const dubName = job.dubName || null;
+  if (job.state === 'paused') return { st: 'paused', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, dubName, pick };
+  if (job.state === 'error') return { st: 'failed', error: job.error, phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, quality: q, dubName, pick };
   if (job.state === 'done') return null;
-  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q, pick };
+  return { st: job.state === 'queued' ? 'queued' : 'saving', phase: job.phase, done: job.done || 0, total: job.total || 0, unit: job.unit, jobId: job.id, quality: q, dubName, pick };
 }
 
 /* rows taken out of this page's line go back to what they were before they were asked */
@@ -3633,7 +3981,7 @@ async function promoteSave(it) {
   if (!sv || sv.st !== 'queued') return;
   if (sv.jobId) {
     try { const job = await post('/api/save/promote?id=' + encodeURIComponent(sv.jobId)); it.save = jobState(job, sv.quality); }
-    catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+    catch (e) { toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) })); }
   } else {
     const i = saveQueue.indexOf(it); if (i >= 0) saveQueue.splice(i, 1);
     sv.first = true;
@@ -3657,7 +4005,7 @@ async function cancelSaves(items) {
   for (const it of mine) { if (!bySeries.has(it.seriesId)) bySeries.set(it.seriesId, []); bySeries.get(it.seriesId).push(it.number); }
   try {
     for (const [seriesId, eps] of bySeries) await post(`/api/saves/cancel?series=${encodeURIComponent(seriesId)}&episodes=${eps.join(',')}`);
-  } catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  } catch (e) { toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) })); }
   if (mine.length) toast(t('toast.cancelled', { n: mine.length }));
   clearTimeout(savesT); watchSaves();
 }
@@ -3668,7 +4016,7 @@ async function deleteSaved(items) {
   let n = 0;
   try {
     for (const [seriesId, eps] of bySeries) n += (await post(`/api/library/delete?series=${encodeURIComponent(seriesId)}&episodes=${eps.join(',')}`)).removed || 0;
-  } catch (e) { toast(t('toast.saveFail', { why: e.message })); }
+  } catch (e) { toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) })); }
   await loadLibrary();
   toast(t('toast.deleted', { n }));
 }
@@ -3688,7 +4036,7 @@ async function pauseItems(items, whole = false) {
     if (whole) await post('/api/saves/pause');
     else await Promise.all(jobs.map(it => post('/api/save/pause?id=' + encodeURIComponent(it.save.jobId))));
   } catch (e) { toast(t('toast.pauseFail', { why: e.message })); return; }
-  for (const it of jobs) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null };
+  for (const it of jobs) it.save = { st: 'paused', phase: it.save.phase, done: it.save.done || 0, total: it.save.total || 0, unit: it.save.unit, quality: it.save.quality || null, dubName: it.save.dubName || null };
   paintSaved();
   clearTimeout(savesT); watchSaves();       // the rows follow the server's records
 }
@@ -4293,7 +4641,8 @@ video.addEventListener('playing', () => {
     it.retries = 0;                  // it plays: the count of tries starts over
   }
 });
-video.addEventListener('waiting', () => { const it = cur(); if (it && it.loadedSrc) sayStalled(it); });
+video.addEventListener('waiting', () => { diary('video', 'waiting'); const it = cur(); if (it && it.loadedSrc) sayStalled(it); });
+for (const ev of ['stalled', 'canplay', 'playing', 'ended', 'loadedmetadata', 'emptied', 'suspend']) video.addEventListener(ev, () => diary('video', ev));
 video.addEventListener('canplay', () => { clearTimeout(stallT); hideNotice('busy'); });
 video.addEventListener('timeupdate', () => { if (noticeKind === 'busy' && !video.paused && video.readyState >= 3) hideNotice('busy'); });   // the picture moves: nothing is waiting
 video.addEventListener('ended', () => {
@@ -4317,6 +4666,7 @@ video.addEventListener('ended', () => {
    which marks its source dead and picks again. Only when that has
    been tried does the episode count as broken and the queue moves on. */
 video.addEventListener('error', () => {
+  diary('video', `error${video.error ? ' ' + video.error.code : ''}`);
   stage.classList.remove('fading');
   const it = cur();
   if (!it || !it.loadedSrc) return;
@@ -4527,14 +4877,25 @@ function onKey(e) {
     case 'KeyQ': toggleQueue(); break;
     case 'Home': e.preventDefault(); seekTo(0); break;
     case 'End':  e.preventDefault(); seekTo(duration() - 2); break;
-    case 'Escape':
-      if (anyMenuOpen()) closeMenus();
-      else if (state.pipWin) state.pipWin.close();
-      else if (state.queueOpen) toggleQueue(false);
-      break;
   }
   poke();
 }
+/* Esc closes one layer, the topmost, and stops: the save window over the
+   popover, the history list, the pinned popover, a menu of the deck, the
+   PiP window, the queue. Another Esc takes the next. It works from an
+   input too, so a search in the history can be cleared and closed. */
+function onEscape(e) {
+  if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (!saveMenu.hidden) closeSaveMenu();
+  else if (escapeHistory()) { /* cleared or closed */ }
+  else if (popPinned) unpinSavePop();
+  else if (anyMenuOpen()) closeMenus();
+  else if (state.pipWin) state.pipWin.close();
+  else if (state.queueOpen) toggleQueue(false);
+  else return;
+  e.preventDefault(); e.stopPropagation(); poke();
+}
+document.addEventListener('keydown', onEscape);
 document.addEventListener('keydown', onKey);
 document.addEventListener('keyup', e => {
   if (e.key === ' ' && e.target && e.target.tagName === 'BUTTON') e.target.blur();

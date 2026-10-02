@@ -45,7 +45,8 @@ export function extractorFor(extractors, url) {
    slow or unreachable, the whole connection timeout, once per page of
    a franchise. They are refused at once and said so. */
 const CLOSED_DOORS = [
-  { host: /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i, why: 'closed door' }   // it plays only in a browser,
+  { host: /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i, why: 'closed door' },  // it plays only in a browser,
+  { host: /(^|\.)(gencit\.info|ceramet\.net)$/i, why: 'closed door' },                       // an aggregator's stub that unfolds only inside a frame
 ];
 export function closedDoor(url) {
   let host; try { host = new URL(url).hostname; } catch { return null; }

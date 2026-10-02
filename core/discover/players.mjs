@@ -55,6 +55,25 @@ const DEFERRED = [{
   id: v => ((/(^|&)mod=([\w-]+?)(-player)?(&|$)/i.exec(v) || [])[2] || 'player').toLowerCase(),
 }];
 
+/* What the engine answers for a deferred player: JSON naming the address
+   (a string, or under data/url/src/iframe), JSON about the player (its
+   address, or the ids of a CVH player dropped in as an element, which get
+   the element's own address), the iframe itself, or the bare address. */
+export function deferredAnswer(body) {
+  body = String(body || '').trim();
+  let found = null;
+  try {
+    const j = JSON.parse(body);
+    const d = typeof j === 'string' ? j : j.data ?? j.url ?? j.src ?? j.iframe ?? null;
+    if (d && typeof d === 'object') {
+      if (d.kind === 'cvh' && d.title_id) { const q = new URLSearchParams({ title_id: d.title_id }); if (d.pub_id) q.set('pub', d.pub_id); if (d.aggregator) q.set('aggr', d.aggregator); found = 'https://player.cdnvideohub.com/embed?' + q; }
+      else found = d.src || d.url || d.iframe || null;
+    } else found = d;
+  } catch { /* not JSON */ }
+  if (!found) found = /<iframe[^>]+src=["']([^"']+)["']/i.exec(body)?.[1] || (/^(https?:)?\/\/\S+$/.test(body) ? body : null);
+  return found && typeof found === 'string' ? found : null;
+}
+
 export const streamKind = u => /\.m3u8(\?|$)/i.test(u) ? 'hls' : /\.mpd(\?|$)/i.test(u) ? 'dash' : /\.mp4(\?|$)/i.test(u) ? 'mp4' : null;
 
 /* "720p" in the file name, or a bare 480/720/1080 as a folder of the
@@ -135,6 +154,20 @@ export function findPlayers(doc, url, { profile } = {}) {
     let u; try { u = d.url(v, url); } catch { continue; }
     const p = add(u, 'deferred', `[${d.attr}]`);
     if (p) p.id = d.id(v);
+  }
+  /* The same engine's newer way: the player block carries the entry's
+     id (data-player-anime-id, data-player-post-id…) and holds empty
+     slots (data-player-slot="0", "1"…) that a relay frame fills after
+     the page loads, asking the engine for mod=player&id=…&slot=N. The
+     slot's title names the player ("Плеер …") when it has one. */
+  for (const slot of doc.querySelectorAll('[data-player-slot]')) {
+    const block = slot.closest('[data-player-anime-id], [data-player-post-id], [data-player-news-id], [data-player-id]');
+    const id = block && [...block.attributes].find(at => /^data-player-(?:[\w-]+-)?id$/.test(at.name))?.value;
+    if (!id) continue;
+    const n = slot.getAttribute('data-player-slot');
+    let u; try { u = new URL(`/engine/ajax/controller.php?mod=player&id=${encodeURIComponent(id)}&slot=${encodeURIComponent(n)}`, url).toString(); } catch { continue; }
+    const p = add(u, 'deferred', '[data-player-slot]');
+    if (p) { const name = (slot.getAttribute('data-player-title') || '').replace(/^(?:плеер|player)\s+/i, '').trim(); p.id = (name || `slot ${n}`).toLowerCase(); }
   }
   for (const s of doc.querySelectorAll('script:not([src])')) {
     for (const m of s.textContent.matchAll(STREAM_RE)) add(abs(m[0]), 'script', 'script');

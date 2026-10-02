@@ -11,13 +11,14 @@
    ═══════════════════════════════════════════════════════════ */
 
 import { seasonFromText } from '../discover/series.mjs';
+import { refuse } from '../reasons.mjs';
 
 const HOSTS = /(^|\.)(yummyani\.me|yummy-anime\.ru|yani\.tv)$/i;
 const ITEM = /\/catalog\/item\/([^/?#]+)/;
 
 async function json(session, url, referer) {
   const res = await session.fetch(url, { referer, headers: { accept: 'application/json' } });
-  if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
+  if (res.status >= 400) throw refuse('pageStatus', { status: res.status }, `${url} answered ${res.status}`);
   const data = JSON.parse(res.body);
   return data.response !== undefined ? data.response : data;
 }

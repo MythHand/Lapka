@@ -174,9 +174,9 @@ describe('picking', () => {
     assert.equal(pickSource(dub).player, 'alpha');
     markHealth(beta, true);
     assert.equal(pickSource(dub).player, 'beta');
-    markHealth(beta, false, new Error('403'));
+    markHealth(beta, false, { key: 'playerStatus', status: 403 });   // a reason, kept whole for the page to word
     assert.equal(pickSource(dub).player, 'alpha');
-    assert.equal(beta.health.error, 'Error: 403');
+    assert.deepEqual(beta.health.error, { key: 'playerStatus', status: 403 });
     /* a failure is forgotten after a while */
     assert.equal(rankSources(dub, { now: Date.now() + RETRY_MS + 1 })[0].player, 'alpha');
     markHealth(alpha, false);
@@ -215,6 +215,20 @@ describe('picking', () => {
     assert.equal(pickDub(ep, chosen).key, 'anidub');
     assert.equal(pickDub(ep, null).key, 'original');
     assert.equal(pickDub(createEpisode({ number: 10 }), chosen), null);
+  });
+
+  test('with nothing asked for, a dub whose every source refused is passed over', () => {
+    const ep = createEpisode({ number: 1 });
+    const stub = createDub({ name: 'Основной' }), live = createDub({ name: 'AniDub' });
+    stub.sources = [createSource({ player: 'stub.example', embedUrl: 'https://stub.example/1' })];
+    live.sources = [createSource({ player: 'embed.example', embedUrl: 'https://embed.example/1' })];
+    ep.dubs = [stub, live];
+    assert.equal(pickDub(ep, null).key, 'основной', 'not asked yet: the page\'s first dub');
+    markHealth(stub.sources[0], false, 'playback failed');
+    assert.equal(pickDub(ep, null).key, 'anidub', 'its only source refused: the next dub plays');
+    assert.equal(pickDub(ep, stub).key, 'основной', 'asked for by name, it is still the one, and its reason is said');
+    markHealth(live.sources[0], false, 'gone');
+    assert.equal(pickDub(ep, null).key, 'основной', 'every dub dead: the first, so the reasons are said');
   });
 });
 

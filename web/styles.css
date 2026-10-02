@@ -40,7 +40,9 @@
   --r-xl:26px;
 
   --shadow: 0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.4);
-  --queue-w: 709px;          /* 788 − 10 % */
+  --queue-w-wide: 709px;     /* 788 − 10 %: the queue at its widest */
+  --queue-w-narrow: 504px;   /* the queue narrowed by hand, and the least it ever is */
+  --queue-w: var(--queue-w-wide);
 
   --font-inter: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text",
                 "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -320,6 +322,13 @@ svg.ph{ fill:currentColor; stroke:none; }
   background:#fff; color:#0b0b0c; font-size:calc(12.5px + var(--fs)); font-weight:520;
 }
 .notice__act:hover{ background:#e6e6e8; }
+.notice__how{ margin-top:8px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2); }
+.notice__howhead{ margin-bottom:4px; }
+/* a way to start, as a bulleted item; the lines after its first hang under its text */
+.notice__way{ position:relative; padding-left:14px; }
+.notice__way + .notice__way{ margin-top:4px; }
+.notice__way::before{ content:'·'; position:absolute; left:3px; color:var(--tx-3); }
+.notice__cmd{ font-family:var(--mono); letter-spacing:0; color:var(--tx-1); }
 .notice__x{ flex:none; color:var(--tx-3); display:grid; place-items:center; }
 .notice__x:hover{ color:var(--tx-1); }
 .notice__x svg{ width:16px; height:16px; }
@@ -657,7 +666,10 @@ svg.ph{ fill:currentColor; stroke:none; }
    --tx-3: at --tx-3 they sank into the panel, at --tx-2 they would match
    the group headings. The drop hint, the note and the sub-points set
    --tx-3 of their own and stay one step quieter. */
-.queue__about{ padding:22px 24px 34px; color:var(--tx-2); }
+/* laid out at the panel's full width, as a mask: while the panel changes
+   width the words do not reflow, the panel only shows more or less of them;
+   the width itself follows the window, as the panel's does */
+.queue__about{ padding:22px 24px 34px; color:var(--tx-2); width:var(--queue-w-wide); max-width:100vw; }
 .queue__rule{ height:1px; border:0; background:var(--line); margin:18px 0 22px; }
 .queue__about h2{
   font-size:calc(15.5px + var(--fs)); font-weight:560; line-height:1.35;
@@ -887,11 +899,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   opacity:0; transition:opacity var(--select);
 }
 .tile.active .tile__eq{ opacity:1; }
-.queue__list{ flex:1; overflow-y:auto; overflow-x:hidden; list-style:none; }
-.queue__list::-webkit-scrollbar{ width:10px; }
-.queue__list::-webkit-scrollbar-track{ background:transparent; }
-.queue__list::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.16); border-radius:99px; border:3px solid transparent; background-clip:padding-box; }
-.queue__list::-webkit-scrollbar-thumb:hover{ background:rgba(255,255,255,.24); }
+.queue__list{ flex:1; overflow-y:auto; overflow-x:hidden; list-style:none; position:relative; }
 
 /* A row is a solid line across the full width: with rounded corners and
    side padding the insertion marker looked like a stub. */
@@ -1011,23 +1019,63 @@ svg.ph{ fill:currentColor; stroke:none; }
    title and the link as pasted, whole, and when. */
 .histpop{
   position:fixed; z-index:60;
-  width:653px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px); overflow:auto;
-  padding:12px; border-radius:var(--r-lg);
-  background:rgba(22,23,26,.97); border:1px solid var(--line-2); box-shadow:var(--shadow);
-  backdrop-filter:blur(28px) saturate(1.4); -webkit-backdrop-filter:blur(28px) saturate(1.4);
+  width:653px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px);
+  display:flex; flex-direction:column; overflow:hidden;
+  border-radius:var(--r-lg); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  /* the veil of the queue over the video: nearly opaque, the picture only a blur behind */
+  background:rgba(16,17,20,.93);
+  backdrop-filter:blur(28px) saturate(1.3); -webkit-backdrop-filter:blur(28px) saturate(1.3);
   font-size:calc(12.5px + var(--fs)); line-height:1.45; color:var(--tx-2);
   opacity:0; transform:translateX(-10px);
   transition:opacity 110ms cubic-bezier(.35,0,.65,1), transform 170ms cubic-bezier(.25,.45,.55,.95), display 170ms allow-discrete;
 }
 .histpop:not([hidden]){ opacity:1; transform:none; transition:opacity 120ms cubic-bezier(.33,.8,.45,1), transform 200ms cubic-bezier(.2,.8,.3,1), display 0s allow-discrete; }
 @starting-style{ .histpop:not([hidden]){ opacity:0; transform:translateX(-10px); } }
-.histpop__head{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); padding:4px 6px 10px; }
+/* On top the title and the count, at the bottom the search; only the rows
+   between them scroll, so neither needs a fill of its own and the veil
+   stays one from edge to edge. */
+.histpop__top{
+  flex:none; display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+  padding:16px 18px 10px;
+}
+.histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
+.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px; position:relative; }
+.histpop__bottom{ flex:none; padding:10px 12px 12px; }
+.histpop__field{ position:relative; display:flex; }
+.histpop__search{ width:100%; padding:0 40px 0 12px; }
+/* the cross inside the field, as the project draws its buttons: a quiet square that lights up under the pointer */
+.histpop__clear{
+  position:absolute; right:5px; top:50%; transform:translateY(-50%);
+  display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:6px;
+  color:var(--tx-3); background:transparent; transition:background .15s, color .15s;
+}
+.histpop__clear:hover{ color:var(--tx-1); background:var(--glass-hi); }
+.histpop__clear svg{ width:14px; height:14px; }
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
 .histpop__row{
+  position:relative;
   display:flex; gap:12px; align-items:flex-start; width:100%; padding:8px 6px; border-radius:8px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
 .histpop__row:hover{ background:var(--glass-hi); color:var(--tx-1); }
+/* the cross that forgets the link: in the row's top right corner, over the
+   row but not over its words (the title keeps the corner free), shown while
+   the pointer is on the row or the cross has the focus */
+.histpop__x{
+  position:absolute; top:6px; right:6px; width:26px; height:26px;
+  display:grid; place-items:center; color:var(--tx-3); opacity:0;   /* part of the row's hover: no pace of its own */
+}
+.histpop__x svg{ opacity:.55; }                                      /* quiet until the pointer is on it */
+.histpop__x:hover svg{ opacity:1; }
+.histpop__row:hover .histpop__x, .histpop__x:focus-visible{ opacity:1; }
+.histpop__x:hover{ color:var(--tx-1); }
+.histpop__x svg{ width:14px; height:14px; }
+/* a row on its way out: a fading copy where it stood, while the others slide; nothing answers the pointer meanwhile */
+.histpop__ghost{ position:absolute; pointer-events:none; }
+.histpop__ghost .histpop__x{ display:none; }
+.histpop__list.is-settling .histpop__row:hover{ background:transparent; color:var(--tx-2); }
+.histpop__list.is-settling .histpop__x{ opacity:0; }
+.histpop__title{ padding-right:30px; }
 .histpop__cover{ flex:none; width:44px; height:62px; border-radius:6px; background:var(--glass-soft); object-fit:cover; }
 .histpop__cover--none{ display:flex; align-items:center; justify-content:center; color:var(--tx-3); }
 .histpop__cover--none svg{ width:18px; height:18px; }
@@ -1038,6 +1086,8 @@ svg.ph{ fill:currentColor; stroke:none; }
 .histpop__meta{ display:flex; justify-content:space-between; gap:12px; font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; }
 .histpop__when{ flex:none; }
 .histpop__stop{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); }
+/* the episode, the time and the dub stay together: at the end of the line, or whole on the next */
+.histpop__tail{ white-space:nowrap; }
 .histpop__url{ font-family:var(--mono); letter-spacing:0; font-size:calc(12px + var(--fs)); color:var(--tx-2); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; word-break:break-all; line-height:1.4; margin-top:2px; }
 
 /* ───────────── modals ───────────── */
@@ -1230,6 +1280,7 @@ body.pip-body::before{ display:none; }
 .cmd__line{ white-space:pre-wrap; overflow-wrap:anywhere; }
 .cmd__line::before{ content:'› '; color:var(--tx-3); }
 .cmd__line:last-child{ color:var(--tx-1); }
+.cmd__detail{ color:var(--tx-3); }   /* the machine's own word, quieter than Lapka's */
 /* The wait for a link holds its shape from the first moment: a wider
    sheet, the address on one line, three phases always there, and a log
    ten lines tall whether it holds one line or ten, with a prompt at its
@@ -1345,7 +1396,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   overflow:hidden;
 }
 .menu--split.open{ display:flex; }
-.menu__col{ flex:1 1 0; min-width:0; min-height:0; overflow-y:auto; }
+.menu__col{ flex:1 1 0; min-width:0; min-height:0; overflow-y:auto; position:relative; }
 /* a divider on every column but the first, so the rule does not depend
    on whether a given menu has two columns or three */
 .menu--split .menu__col + .menu__col{
@@ -1376,8 +1427,8 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   top:var(--gear-pad-y); bottom:auto;
   right:calc(100% - var(--gear-pad-x) + 24px);
   /* four columns and the band of keys under them */
-  min-width:min(1236px, calc(100vw - 60px));
-  max-width:min(1236px, calc(100vw - 60px));
+  min-width:min(1317px, calc(100vw - 60px));
+  max-width:min(1317px, calc(100vw - 60px));
   /* the height is the sheet's own; the window alone caps it, and then the
      whole sheet scrolls, not a column of it */
   max-height:calc(100vh - 44px);
@@ -1394,7 +1445,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    and with the columns on the class the content collapsed into one
    column before the sheet had left. */
 .menu--gear{
-  grid-template-columns:minmax(0,21fr) minmax(0,34fr) minmax(0,34fr) minmax(0,34fr);
+  /* the first column is 15% wider than it once was (21fr → 24.15fr), the three
+     others 5% wider (34fr → 35.7fr), and the sheet wider by both, so no column
+     paid for another */
+  grid-template-columns:minmax(0,24.15fr) minmax(0,35.7fr) minmax(0,35.7fr) minmax(0,35.7fr);
   grid-template-areas:'left ui player place' 'keys keys keys place';
   align-items:stretch;
 }
@@ -1513,12 +1567,14 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ───────────── narrow window ─────────────
    The media queries come last, otherwise they could not override the
    rules declared further down the file. */
-/* narrowed by hand: the queue takes the width the next smaller screen would give it */
-.workspace.queue-narrow{ --queue-w:504px; }
-@media (max-width:1500px){ :root{ --queue-w:504px; } .workspace.queue-narrow{ --queue-w:360px; } }
-@media (max-width:1100px){ :root{ --queue-w:360px; } #btnQueueWidth{ display:none; } }
+/* narrowed by hand: the queue takes its narrow width. A smaller window
+   brings the wide width down to the narrow one and no further: the narrow
+   width is the least the queue ever is, and with both the same the width
+   button has nothing to do */
+.workspace.queue-narrow{ --queue-w:var(--queue-w-narrow); }
+@media (max-width:1500px){ :root{ --queue-w-wide:504px; } #btnQueueWidth{ display:none; } }
 @media (max-width:820px){
-  :root{ --queue-w:100vw; }
+  :root{ --queue-w-wide:100vw; --queue-w-narrow:100vw; }
   /* The shift centres captions in what the queue leaves visible. Here it
      leaves nothing, and shifted by the whole width the start screen was
      squeezed to a sliver as the panel slid in. */
@@ -1703,6 +1759,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .btn--quiet.is-armed{ color:#e0a24a; border-color:rgba(224,162,74,.5); background:rgba(224,162,74,.08); }
 /* the way out of Lapka, under the state: note, the guide, the button; quiet until armed */
 .quit__note{ margin:0; }
+.quit__note + .quit__note{ margin-top:-2px; }   /* how to start again: a paragraph of its own, 7px under the first (the row's gap is 9) */
 .quit__guide{ display:inline-block; align-self:flex-start; font-size:calc(12px + var(--fs)); color:var(--tx-3); text-decoration:underline; padding:2px 2px 4px; }
 .quit__guide:hover{ color:var(--tx-1); }
 .quit{ color:var(--tx-3); height:auto; min-height:var(--ctl-h); white-space:normal; line-height:1.3; padding:6px 12px; }
@@ -1721,6 +1778,21 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .saveall__count{ font-variant-numeric:tabular-nums; }
 .saveall__count:empty{ display:none; }
 
+/* ── Lapka's own scrollbar: the system's is hidden, a thin thumb over the
+   content stands in, seen while the content moves or the pointer is at the
+   edge; wider and brighter under the pointer; dragged, it moves the content ── */
+.scroll-own{ scrollbar-width:none; }
+.scroll-own::-webkit-scrollbar{ display:none; width:0; height:0; }
+.scroll-own > .bar{
+  position:absolute; top:0; right:4px; width:4px;                 /* square ends: a block, in the project's own manner */
+  background:rgba(131,132,140,.22); opacity:0; pointer-events:none; z-index:5;   /* the grey of quiet text, mostly see-through */
+  transition:opacity .22s ease, width .15s ease, right .15s ease, background .15s ease; will-change:transform;
+}
+.scroll-own > .bar.is-on{ opacity:1; pointer-events:auto; }
+.scroll-own > .bar:hover, .scroll-own > .bar.is-drag{ width:10px; right:2px; background:rgba(255,255,255,.4); }
+.scroll-own > .bar[hidden]{ display:none; }
+@media (prefers-reduced-motion: reduce){ .scroll-own > .bar{ transition:none; } }
+
 /* ── the tooltip: at once, under the pointer, alive while it is shown ── */
 .tip{
   position:fixed; z-index:70; max-width:min(420px, calc(100vw - 24px)); padding:8px 11px;
@@ -1728,6 +1800,19 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; line-height:1.5; color:var(--tx-1); pointer-events:none; white-space:nowrap;
 }
 .tip__sub{ color:var(--tx-3); white-space:normal; }
+
+/* ── the card of a row's save: beside its ring, the popovers' own look ── */
+.savecard{
+  position:fixed; z-index:70; width:340px; max-width:calc(100vw - 24px);
+  padding:14px 16px 12px; border-radius:var(--r-lg);
+  background:rgba(22,23,26,.97); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  font-size:calc(12.5px + var(--fs)); line-height:1.5; color:var(--tx-2); pointer-events:none;
+}
+.savecard .savepop__v{ overflow-wrap:anywhere; }
+/* the bar takes the ring's colour: grey on a pause, the warning's when broken off */
+.savecard.is-paused .savepop__bar i{ background:var(--tx-3); }
+.savecard.is-failed .savepop__bar i{ background:#e0a24a; }
+.savecard__hint{ margin-top:12px; color:var(--tx-3); }
 
 /* ── a switch for a setting that is on or off ───────────────── */
 .menu__row.menu__row--switch{ flex-direction:row; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; }

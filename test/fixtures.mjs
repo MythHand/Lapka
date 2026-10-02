@@ -58,13 +58,15 @@ const SRT_LONG = [
 
 /* -shortest keeps audio and video the same length; without it the sine
    runs on and the durations stop matching between fixtures. */
-const src = d => ['-f', 'lavfi', '-i', `testsrc=size=320x180:rate=10:duration=${d}`];
+/* the picture: the test pattern, or plain black when a shot of the player
+   should show no picture at all (SITE_VIDEO=black on npm run dev) */
+const src = d => ['-f', 'lavfi', '-i', (process.env.SITE_VIDEO === 'black' ? 'color=c=black:' : 'testsrc=') + `size=320x180:rate=10:duration=${d}`];
 const tone = (f, d) => ['-f', 'lavfi', '-i', `sine=frequency=${f}:duration=${d}`];
 const SRC = src(2);
 const TONE = f => tone(f, 2);
 
 export async function build() {
-  const dir = path.join(os.tmpdir(), 'pip-player-test-media');
+  const dir = path.join(os.tmpdir(), process.env.SITE_VIDEO === 'black' ? 'pip-player-test-media-black' : 'pip-player-test-media');   // the black picture is built and kept apart
   const show = path.join(dir, 'Show', 'S01');
   await fsp.mkdir(show, { recursive: true });
 

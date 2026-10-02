@@ -27,6 +27,12 @@ export async function openState(own) {
      1.1.3 it was kept per dub. Old keys "series/episode/dub" fold into
      "series/episode", the newest of them winning. */
   let folded = false;
+  /* one row of history per franchise: rows whose parts meet fold into the newest */
+  for (const h of Object.values(data.history).sort((a, b) => b.at - a.at)) {
+    if (!data.history[h.url]) continue;
+    const ids = new Set((h.parts || []).map(p => p.id));
+    for (const o of Object.values(data.history)) if (o.url !== h.url && (o.parts || []).some(p => ids.has(p.id))) { delete data.history[o.url]; folded = true; }
+  }
   for (const [k, v] of Object.entries(data.positions)) {
     const parts = k.split('/');
     if (parts.length < 3) continue;
@@ -50,10 +56,10 @@ export async function openState(own) {
     get: () => data,
     position(seriesId, episode) { return data.positions[posKey(seriesId, episode)]?.t ?? null; },
     /* the duration goes along, so a row can show where the episode was left before it is ever opened again */
-    setPosition(seriesId, episode, seconds, duration = 0) {
+    setPosition(seriesId, episode, seconds, duration = 0, dub = null) {
       const k = posKey(seriesId, episode);
       if (seconds === null) delete data.positions[k];
-      else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), d: Math.max(0, Number(duration) || 0), at: Date.now() };
+      else data.positions[k] = { t: Math.max(0, Number(seconds) || 0), d: Math.max(0, Number(duration) || 0), at: Date.now(), ...(dub ? { dub: String(dub) } : {}) };
       /* the oldest are let go, so the file does not grow with every episode ever watched */
       const keys = Object.keys(data.positions);
       if (keys.length > POS_KEEP) for (const k of keys.sort((a, b) => data.positions[a].at - data.positions[b].at).slice(0, keys.length - POS_KEEP)) delete data.positions[k];
@@ -61,9 +67,9 @@ export async function openState(own) {
     },
     /* an episode watched to its end, whatever the dub; kept for good, unlike the positions */
     watched(seriesId, episode) { return !!data.watched[`${seriesId}/${episode}`]; },
-    setWatched(seriesId, episode, on = true) {
+    setWatched(seriesId, episode, on = true, dub = null) {
       const k = `${seriesId}/${episode}`;
-      if (on) data.watched[k] = { at: Date.now() }; else delete data.watched[k];
+      if (on) data.watched[k] = { at: Date.now(), ...(dub ? { dub: String(dub) } : {}) }; else delete data.watched[k];
       soon();
     },
     dub(seriesId) { return data.dubs[seriesId] || null; },
@@ -86,26 +92,41 @@ export async function openState(own) {
       let best = null;
       for (const [k, v] of Object.entries(data.positions)) {
         const [sid, ep] = k.split('/');
-        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: v.t, d: v.d || 0, at: v.at, done: false };
+        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: v.t, d: v.d || 0, at: v.at, done: false, dub: v.dub || null };
       }
       for (const [k, v] of Object.entries(data.watched)) {
         const [sid, ep] = k.split('/');
-        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: 0, d: 0, at: v.at, done: true };
+        if (set.has(sid) && (!best || v.at > best.at)) best = { seriesId: sid, episode: Number(ep), t: 0, d: 0, at: v.at, done: true, dub: v.dub || null };
       }
       return best;
     },
     remember(rec) {
       const url = String(rec.url || '').trim();
       if (!url) return null;
-      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '' })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
-      /* a link pasted again keeps the cover it had when none came this time */
-      const prev = data.history[url] || {};
+      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '', season: Number(p.season) || null, kind: p.kind || null })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
+      /* A franchise is one row: a link whose parts meet those of a row
+         already kept (the first season pasted after the fifth, on the same
+         site) takes that row's place. A link pasted again keeps the cover it
+         had when none came this time. */
+      const ids = new Set(parts.map(p => p.id));
+      const same = Object.values(data.history).filter(h => h.url !== url && (h.parts || []).some(p => ids.has(p.id)));
+      for (const h of same) delete data.history[h.url];
+      const prev = data.history[url] || same.find(h => h.seriesId === rec.seriesId) || {};
       const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || prev.cover || null, coverFile: rec.coverFile || prev.coverFile || null, parts, at: Date.now() };
       data.history[url] = entry;
       const keys = Object.keys(data.history);
       if (keys.length > HISTORY_KEEP) for (const k of keys.sort((a, b) => data.history[a].at - data.history[b].at).slice(0, keys.length - HISTORY_KEEP)) delete data.history[k];
       soon();
       return entry;
+    },
+    /* one link forgotten: the row goes, and the name of its cover file is
+       given back to be removed; what was watched stays, it is the series'
+       own memory, not the link's */
+    forgetLink(url) {
+      const h = data.history[String(url || '').trim()];
+      if (!h) return null;
+      delete data.history[h.url]; soon();
+      return { coverFile: h.coverFile || null };
     },
     /* what was noted about watching: positions, watched marks, dub choices, the links pasted. Settings and save records stay. */
     notes() { return Object.keys(data.positions).length + Object.keys(data.watched).length + Object.keys(data.dubs).length + Object.keys(data.history).length; },

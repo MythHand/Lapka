@@ -3,6 +3,7 @@
    pieces, the last one cut by substring() a couple of times, and
    glued by a line of script. The line is read, not run.
    ═══════════════════════════════════════════════════════════ */
+import { refuse } from '../../reasons.mjs';
 
 const HOSTS = /(^|\.)(streamtape\.(com|net|to|xyz|cc|site)|strtape\.\w+|stape\.\w+|streamta\.pe|tapecontent\.net|scloud\.online)$/i;
 
@@ -26,9 +27,9 @@ export default {
 
   async extract(embedUrl, { referer = null } = {}, session) {
     const res = await session.fetch(embedUrl, { referer });
-    if (res.status >= 400) throw new Error(`embed answered ${res.status}`);
+    if (res.status >= 400) throw refuse('embedStatus', { status: res.status });
     const link = readLink(res.body);
-    if (!link) throw new Error('no file on the embed page');
+    if (!link) throw refuse('emptyEmbed');
     const origin = new URL(res.url || embedUrl).origin;
     return { streams: [{ kind: 'mp4', url: link + (link.includes('&stream=') ? '' : '&stream=1'), quality: null, headers: { referer: origin + '/' } }], dubs: [] };
   },

@@ -17,3 +17,11 @@ export function textOf(el) {
   walk(el);
   return parts.join('').replace(/\s+/g, ' ').trim();
 }
+
+/* The entities of HTML, back to characters: what a regex reads from raw
+   markup ("AniStar &amp; DEEP", a title with &quot;) is not yet text. */
+const NAMED = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: '\u00a0' };
+export const unescape = s => String(s || '')
+  .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+  .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+  .replace(/&(amp|quot|apos|lt|gt|nbsp);/g, (_, n) => NAMED[n]);

@@ -12,6 +12,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 import { seasonFromText as seasonOf } from '../discover/series.mjs';
+import { refuse } from '../reasons.mjs';
 
 const HOSTS = /(^|\.)(aniliberty\.top|anilibria\.top|anilibria\.tv)$/i;
 const RELEASE = /\/anime\/releases\/release\/([^/?#]+)/;
@@ -32,7 +33,7 @@ function marksOf(e) {
 
 async function json(session, url) {
   const res = await session.fetch(url, { headers: { accept: 'application/json' } });
-  if (res.status >= 400) throw new Error(`${url} answered ${res.status}`);
+  if (res.status >= 400) throw refuse('pageStatus', { status: res.status }, `${url} answered ${res.status}`);
   return JSON.parse(res.body);
 }
 
