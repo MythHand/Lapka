@@ -112,7 +112,9 @@ export async function openState(own) {
       const same = Object.values(data.history).filter(h => h.url !== url && (h.parts || []).some(p => ids.has(p.id)));
       for (const h of same) delete data.history[h.url];
       const prev = data.history[url] || same.find(h => h.seriesId === rec.seriesId) || {};
-      const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || prev.cover || null, coverFile: rec.coverFile || prev.coverFile || null, parts, at: Date.now() };
+      /* the newest row is the last: its moment is past every row's, even two in one millisecond */
+      const at = Math.max(Date.now(), ...Object.values(data.history).map(h => (h.at || 0) + 1));
+      const entry = { url, seriesId: rec.seriesId || null, title: rec.title || '', kind: rec.kind || null, year: rec.year || null, season: rec.season || null, episodes: Number(rec.episodes) || 0, cover: rec.cover || prev.cover || null, coverFile: rec.coverFile || prev.coverFile || null, parts, at };
       data.history[url] = entry;
       const keys = Object.keys(data.history);
       if (keys.length > HISTORY_KEEP) for (const k of keys.sort((a, b) => data.history[a].at - data.history[b].at).slice(0, keys.length - HISTORY_KEEP)) delete data.history[k];
