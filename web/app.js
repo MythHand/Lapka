@@ -3070,7 +3070,7 @@ if (btnQueueWidth) btnQueueWidth.onclick = () => {
    by importance to the goal: first what the whole thing was started
    for, then what it cannot work without, and only at the end the
    trimmings. */
-const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co', 'yummyanime.tv', 'ani-media.online', 'domanime.ru', 'lordserials.fan'];
+const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co', 'yummyanime.tv', 'ani-media.online', 'domanime.ru', 'lordserials.fan', 'ailiberty.top'];
 const SITES_PART = [{ site: 'animeflv.or.at', note: 'about.partOne' }];
 const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at'];
 /* The left side while nothing is open: the seal, the state as a

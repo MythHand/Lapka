@@ -70,7 +70,7 @@ The page reading is one general mechanism, not code written for particular
 sites: Lapka looks for players, episode lists and dubs by the way a page is
 built. Tested on: aniliberty.top, old.yummyani.me, jut-su.net, animego.me,
 anidubonline.ru, gogoanime.by, jkanime.net, newdeaf.co, yummyanime.tv,
-ani-media.online, domanime.ru, lordserials.fan. Other sites built the same way
+ani-media.online, domanime.ru, lordserials.fan, ailiberty.top. Other sites built the same way
 mostly open too. Sites with DRM, and sites that deliberately lock
 their players, Lapka does not break into.
 

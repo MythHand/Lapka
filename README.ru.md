@@ -67,7 +67,7 @@ PIP-Player под MIT. Уведомление MIT сохранено в
 плееры, списки серий и озвучек по устройству страницы. Проверено на:
 aniliberty.top, old.yummyani.me, jut-su.net, animego.me, anidubonline.ru,
 gogoanime.by, jkanime.net, newdeaf.co, yummyanime.tv, ani-media.online,
-domanime.ru, lordserials.fan. Другие сайты с похожим устройством чаще всего
+domanime.ru, lordserials.fan, ailiberty.top. Другие сайты с похожим устройством чаще всего
 открываются тоже. Сайты с DRM и сайты, которые намеренно закрывают
 свои плееры, Lapka не вскрывает.
 
