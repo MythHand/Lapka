@@ -301,6 +301,23 @@ describe('episodes in the page\'s data', () => {
     assert.equal(r.season, 3);
     assert.equal(r.kind_, 'tv');
   });
+  /* the players' own way: a playlist of objects whose file lists the qualities in
+     one string, the addresses relative to the page and signed for hours, the
+     number only in the title */
+  const PLAYERJS = `<html><head><title>Рай 2 - Site</title><meta property="og:title" content="Рай 2"/></head><body><h1>Рай 2</h1>
+<script>(() => { const player = new Playerjs({ id: 'p', file: [{"file":"[480p]\\/video\\/pl\\/a480.m3u8?expires=1791956901\\u0026signature=aa,[720p]\\/video\\/pl\\/a720.m3u8?expires=1791956901\\u0026signature=bb or \\/video\\/pl\\/a720b.m3u8,[1080p]\\/video\\/pl\\/a1080.m3u8?expires=1791956901\\u0026signature=cc","title":"\\u042d\\u043f\\u0438\\u0437\\u043e\\u0434 1"},{"file":"[480p]\\/video\\/pl\\/b480.m3u8?expires=1791956901\\u0026signature=dd,[720p]\\/video\\/pl\\/b720.m3u8?expires=1791956901\\u0026signature=ee","title":"\\u042d\\u043f\\u0438\\u0437\\u043e\\u0434 2"}] }); })();</script>
+</body></html>`;
+  test('a player\'s playlist in a script: the qualities out of one string, the addresses made absolute, the expiry read, the number out of the title', () => {
+    const p = discover({ html: PLAYERJS, url: 'https://pl.example/releases/rai-2' });
+    assert.equal(p.kind, 'series');
+    assert.deepEqual(p.episodes.items.map(e => e.number), [1, 2]);
+    assert.equal(p.episodes.items[0].title, '', 'a title that only numbers the episode is no title');
+    assert.deepEqual(p.episodes.items[0].streams.map(s => [s.quality, s.url]), [['480p', 'https://pl.example/video/pl/a480.m3u8?expires=1791956901&signature=aa'], ['720p', 'https://pl.example/video/pl/a720.m3u8?expires=1791956901&signature=bb'], ['1080p', 'https://pl.example/video/pl/a1080.m3u8?expires=1791956901&signature=cc']]);
+    assert.equal(p.episodes.items[0].streams[0].expiresAt, 1791956901000);
+    assert.equal(p.title.value, 'Рай 2');
+    assert.equal(p.season, 2);
+    assert.equal(toContribution(p).episodes[1].dubs[0].sources[0].streams[1].expiresAt, 1791956901000);
+  });
   test('into the catalog: every episode with its page as the player and the videos as its streams', () => {
     const c = toContribution(r);
     assert.equal(c.episodes.length, 3);

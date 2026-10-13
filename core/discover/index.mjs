@@ -35,13 +35,13 @@ export function discover({ html, url, profile = null }) {
      streams a script scan found are those episodes', not players of this page */
   if (!episodes.items.length) {
     const texts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent || '');
-    const data = episodesInData(texts);
+    const data = episodesInData(texts, url);
     if (data.length) {
       episodes = { ...episodes, items: data.map(e => ({ ...e, url })), by: 'data', confidence: 0.8 };
-      /* by path: a scan of the raw payload may have cut an address at an escaped character of its query */
-      const path = u => { try { const x = new URL(u); return x.origin + x.pathname; } catch { return u; } };
-      const own = new Set(data.flatMap(e => e.streams.map(st => path(st.url))));
-      players = players.filter(p => !(p.kind === 'script' && own.has(path(p.url))));
+      /* by file name: a scan of the raw script may have cut an address at an escaped character, in its path or its query */
+      const name = u => { try { return new URL(u).pathname.split('/').pop(); } catch { return u; } };
+      const own = new Set(data.flatMap(e => e.streams.map(st => name(st.url))));
+      players = players.filter(p => !(p.kind === 'script' && own.has(name(p.url))));
     }
   }
   const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
@@ -223,7 +223,7 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
     if (e.duration) ep.duration = e.duration;
     if (e.marks) ep.marks = e.marks;
     /* an episode the page's data names with its video: the page is its player, the dub what the profile calls it */
-    if (e.streams && e.streams.length) ep.dubs = [{ name: report.defaultDub || UNNAMED_DUB, sources: [{ player: 'page', embedUrl: e.url, streams: e.streams.map(st => ({ kind: st.kind, url: st.url, quality: st.quality || qualityOf(st.url) })) }] }];
+    if (e.streams && e.streams.length) ep.dubs = [{ name: report.defaultDub || UNNAMED_DUB, sources: [{ player: 'page', embedUrl: e.url, streams: e.streams.map(st => ({ kind: st.kind, url: st.url, quality: st.quality || qualityOf(st.url), expiresAt: st.expiresAt || null })) }] }];
     c.episodes.push(ep);
   }
 

@@ -222,10 +222,13 @@ export function createLapka({ session = createSession(), profiles = [], extracto
        refreshed by reading that page again: the generic extractor on a
        page that carries every episode's streams would bring them all */
     if (source.player === 'page' || String(source.extractor || '').startsWith('site:')) {
-      if (!ep.sourceUrl || ep.sourceUrl === s.sourceUrl) { markHealth(source, false, 'nothing to re-read'); return false; }
+      /* the episode's own page, or the series page that carries every episode's
+         streams in its data: read again, the signed addresses come back fresh */
+      const pageUrl = ep.sourceUrl || (source.player === 'page' ? s.sourceUrl : null);
+      if (!pageUrl) { markHealth(source, false, 'nothing to re-read'); return false; }
       try {
         const before = source.streams.map(st => st.url).join('\n');
-        const report = await readPage(ep.sourceUrl, s.sourceUrl);
+        const report = await readPage(pageUrl, s.sourceUrl);
         if (report.episode.value === null) report.episode.value = ep.number;
         merge(s, toContribution(report));
         const fresh = source.streams.length && source.streams.map(st => st.url).join('\n') !== before;
