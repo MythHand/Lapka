@@ -1002,14 +1002,19 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
   const wantedNumber = at && at.number != null ? at.number : at != null && typeof at !== 'object' ? at : got.start ? got.start.episode : null;
   const wantedSeries = at && at.seriesId ? at.seriesId : got.series.id;
+  /* a session restored and its episode not in the list: the episode last watched, by the server's memory of places */
+  const lastPlace = () => state.list.filter(i => state.positions[posKey(i)]).sort((a, b) => (state.positions[posKey(b)].at || 0) - (state.positions[posKey(a)].at || 0))[0] || null;
   const first = state.list.find(i => i.seriesId === wantedSeries && i.number === wantedNumber)
+    || (at && typeof at === 'object' ? lastPlace() : null)
     || state.list.find(i => i.seriesId === got.series.id) || state.list[0];
   if (autoplay) playItem(first);
   else {
-    /* the series is back but not started: the stage shows the episode it stopped on, not the start screen */
+    /* the series is back but not started: the stage shows the episode it stopped on, not the start screen,
+       and the queue stands at it, once the rows have their places */
     state.current = first;
     emptyEl.classList.add('hide'); stage.classList.remove('is-empty');
     paintTitle(); paintActive(); syncStatus();
+    requestAnimationFrame(() => requestAnimationFrame(revealCurrent));
   }
   return true;
 }
@@ -5032,7 +5037,7 @@ document.addEventListener('keyup', e => {
   try {
     const st = await api('/api/state');
     state.remote = st;
-    for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = { t: v.t, d: v.d || 0 };
+    for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = { t: v.t, d: v.d || 0, at: v.at || 0 };   // the moment too: the place last watched is the newest
     for (const k of Object.keys(st.watched || {})) state.watched[k] = true;
     /* the settings sheet is drawn from these the moment it first opens */
     askHome().catch(() => {}); askCache().catch(() => {}); checkServer();
