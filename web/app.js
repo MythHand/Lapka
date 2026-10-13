@@ -4677,12 +4677,29 @@ video.addEventListener('pause', () => {
 });
 
 /* ── what the page said of the series, while paused ──────────
-   The facts of the part the paused episode belongs to: the name and its
-   other names, then the rows the page gave, in two columns so nothing
-   scrolls; a row without a value is not drawn. Shown for as long as the
-   pause lasts, when the setting is on; a play, a switch, the end card
-   take it away. */
-const pauseInfo = $('#pauseInfo'), pauseCover = $('#pauseCover'), pauseTitle = $('#pauseTitle'), pauseAlt = $('#pauseAlt'), pauseCols = $('#pauseCols');
+   The facts of the part the paused episode belongs to, over the whole
+   frame: the name and one other name of the same part, then two
+   columns, the facts in a meaningful order on the left (what it is,
+   what it is about, who made it, for whom), the dubs by name on the
+   right. A row without a value is not drawn; a label stands as wide as
+   the widest. Shown for as long as the pause lasts, when the setting is
+   on; a play, a switch, the end card take it away. */
+const pauseInfo = $('#pauseInfo'), pauseCover = $('#pauseCover'), pauseTitle = $('#pauseTitle'), pauseAlt = $('#pauseAlt'), pauseFacts = $('#pauseFacts'), pauseDubs = $('#pauseDubs');
+/* One other name of this very part, not the franchise's roll of names:
+   the one that carries the same number as the title does (the second
+   season's own), in another script by preference, else the first that
+   is not the title itself. */
+function otherName(series) {
+  const title = String(series.title || '').trim();
+  const all = (series.altTitles || []).map(a => String(a).trim()).filter(a => a && a.toLowerCase() !== title.toLowerCase());
+  if (!all.length) return '';
+  const n = /(\d{1,2})\s*$/.exec(title)?.[1] || (series.season && series.season > 1 ? String(series.season) : null);
+  const same = n ? all.filter(a => new RegExp(`(?:^|[^\\d])${n}(?:[^\\d]|$)`).test(a)) : all;
+  const pool = same.length ? same : n ? [] : all;
+  if (!pool.length) return '';
+  const cyr = /[\u0400-\u04ff]/;
+  return pool.find(a => !cyr.test(a) && /[A-Za-z]/.test(a)) || pool.find(a => !cyr.test(a)) || pool[0];
+}
 function paintPauseInfo() {
   const it = cur();
   const due = state.set.pauseInfo !== 'off' && it && it.loadedSrc && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
@@ -4693,15 +4710,21 @@ function paintPauseInfo() {
   const f = s.facts || {};
   if (s.cover) pauseCover.src = s.cover; else pauseCover.removeAttribute('src');
   pauseTitle.textContent = s.title || '';
-  pauseAlt.textContent = (s.altTitles || []).filter(a => a && a.toLowerCase() !== String(s.title || '').toLowerCase()).join(' · ');
+  pauseAlt.textContent = otherName(s);
   const episodes = f.episodesTotal ? (f.episodes && f.episodes < f.episodesTotal ? `${f.episodes} / ${f.episodesTotal}` : String(f.episodesTotal)) : s.episodes && s.episodes.length ? String(s.episodes.length) : null;
   const rows = [
-    ['year', s.year], ['kind', kindLabel(s)], ['episodes', episodes],
-    ['dubs', it.dubs && it.dubs.length ? String(it.dubs.length) : null],
-    ['genres', (f.genres || []).join(', ')], ['studio', f.studio], ['origin', f.origin],
+    ['kind', kindLabel(s) || (s.kind === 'tv' ? t('info.tv') : null)], ['year', s.year], ['episodes', episodes],
+    ['genres', (f.genres || []).join(', ')], ['origin', f.origin], ['studio', f.studio],
     ['age', [f.age, f.mpaa].filter(Boolean).join(' · ')],
   ].filter(([, v]) => v);
-  pauseCols.replaceChildren(...rows.map(([k, v]) => { const r = document.createElement('div'); r.className = 'pauseinfo__row'; const a = document.createElement('span'); a.className = 'pauseinfo__k'; a.textContent = t('info.' + k); const b = document.createElement('span'); b.className = 'pauseinfo__v'; b.textContent = String(v); r.append(a, b); return r; }));
+  pauseFacts.replaceChildren(...rows.flatMap(([k, v]) => { const a = document.createElement('span'); a.className = 'pauseinfo__k'; a.textContent = t('info.' + k); const b = document.createElement('span'); b.className = 'pauseinfo__v'; b.textContent = String(v); return [a, b]; }));
+  const dubs = it.dubs || [];
+  if (dubs.length) {
+    const k = document.createElement('span'); k.className = 'pauseinfo__k'; k.textContent = t('info.dubs');
+    const list = document.createElement('div'); list.className = 'pauseinfo__names';
+    for (const d of dubs) { const i = document.createElement('i'); i.textContent = d.name; if (it.dub && d.key === it.dub.key) i.classList.add('is-on'); if (d.sources && !d.alive) i.classList.add('is-dead'); list.append(i); }
+    pauseDubs.replaceChildren(k, list);
+  } else pauseDubs.replaceChildren();
   pauseInfo.setAttribute('aria-hidden', 'false');
   pauseInfo.classList.add('show');
 }

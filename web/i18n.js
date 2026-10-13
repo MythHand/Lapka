@@ -168,6 +168,7 @@ en: {
   'info.studio': 'Studio',
   'info.origin': 'Source',
   'info.age': 'Age',
+  'info.tv': 'TV series',
 
   'queue.hide': 'Hide · Q',
   'queue.about': 'About',
@@ -724,6 +725,7 @@ ru: {
   'info.studio': 'Студия',
   'info.origin': 'Первоисточник',
   'info.age': 'Возраст',
+  'info.tv': 'Сериал',
 
   'queue.hide': 'Скрыть · Q',
   'queue.about': 'О проекте',
@@ -1280,6 +1282,7 @@ ru: {
   'info.studio': 'Studio',
   'info.origin': 'Vorlage',
   'info.age': 'Alter',
+  'info.tv': 'Serie',
 
   'queue.hide': 'Ausblenden · Q',
   'queue.about': 'Über das Projekt',
@@ -1836,6 +1839,7 @@ ru: {
   'info.studio': 'Studio',
   'info.origin': 'Source',
   'info.age': 'Âge',
+  'info.tv': 'Série',
 
   'queue.hide': 'Masquer · Q',
   'queue.about': 'À propos',
@@ -2392,6 +2396,7 @@ ru: {
   'info.studio': 'Estudio',
   'info.origin': 'Origen',
   'info.age': 'Edad',
+  'info.tv': 'Serie',
 
   'queue.hide': 'Ocultar · Q',
   'queue.about': 'Acerca del proyecto',
@@ -2948,6 +2953,7 @@ ru: {
   'info.studio': 'Studio',
   'info.origin': 'Origine',
   'info.age': 'Età',
+  'info.tv': 'Serie',
 
   'queue.hide': 'Nascondi · Q',
   'queue.about': 'Informazioni sul progetto',
@@ -3504,6 +3510,7 @@ ru: {
   'info.studio': 'Estúdio',
   'info.origin': 'Origem',
   'info.age': 'Idade',
+  'info.tv': 'Série',
 
   'queue.hide': 'Ocultar · Q',
   'queue.about': 'Sobre o projeto',
@@ -4060,6 +4067,7 @@ ru: {
   'info.studio': 'Studio',
   'info.origin': 'Pierwowzór',
   'info.age': 'Wiek',
+  'info.tv': 'Serial',
 
   'queue.hide': 'Ukryj · Q',
   'queue.about': 'O projekcie',
@@ -4616,6 +4624,7 @@ ru: {
   'info.studio': 'Stüdyo',
   'info.origin': 'Kaynak',
   'info.age': 'Yaş',
+  'info.tv': 'Dizi',
 
   'queue.hide': 'Gizle · Q',
   'queue.about': 'Proje hakkında',
@@ -5172,6 +5181,7 @@ ru: {
   'info.studio': '制作',
   'info.origin': '原作',
   'info.age': '年龄',
+  'info.tv': '电视动画',
 
   'queue.hide': '隐藏 · Q',
   'queue.about': '关于项目',
