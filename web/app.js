@@ -3071,7 +3071,7 @@ if (btnQueueWidth) btnQueueWidth.onclick = () => {
    for, then what it cannot work without, and only at the end the
    trimmings. */
 const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co', 'yummyanime.tv', 'ani-media.online', 'domanime.ru', 'lordserials.fan', 'ailiberty.top'];
-const SITES_PART = [{ site: 'animeflv.or.at', note: 'about.partOne' }];
+const SITES_PART = [{ site: 'animeflv.or.at', note: 'about.partOne' }, { site: 'anitv.ru', note: 'about.partDub' }];
 const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at'];
 /* The left side while nothing is open: the seal, the state as a
    terminal would say it, what Lapka is in two paragraphs, and the

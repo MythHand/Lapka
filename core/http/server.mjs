@@ -18,6 +18,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
@@ -358,7 +359,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
           for (const k of ['content-length', 'content-range']) if (origin.headers.get(k)) h[k] = origin.headers.get(k);
           res.writeHead(origin.status, h);
           if (req.method === 'HEAD' || !origin.body) return res.end();
-          return Readable.fromWeb(origin.body).pipe(res);
+          /* an origin that drops the connection mid-file ends this answer, not the program */
+          return pipeline(Readable.fromWeb(origin.body), res).catch(() => { if (!res.writableEnded) res.destroy(); });
         } catch (e) {
           return json(res, e.code || 500, { error: e.message });
         }
