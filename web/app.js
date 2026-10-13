@@ -1422,7 +1422,7 @@ function prefetchNext() {
    it needs, as any player does. The server pulls one episode at a
    time; the page asks for the one playing at the quality in play, and
    reads how far it got now and then. */
-const prefetchOn = () => (state.remote.settings?.prefetch || 'off') === 'on';
+const prefetchOn = () => (state.remote.settings?.prefetch || 'on') !== 'off';   // on unless switched off
 let warmT = null, warmedFor = null;
 const warmLevel = () => (hls && hls.levels && hls.levels.length > 1 && hls.currentLevel >= 0 && hls.levels[hls.currentLevel].height) || null;
 function warmCurrent() {

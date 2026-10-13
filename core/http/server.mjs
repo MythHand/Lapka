@@ -194,7 +194,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       /* the episode playing, pulled into the cache ahead of the player: asked by the page, read by it as it goes */
       if (warmer && req.method === 'GET' && p === '/api/warm') return json(res, 200, { job: warmer.job() });
       if (warmer && mutating && p === '/api/warm') {
-        if (!state || state.setting('prefetch') !== 'on') return json(res, 403, { error: 'warming is switched off' });
+        if (!state || state.setting('prefetch') === 'off') return json(res, 403, { error: 'warming is switched off' });   // on unless switched off
         try { return json(res, 202, { job: warmer.warm(url.searchParams.get('stream') || '', { level: url.searchParams.get('level') }) }); }
         catch (e) { return json(res, e.code || 500, { error: e.message, reason: e.reason || null }); }
       }

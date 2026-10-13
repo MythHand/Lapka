@@ -449,7 +449,8 @@ describe('warming the cache', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
     const al = r.series.episodes.find(e => e.number === 2).dubs.find(d => d.key === 'anilibria');
     const hls = al.sources.find(s => s.player === 'embed/beta').streams[0];
     const mp4 = al.sources.find(s => s.player === 'embed/alpha').streams[0];
-    assert.equal((await post(`/api/warm?stream=${hls.id}`)).status, 403, 'off by default');
+    await post('/api/state/setting?k=prefetch&v=off');
+    assert.equal((await post(`/api/warm?stream=${hls.id}`)).status, 403, 'refused when switched off');
     await post('/api/state/setting?k=prefetch&v=on');
     assert.equal((await post('/api/warm?stream=nope')).status, 404);
     assert.equal((await (await post(`/api/warm?stream=${mp4.id}`)).json()).job.state, 'skipped', 'mp4 is read by ranges, not warmed');
