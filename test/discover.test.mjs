@@ -117,6 +117,22 @@ describe('seasons', () => {
     /* a page with a single season link is not a franchise */
     assert.deepEqual(seriesPage('links').franchise, []);
   });
+  test('a block the site heads as related, a plain list of links with no years and this page among them: the parts in the site\'s order', () => {
+    const page = (self) => `<html><head><title>${self} - Site</title></head><body><h1>${self}</h1>
+<section><h2>Связанные релизы</h2><p>Эта подборка помогает следить за «${self}»</p>
+<ul><li><a href="/releases/rai">Рай</a></li><li><a href="/releases/rai-2nd-season">Рай 2</a></li><li><a href="/releases/rai-movie">Рай: Фильм</a></li></ul></section>
+<section><h2>Похожие релизы</h2><ul><li><a href="/releases/other">Другое</a></li><li><a href="/releases/more">Ещё</a></li></ul></section>
+</body></html>`;
+    const two = discover({ html: page('Рай 2'), url: 'https://site.example/releases/rai-2nd-season' });
+    assert.deepEqual(two.franchise.map(f => [f.order, f.title, f.kind, f.self]), [[1, 'Рай', 'tv', false], [2, 'Рай 2', 'tv', true], [3, 'Рай: Фильм', 'movie', false]]);
+    assert.equal(two.franchise[0].url, 'https://site.example/releases/rai');
+    assert.equal(two.season, 2);
+    const one = discover({ html: page('Рай'), url: 'https://site.example/releases/rai' });
+    assert.equal(one.season, 1, 'the earliest series of the franchise, unnumbered, is the first season');
+    /* a list under such a heading that does not hold this page is a list of something else */
+    const stranger = discover({ html: page('Рай 2').replace('/releases/rai-2nd-season', '/releases/elsewhere'), url: 'https://site.example/releases/rai-2nd-season' });
+    assert.deepEqual(stranger.franchise, []);
+  });
 });
 
 describe('the page\'s own word', () => {

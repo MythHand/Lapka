@@ -298,7 +298,26 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
          under the name): the item is the nearest ancestor of the year
          that holds one link, or none. */
       const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && yearOfLeaf(el) !== null);
-      if (!years.length) continue;
+      /* no years: a plain list of links, this page among them, is the
+         franchise in the site's order (a season a part, by its name) */
+      if (!years.length) {
+        for (const list of up.querySelectorAll('ul, ol')) {
+          if (head.contains(list)) continue;
+          const rows = [...list.children];
+          if (rows.length < 2 || !rows.every(li => li.querySelectorAll('a[href]').length === 1)) continue;
+          const items = rows.map(li => {
+            const a = li.querySelector('a[href]');
+            const name = clean(textOf(a) || a.getAttribute('title') || a.querySelector('img')?.getAttribute('alt'));
+            let abs; try { abs = new URL(a.getAttribute('href'), url).toString(); } catch { abs = null; }
+            return { title: name, url: abs, href: same(a.getAttribute('href')), year: null, kind: kindOfName(name) };
+          }).filter(it => it.title && it.href);
+          const self = items.find(it => it.href === page);
+          if (!self || items.length < 2) continue;      // a list without this page in it is a list of something else
+          if (own.kind) self.kind = own.kind;
+          return items.map((it, i) => ({ order: i + 1, title: it.title, url: it === self ? String(url).replace(/#.*$/, '') : it.url, year: it.year, kind: it.kind, self: it === self }));
+        }
+        continue;
+      }
       const items = [];
       const yearsIn = el => years.filter(y => el.contains(y)).length;
       for (const y of years) {
