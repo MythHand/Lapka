@@ -1442,9 +1442,11 @@ function watchWarm() {
     if (!job) return;
     if (job.state === 'working') return watchWarm();
     diary('warm', `${job.done}/${job.total} ${job.state}${job.error ? ' ' + (job.error.key || '') : ''}`);
-    /* the episode playing is there whole: the next one follows, and no further */
     const it = cur();
+    /* the episode playing is there whole: the next one follows, and no further */
     if (job.state === 'done' && it && it.stream && job.streamId === it.stream.id) warmNext(it, job.level);
+    /* the origin dropped out while the episode was being pulled: asked again in half a minute, for as long as it plays; the pieces already there are passed over */
+    if (job.state === 'error' && it && it.stream && job.streamId === it.stream.id) warmT = setTimeout(() => { if (cur() === it) askWarm(it, job.level); }, 30000);
   }, 2500);
 }
 async function warmNext(it, level) {

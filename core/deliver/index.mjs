@@ -97,17 +97,26 @@ export function createDelivery({ session, cache }) {
   }
 
   /* A segment or a key: from the cache if it passed through before,
-     otherwise from the origin and into the cache on the way. */
+     otherwise from the origin and into the cache on the way. A piece
+     asked for twice at once (the player and the warming of the episode
+     both want it) is fetched once and given to both. */
+  const inFlight = new Map();         // id/name → the fetch under way
   async function piece(entry, url) {
     if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
     const name = nameFor(url);
     const cache = cacheOf();
     if (await cache.has(entry.id, name)) { cache.touch(entry.id); return { bytes: await cache.read(entry.id, name), hit: true }; }
-    const res = await fetchOrigin(entry, url);
-    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
-    const bytes = Buffer.from(await res.arrayBuffer());
-    cache.write(entry.id, name, bytes).catch(() => {});
-    return { bytes, hit: false };
+    const key = `${entry.id}/${name}`;
+    if (inFlight.has(key)) return { bytes: await inFlight.get(key), hit: true };
+    const fetching = (async () => {
+      const res = await fetchOrigin(entry, url);
+      if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
+      const bytes = Buffer.from(await res.arrayBuffer());
+      cache.write(entry.id, name, bytes).catch(() => {});
+      return bytes;
+    })().finally(() => inFlight.delete(key));
+    inFlight.set(key, fetching);
+    return { bytes: await fetching, hit: false };
   }
 
   /* MP4: the browser's range request goes to the origin as it is. */
