@@ -8,13 +8,20 @@
    what the origin does after that is not seen.
 
    One episode warms at a time: asked for another, the one under way is
-   let go (the piece in flight finishes, the rest stay unasked). MP4 is
+   let go (the piece in flight finishes, the rest stay unasked). The pull
+   is paced to twice the speed of watching: enough to run ahead, not a
+   second full-speed client at an origin that counts them. MP4 is
    not warmed: the browser reads it by ranges and the cache does not
    hold it. Nothing is kept beyond the cache's own limit: the pieces
    are ordinary cache files, evicted as any other.
    ═══════════════════════════════════════════════════════════ */
 import { reasonOf } from '../reasons.mjs';
-import { segmentsOf, piecesOf } from './pieces.mjs';
+import { segmentsOf, timedPiecesOf } from './pieces.mjs';
+
+/* the pull is paced: never faster than this many seconds of video per second of pulling,
+   so the warming is a second viewer beside the player, not a flood at the origin */
+export const PACE = 2;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export function createWarmer({ delivery, cache }) {
   const cacheOf = () => (typeof cache === 'function' ? cache() : cache);
@@ -37,12 +44,19 @@ export function createWarmer({ delivery, cache }) {
     stop = () => { gone = true; if (job.state === 'working') job.state = 'stopped'; };
     current = job;
     (async () => {
-      const pieces = piecesOf(await segmentsOf(delivery, entry, entry.stream.url, 0, level));
+      const pieces = timedPiecesOf(await segmentsOf(delivery, entry, entry.stream.url, 0, level));
       job.total = pieces.length;
       const c = cacheOf();
-      for (const u of pieces) {
+      const began = Date.now();
+      let pulled = 0;   // seconds of video fetched from the origin, the cache's own not counted
+      for (const { url, seconds } of pieces) {
         if (gone) return;
-        if (!(await c.has(entry.id, delivery.nameFor(entry, u)))) await delivery.piece(entry, u);
+        if (!(await c.has(entry.id, delivery.nameFor(entry, url)))) {
+          await delivery.piece(entry, url);
+          pulled += seconds;
+          const due = began + pulled / PACE * 1000;
+          if (Date.now() < due) await sleep(due - Date.now());
+        }
         if (gone) return;
         job.done++;
       }

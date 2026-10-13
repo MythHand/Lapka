@@ -62,8 +62,10 @@ export async function segmentsOf(delivery, entry, url, depth = 0, level = null) 
     }
     return video;
   }
-  const segments = [], keys = [], out = [];
+  const segments = [], keys = [], out = [], durations = [];
+  let next = 0;   // the EXTINF before a segment names its length
   for (const line of lines) {
+    const inf = /^#EXTINF:\s*([\d.]+)/.exec(line); if (inf) next = Number(inf[1]) || 0;
     if (line.startsWith('#EXT-X-KEY') || line.startsWith('#EXT-X-MAP')) {
       const u = /URI="([^"]+)"/.exec(line)?.[1];
       if (u) {
@@ -75,14 +77,20 @@ export async function segmentsOf(delivery, entry, url, depth = 0, level = null) 
     }
     if (line.trim() && !line.startsWith('#')) {
       const abs = new URL(line.trim(), base).toString();
-      entry.allowed.add(abs); segments.push(abs);
+      entry.allowed.add(abs); segments.push(abs); durations.push(next); next = 0;
       out.push(delivery.nameFor(entry, abs));
       continue;
     }
     out.push(line);
   }
-  return { segments, keys, localPlaylist: out.join('\n') };
+  return { segments, keys, durations, localPlaylist: out.join('\n') };
 }
 
 /* every piece of a stream, keys first, then the picture, then the sound */
 export const piecesOf = ({ segments, keys, audio }) => [...keys, ...segments, ...(audio ? [...audio.keys, ...audio.segments] : [])];
+/* the same pieces with the seconds of video each one holds (a key holds none) */
+export const timedPiecesOf = ({ segments, keys, durations = [], audio }) => [
+  ...keys.map(url => ({ url, seconds: 0 })),
+  ...segments.map((url, i) => ({ url, seconds: durations[i] || 0 })),
+  ...(audio ? [...audio.keys.map(url => ({ url, seconds: 0 })), ...audio.segments.map((url, i) => ({ url, seconds: (audio.durations || [])[i] || 0 }))] : []),
+];

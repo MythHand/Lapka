@@ -333,10 +333,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return json(res, 200, { ok: true });
       }
 
-      if (delivery && (m = /^\/api\/stream\/([a-f0-9]{16})(?:\.(m3u8|mp4|vtt)|\/(pl|seg|key))$/.exec(p))) {
+      if (delivery && (m = /^\/api\/stream\/([a-f0-9]{16})(?:\.(m3u8|mp4|vtt)|\/(pl|seg|key|cached))$/.exec(p))) {
         const entry = delivery.get(m[1]);
         if (!entry) return json(res, 404, { error: 'unknown stream' });
         try {
+          /* what of the stream is on the disk already, for the page's timeline */
+          if (m[3] === 'cached') return json(res, 200, await delivery.cached(entry, { level: Number(url.searchParams.get('level')) || null }));
           if (m[2] === 'vtt') {
             const body = await delivery.text(entry);
             res.writeHead(200, { 'content-type': 'text/vtt; charset=utf-8', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store' });

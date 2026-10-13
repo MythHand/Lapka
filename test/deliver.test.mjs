@@ -75,6 +75,11 @@ describe('delivery', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.equal(Buffer.compare(bytes, Buffer.from(await b.arrayBuffer())), 0);
     const files = await fsp.readdir(lapka.store.cache.dirFor(hls.id));
     assert.ok(files.some(f => f.endsWith('.ts')) && files.some(f => f.endsWith('.m3u8')), files.join(','));
+    /* the page's timeline asks what is on the disk: the first piece as a stretch from the start */
+    const disk = await (await get(`/api/stream/${hls.id}/cached`)).json();
+    assert.equal(disk.ranges.length, 1);
+    assert.equal(disk.ranges[0][0], 0);
+    assert.ok(disk.ranges[0][1] > 0 && disk.duration > disk.ranges[0][1], JSON.stringify(disk));
   });
 
   test('nothing outside the playlist is fetched', async () => {
@@ -138,6 +143,11 @@ describe('a stream under a changing address', () => {
       const got = await delivery.piece(delivery.get(id), seg2);
       assert.equal(got.hit, true, 'the piece is found by its place');
       assert.equal(String(got.bytes), 'bytes of sigA 1', 'what was kept under the first address');
+      /* what is on the disk, as stretches of the timeline: the first piece, six seconds of twelve */
+      assert.deepEqual(await delivery.cached(delivery.get(id)), { ranges: [[0, 6]], duration: 12, tag: 'main' });
+      const pl2 = await delivery.playlist(delivery.get(id));
+      await delivery.piece(delivery.get(id), decodeURIComponent(/u=(\S+)/.exec(pl2.split('\n').filter(l => l.includes('seg?u=')).pop())[1]));
+      assert.deepEqual((await delivery.cached(delivery.get(id))).ranges, [[0, 12]], 'two pieces side by side are one stretch');
       /* another quality of the same source is another stream; the same quality twice is told apart by order */
       assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigB/index.m3u8`, quality: '480p', headers: {} }, meta), id);
       assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigC/index.m3u8`, quality: '720p', headers: {} }, { ...meta, nth: 1 }), id);

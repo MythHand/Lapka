@@ -165,7 +165,36 @@ export function createDelivery({ session, cache }) {
     return res;
   }
 
-  return { register, get, playlist, text, piece, file, rewrite, learn, streams, fetchOrigin, nameFor };
+  /* What of a stream is on the disk, as stretches of seconds: read off the
+     playlist kept for the quality in play (the variant of that height, else
+     the main one), piece by piece. Nothing is fetched: a playlist not yet
+     played through has nothing on the disk to speak of. */
+  async function cached(entry, { level = null } = {}) {
+    const want = level ? `v${level}` : null;
+    const tag = want && [...entry.tags.values()].includes(want) ? want : 'main';
+    const c = cacheOf();
+    let text; try { text = String(await c.read(entry.id, `${tag}.m3u8`)); } catch { return { ranges: [], duration: null, tag }; }
+    let at = 0, next = 0, i = 0, duration = 0;
+    const ranges = [];
+    const names = [];
+    for (const line of text.split(/\r?\n/)) {
+      const inf = /^#EXTINF:\s*([\d.]+)/.exec(line); if (inf) { next = Number(inf[1]) || 0; continue; }
+      if (!line.trim() || line.startsWith('#')) continue;
+      const e = (line.trim().split(/[?#]/)[0].match(/\.[a-z0-9]+$/i) || [''])[0];   // the line may be relative: its extension read off it
+      names.push({ name: `${tag}-${i++}${e}`, start: at, end: at + next });
+      at += next; next = 0;
+    }
+    duration = at;
+    const there = await Promise.all(names.map(n => c.has(entry.id, n.name)));
+    for (let k = 0; k < names.length; k++) {
+      if (!there[k]) continue;
+      const last = ranges[ranges.length - 1];
+      if (last && Math.abs(last[1] - names[k].start) < 0.01) last[1] = names[k].end; else ranges.push([names[k].start, names[k].end]);
+    }
+    return { ranges: ranges.map(([a, b]) => [Math.round(a * 10) / 10, Math.round(b * 10) / 10]), duration: Math.round(duration * 10) / 10, tag };
+  }
+
+  return { register, get, playlist, text, piece, file, rewrite, learn, cached, streams, fetchOrigin, nameFor };
 }
 
 export const contentType = url => /\.m3u8(\?|$)/i.test(url) ? 'application/vnd.apple.mpegurl'

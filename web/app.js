@@ -131,7 +131,7 @@ const emptyEl = $('#empty'), modeHint = $('#modeHint');
 const prep = $('#prep'), prepName = $('#prepName'), prepTrack = $('#prepTrack'), prepHead = $('#prepHead');
 const prepSteps = $('#prepSteps'), prepCmd = $('#prepCmd');
 const deck = $('#deck'), seek = $('#seek'), seekFill = $('#seekFill');
-const seekBuffer = $('#seekBuffer'), seekKnob = $('#seekKnob'), seekTip = $('#seekTip');
+const seekBuffer = $('#seekBuffer'), seekDisk = $('#seekDisk'), seekKnob = $('#seekKnob'), seekTip = $('#seekTip');
 const tCur = $('#tCur'), tDur = $('#tDur');
 const btnPlay = $('#btnPlay'), playIcon = $('#playIcon');
 const btnMute = $('#btnMute'), volIcon = $('#volIcon'), volBar = $('#volBar'), volFill = $('#volFill');
@@ -1440,7 +1440,7 @@ function watchWarm() {
     let d; try { d = await api('/api/warm'); } catch (_) { return; }
     const job = d.job;
     if (!job) return;
-    if (job.state === 'working') return watchWarm();
+    if (job.state === 'working') { watchDisk(); return watchWarm(); }
     diary('warm', `${job.done}/${job.total} ${job.state}${job.error ? ' ' + (job.error.key || '') : ''}`);
     const it = cur();
     /* the episode playing is there whole: the next one follows, and no further */
@@ -1449,6 +1449,36 @@ function watchWarm() {
     if (job.state === 'error' && it && it.stream && job.streamId === it.stream.id) warmT = setTimeout(() => { if (cur() === it) askWarm(it, job.level); }, 30000);
   }, 2500);
 }
+/* ── what of the episode is on the disk, on the timeline ────────
+   The player's own buffer is a minute or two of memory, and the
+   timeline's lighter band shows that; the disk holds whatever passed
+   through, played or pulled ahead, and the band under it shows that,
+   in stretches, read from the server now and then while an HLS episode
+   plays. A gap in the band is a gap on the disk. */
+let diskT = null;
+function paintDisk(d) {
+  const dur = duration() || (d && d.duration) || 0;
+  seekDisk.replaceChildren();
+  if (!d || !dur) return;
+  for (const [a, b] of d.ranges || []) {
+    const i = document.createElement('i');
+    i.style.left = Math.max(0, Math.min(100, a / dur * 100)) + '%';
+    i.style.width = Math.max(0, Math.min(100, (b - a) / dur * 100)) + '%';
+    seekDisk.append(i);
+  }
+}
+async function watchDisk() {
+  clearTimeout(diskT);
+  const it = cur();
+  if (!it || !it.stream || it.stream.kind !== 'hls' || it.loadedSrc !== it.stream.play) { paintDisk(null); return; }
+  const level = warmLevel();
+  let d = null;
+  try { d = await api(`/api/stream/${it.stream.id}/cached${level ? '?level=' + level : ''}`); } catch (_) { /* the server will answer next time */ }
+  if (cur() !== it) return;
+  paintDisk(d);
+  diskT = setTimeout(watchDisk, 4000);
+}
+
 async function warmNext(it, level) {
   const nx = state.list[idxOf(it) + 1];
   if (!nx || nx.err) return;
@@ -1554,6 +1584,7 @@ function loadSource(it, src, token, onMeta, play) {
   it.loadedSrc = src.play;
   loaded = null;
   attachSource(src);
+  paintDisk(null); watchDisk();
   sayLoading(it);
   const reveal = fadeIn();
   video.addEventListener('loadeddata', reveal, { once: true });
@@ -1620,6 +1651,7 @@ function attachSource(stream) {
       /* the quality in play is known: the episode is pulled ahead at it; a level hls.js picks by itself later does not start it over */
       const it = cur();
       if (it && it.stream && (warmedFor !== it.stream.id || state.quality !== 'auto')) warmCurrent();
+      watchDisk();
     });
     hls.loadSource(stream.play);
     hls.attachMedia(video);

@@ -442,6 +442,9 @@ svg.ph{ fill:currentColor; stroke:none; }
   background:rgba(255,255,255,.16); overflow:hidden;
   transition:height .15s;
 }
+/* what of the episode is on the disk: stretches, under the player's own buffer */
+.seek__disk{ position:absolute; inset:0; pointer-events:none; }
+.seek__disk i{ position:absolute; top:0; bottom:0; background:rgba(255,255,255,.2); }
 .seek__buf{ position:absolute; inset:0 auto 0 0; width:0; background:rgba(255,255,255,.14); }
 .seek__fill{ position:absolute; inset:0 auto 0 0; width:0; background:#fff; }
 .seek__knob{
