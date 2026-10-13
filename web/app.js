@@ -3464,7 +3464,8 @@ const isPaused = it => !!(it.save && it.save.st === 'paused');
 /* why a save broke off, in words: the server names it by a code; a
    sentence kept from before 1.2.0, or made by this page, stays as it is */
 const SAVE_WHY = { gone: 'save.err.gone', denied: 'save.err.denied', origin: 'save.err.origin', network: 'save.err.network', playlist: 'save.err.playlist', noStream: 'save.err.noStream', noFfmpeg: 'save.err.noFfmpeg', ffmpeg: 'save.err.ffmpeg', disk: 'save.err.disk', access: 'save.err.access', other: 'save.err.other' };
-const saveWhy = why => !why ? '' : typeof why === 'string' ? why : t(SAVE_WHY[why.key] || 'save.err.other', { status: why.status || '', detail: why.detail || why.key || '' });
+/* a save that broke off is worded by its own reasons; one that never opened carries the look's reason, worded as the look words it */
+const saveWhy = why => !why ? '' : typeof why === 'string' ? why : SAVE_WHY[why.key] ? t(SAVE_WHY[why.key], { status: why.status || '', detail: why.detail || '' }) : WHY[why.key] ? whyText(why) : t('save.err.other', { detail: why.detail || why.key || '' });
 const progressWords = sv => sv.unit === 'bytes' ? `${fmtSize(sv.done || 0)} / ${fmtSize(sv.total || 0)}` : `${sv.done || 0} / ${sv.total || 0}`;
 const progressPct = sv => sv.phase === 'assemble' ? 100 : sv.total ? Math.round(sv.done / sv.total * 100) : 0;
 const isFailed = it => !!(it.save && it.save.st === 'failed');
@@ -3950,6 +3951,10 @@ async function submitSave(it, stream = null) {
   } catch (e) {
     it.save = { st: 'failed', error: e.reason || e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
     toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) }));
+    /* the server is told of the save that did not open, so it is taken up again like one that broke off */
+    const note = new URLSearchParams({ series: it.seriesId, episode: String(it.number), dub: (it.dub && it.dub.key) || state.dubKey || '', quality: quality || '', dubName: before.dubName || '', why: (e.reason && e.reason.key) || 'other' });
+    if (e.reason && e.reason.detail) note.set('detail', e.reason.detail); else if (!e.reason) note.set('detail', String(e.message || '').slice(0, 200));
+    await post('/api/save/note?' + note).catch(() => {});
   }
 }
 /* a server job as the row's state */

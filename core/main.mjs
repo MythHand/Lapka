@@ -14,6 +14,7 @@ import { createSession } from './session/index.mjs';
 import fs from 'node:fs';
 import { readConfig, writeConfig, checkHome, homeInside } from './store/config.mjs';
 import { openUrl } from './store/folder.mjs';
+import { appendJournal } from './store/journal.mjs';
 
 export const PORT = Number(process.env.PORT) || 8800;
 export const WEB_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -85,7 +86,13 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   }
   ctx.port = server.port || port;   // the one really listened on, for starting again after an update
   /* saves cut short last time are taken up again, a moment after start, unless switched off */
-  ctx.resumeSaves = () => (ctx.state.setting('autoResume') === 'off' ? Promise.resolve([]) : ctx.saver.resume(ctx.lapka));
+  ctx.resumeSaves = async () => {
+    if (ctx.state.setting('autoResume') === 'off') return [];
+    const out = await ctx.saver.resume(ctx.lapka);
+    /* every round is written down: which saves were taken up and how each one ended */
+    if (out.length) await appendJournal('saves taken up again', out.map(r => `${r.key}: ${r.state}${r.error ? ' (' + [r.error.key, r.error.status, r.error.detail].filter(Boolean).join(' ') + ')' : ''}`)).catch(() => {});
+    return out;
+  };
   /* A save cut short is taken up again while Lapka runs: a moment
      after start, and then whenever a save has failed, with a pause
      that grows while the failures go on (a network that is down stays

@@ -23,6 +23,7 @@ import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
 import { appendJournal } from '../store/journal.mjs';
+import { reasonOf } from '../reasons.mjs';
 import { VERSION, checkUpdate, checkNpm, runUpdate, restartAfterExit, installKind } from '../update.mjs';
 export { VERSION };
 
@@ -110,7 +111,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const q = url.searchParams;
         try {
           return json(res, 200, await lapka.resolve({ seriesId: q.get('series'), number: Number(q.get('episode')), dubKey: q.get('dub') || null, avoid: q.get('avoid') || null }));
-        } catch (e) { return json(res, e.code || 500, { error: e.message }); }
+        } catch (e) { return json(res, e.code || 500, { error: e.message, reason: reasonOf(e) }); }
       }
 
       /* anything that changes the machine wants a header a cross-site form cannot set */
@@ -277,6 +278,20 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return json(res, 202, { ok: true });
       }
       if (state && mutating && p === '/api/saves/forget') { state.clearSave(url.searchParams.get('key') || ''); return json(res, 200, { ok: true }); }
+      /* A save asked for that could not even be opened (the episode's video
+         did not resolve): written down as a save that broke off before its
+         first byte, so that it is taken up again like any other. */
+      if (state && mutating && p === '/api/save/note') {
+        const q = url.searchParams;
+        const series = lapka.series(q.get('series') || '');
+        const episode = Number(q.get('episode'));
+        if (!series || !Number.isFinite(episode)) return json(res, 404, { error: 'unknown series or episode' });
+        const dubKey = q.get('dub') || null, key = `${series.id}/${episode}/${dubKey || ''}`;
+        const why = { key: q.get('why') || 'other' };
+        if (q.get('detail')) why.detail = q.get('detail').slice(0, 200);
+        state.setSave(key, { seriesUrl: series.sourceUrl, seriesId: series.id, episode, dubKey, dubName: q.get('dubName') || null, quality: q.get('quality') || 'auto', phase: 'fetch', done: 0, total: 0, unit: null, error: why, paused: false });
+        return json(res, 200, { key });
+      }
       if (state && mutating && p === '/api/state/setting') {
         const k = url.searchParams.get('k'); if (!/^[a-zA-Z]{1,40}$/.test(k || '')) return json(res, 400, { error: 'bad key' });
         state.setSetting(k, url.searchParams.has('v') ? url.searchParams.get('v') : undefined);

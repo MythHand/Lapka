@@ -358,13 +358,15 @@ export function createSaver({ delivery, cache, library, state = null }) {
           const already = (await library.list()).some(s => s.episodes.some(e => e.seriesId === rec.seriesId && e.episode === rec.episode && e.dubKey === rec.dubKey));
           if (already) { state.clearSave(key); continue; }
           if (!lapka.series(rec.seriesId)) await lapka.look(rec.seriesUrl);
-          const r = await lapka.resolve({ seriesId: rec.seriesId, number: rec.episode, dubKey: rec.dubKey });
+          const r = await lapka.resolve({ seriesId: rec.seriesId, number: rec.episode, dubKey: rec.dubKey || null });
           const st = streamForQuality(r.streams || [], rec.quality);
           const ctx = st && lapka.context(st.id);
           if (!ctx) { state.setSave(key, { error: { key: 'noStream' } }); continue; }
           /* a quality named on an adaptive stream is one of its levels */
           const level = st && !st.quality && /^\d{3,4}p$/.test(String(rec.quality || '')) ? parseInt(rec.quality, 10) : null;
           const job = start(st.id, ctx, { level });
+          /* a record written before its dub was known is named anew by the job: the old name goes */
+          if (job.key !== key) state.clearSave(key);
           await new Promise(res => { const t = setInterval(() => { if (job.state !== 'working' && job.state !== 'queued') { clearInterval(t); res(); } }, 500); });
           out.push({ key, state: job.state, error: job.error });
         } catch (e) { const why = reasonOf(e); state.setSave(key, { error: why }); out.push({ key, state: 'error', error: why }); }

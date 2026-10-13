@@ -470,5 +470,27 @@ describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.equal((await post('/api/state/setting?k=autoResume&v=off')).status, 200);
     assert.equal((await (await get('/api/state')).json()).settings.autoResume, 'off');
     assert.equal((await post('/api/state/setting?k=bad%20key&v=1')).status, 400);
+    await post('/api/state/setting?k=autoResume&v=on');
+  });
+
+  test('a save that did not open is noted by the page, taken up again by the round, and the round is in the journal', async () => {
+    const r = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/links/ep-2')}`)).json();
+    /* the page could not resolve the episode: it says so, with the look's reason */
+    const noted = await (await post(`/api/save/note?series=${r.series.id}&episode=2&quality=auto&why=network`)).json();
+    assert.equal(noted.key, `${r.series.id}/2/`, 'named without a dub, since none was known');
+    const rec = (await (await get('/api/saves')).json()).pending[noted.key];
+    assert.equal(rec.error.key, 'network');
+    assert.equal(rec.paused, false, 'not a pause by hand: the round may take it');
+    assert.equal(rec.seriesUrl, r.series.sourceUrl);
+    assert.equal((await post('/api/save/note?series=nobody&episode=1')).status, 404);
+    /* the round resolves it, names it by its dub and saves it; the nameless record goes */
+    const out = await lapka.ctx.resumeSaves();
+    assert.deepEqual(out.map(x => x.state), ['done']);
+    const pending = (await (await get('/api/saves')).json()).pending;
+    assert.equal(Object.keys(pending).length, 0, 'neither the nameless record nor the job’s stays');
+    const lib = await (await get('/api/library')).json();
+    assert.ok(lib.series.some(s => s.episodes.some(e => e.episode === 2)), 'the file is there');
+    const journal = await fsp.readFile(JOURNAL_FILE, 'utf8');
+    assert.match(journal, /saves taken up again\n  \S+\/2\/\S*: done/, 'the round is written down with each save and how it ended');
   });
 });
