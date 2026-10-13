@@ -1633,10 +1633,28 @@ function attachSource(stream) {
     /* loading ahead: the player itself keeps a minute and a half instead of half a minute; the rest of the episode is the cache's */
     const ahead = prefetchOn() ? { maxBufferLength: 90, maxBufferSize: 90 * 1000 * 1000 } : {};
     hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2), ...ahead });
+    /* A fatal network error is the origin going quiet, not the stream
+       going bad: the same stream is asked to load again, three times,
+       four seconds apart, before another source is tried. The stream
+       stays: what is on the disk of it stays with it, and the quality
+       does not change under the viewer. A broken buffer gets one mend. */
+    const h = hls;
+    let again = 0, mended = false;
+    hls.on(Hls.Events.FRAG_LOADED, () => { again = 0; });
     hls.on(Hls.Events.ERROR, (_, d) => {
       diary('hls', `${d.type}/${d.details}${d.fatal ? ' fatal' : ''}${d.response && d.response.code ? ' code ' + d.response.code : ''}`);
-      if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
       const it = cur();
+      if (d.fatal) {
+        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && again < 3) {
+          again++;
+          diary('hls', `load again in 4 s, ${again} of 3`);
+          if (it && !it.switching) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true });
+          setTimeout(() => { if (hls === h && cur() === it) h.startLoad(); }, 4000);
+          return;
+        }
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !mended) { mended = true; diary('hls', 'media error: mending once'); h.recoverMediaError(); return; }
+        video.dispatchEvent(new Event('error')); return;
+      }
       /* a network error while the picture still moves is nothing to say; stalled, it is said at once */
       if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) { if (video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); else sayStalled(it); }
     });
@@ -4778,7 +4796,7 @@ video.addEventListener('error', () => {
     it.switching = { from, n: it.retries };
     busyOver();
     showNotice(t('notice.switching', { from: from || '?', n: it.retries, total: 3 }), { kind: 'switching', busy: true });
-    playItem(it, true, false);
+    playItem(it, !video.paused, false);   // a pause set by hand stays a pause through the switch
     return;
   }
   it.switching = null;
