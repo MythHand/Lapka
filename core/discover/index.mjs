@@ -10,7 +10,7 @@
    right.
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
-import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, seasonFromUrl, tidyTitle, findFranchise, franchiseFromBlock, findSelf } from './series.mjs';
+import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, seasonFromUrl, tidyTitle, findFranchise, franchiseFromBlock, findSelf, findFacts } from './series.mjs';
 import { numberFromText, numberFromUrl, tailNumberOfUrl, stemOfUrl } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
@@ -56,6 +56,7 @@ export function discover({ html, url, profile = null }) {
      least as many parts, else the season links. */
   const bySeasons = findFranchise(doc, url, ownSeason, title[0]?.value || '');
   const self = findSelf(doc);
+  const facts = findFacts(doc);
   const byBlock = franchiseFromBlock(doc, url, title[0]?.value || '', self);
   const franchise = byBlock.length && byBlock.length >= bySeasons.length ? byBlock : bySeasons;
 
@@ -142,6 +143,7 @@ export function discover({ html, url, profile = null }) {
        franchise is the first season, the one sites leave unnumbered */
     season: ownSeason ?? (franchise === bySeasons ? franchise.find(f => f.self)?.order ?? null : firstSeason(franchise)),
     year: self.year ?? tidy.year, kind_: self.kind,
+    facts,
     franchise,
     episodes,
     players, switches,
@@ -212,6 +214,13 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
   if (report.season !== null && report.season !== undefined) c.series.season = report.season;
   if (report.year) c.series.year = report.year;
   if (report.kind_) c.series.kind = report.kind_;
+  /* the facts the page states, those it does: the other names apart, the rest as one */
+  const f = report.facts || {};
+  const alt = (f.altTitles || []).filter(a => a.toLowerCase() !== String(report.title.value || '').toLowerCase());
+  if (alt.length) c.series.altTitles = alt;
+  const facts = {};
+  for (const k of ['genres', 'studio', 'origin', 'age', 'mpaa', 'episodes', 'episodesTotal']) if (f[k] !== null && f[k] !== undefined && !(Array.isArray(f[k]) && !f[k].length)) facts[k] = f[k];
+  if (Object.keys(facts).length) c.series.facts = facts;
   if (report.franchise && report.franchise.length) {
     c.series.franchise = report.franchise;
     const self = report.franchise.find(f => f.self);

@@ -42,6 +42,12 @@ export function merge(series, contribution) {
 
   if (c.series) {
     fill(series, c.series, ['title', 'cover', 'year', 'season', 'kind']);
+    /* the facts, each on its own; the genres as a union */
+    if (c.series.facts) {
+      series.facts = series.facts || {};
+      fill(series.facts, c.series.facts, ['studio', 'origin', 'age', 'mpaa', 'episodes', 'episodesTotal']);
+      if (Array.isArray(c.series.facts.genres)) { series.facts.genres = series.facts.genres || []; union(series.facts.genres, c.series.facts.genres); }
+    }
     /* the first stage to know the franchise names it; a later one cannot reorder it */
     if (!series.franchise.length && Array.isArray(c.series.franchise) && c.series.franchise.length)
       series.franchise = c.series.franchise.map((f, i) => ({ order: f.order ?? i + 1, title: f.title || '', url: f.url || null, kind: f.kind || null, year: f.year || null, relation: f.relation || null, self: !!f.self }));

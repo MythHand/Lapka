@@ -362,6 +362,73 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
   return [];
 }
 
+/* ── the facts a page states about its series ─────────────────
+   Beyond the name, the cover and the year: the genres, the studio,
+   the source it was adapted from, the age rating (a general one, or
+   the MPAA letters), how many episodes there are, the other names
+   it goes by. Read from the structured data first, then from the
+   labelled fields sites write ("Жанр: …", "Studio: …"). A field the
+   page does not state stays empty: nothing is guessed. */
+const FACT_LABELS = {
+  genres: /^(?:жанры?|genres?|géneros?|generi|gatunki?|türler?)$/i,
+  studio: /^(?:студия|студии|studios?|animation studio)$/i,
+  origin: /^(?:первоисточник|original source|source material|adapted from|основа)$/i,
+  age: /^(?:возраст|возрастной рейтинг|возрастное ограничение|age rating|age|rating)$/i,
+  mpaa: /^(?:рейтинг mpaa|mpaa|mpaa rating)$/i,
+  episodes: /^(?:серий|серии|эпизодов|эпизоды|episodes?|episodios?|épisodes?)$/i,
+  altTitles: /^(?:оригинальное название|другие названия|другое название|альтернативные названия|original title|alternative titles?|also known as|other titles?|romaji|japanese)$/i,
+};
+const MPAA = /^(?:G|PG|PG-13|R|NC-17|R\+|Rx|TV-(?:Y|Y7|G|PG|14|MA))$/i;
+const AGE = /(\d{1,2})\s*\+/;
+const splitList = v => String(v || '').split(/\s*[,;·|/]\s*|\s{2,}/).map(x => x.trim()).filter(x => x && x.length < 60);
+export function findFacts(doc) {
+  const out = { genres: [], studio: null, origin: null, age: null, mpaa: null, episodes: null, episodesTotal: null, altTitles: [] };
+  const takeRating = v => { const t = String(v || '').trim(); if (MPAA.test(t)) out.mpaa = out.mpaa || t.toUpperCase(); else { const m = AGE.exec(t); if (m) out.age = out.age || `${m[1]}+`; } };
+  /* structured data: the site's word for machines */
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    let d; try { d = JSON.parse(s.textContent); } catch { continue; }
+    for (const node of (Array.isArray(d) ? d : [d]).flatMap(x => x && x['@graph'] ? x['@graph'] : [x])) {
+      if (!node || typeof node !== 'object') continue;
+      const type = String(Array.isArray(node['@type']) ? node['@type'][0] : node['@type'] || '');
+      if (!/^(TVSeries|TVSeason|Movie|VideoObject|CreativeWorkSeries|Series)$/i.test(type)) continue;
+      for (const g of [].concat(node.genre || [])) if (typeof g === 'string') out.genres.push(g.trim());
+      for (const a of [].concat(node.alternateName || [])) if (typeof a === 'string') out.altTitles.push(a.trim());
+      if (node.contentRating) takeRating(node.contentRating);
+      const n = Number(node.numberOfEpisodes); if (Number.isFinite(n) && n > 0) out.episodesTotal = n;
+      for (const c of [].concat(node.productionCompany || [])) { const name = typeof c === 'string' ? c : c && c.name; if (name && !out.studio) out.studio = String(name).trim(); }
+    }
+  }
+  /* labelled fields: the smallest element that reads "Label: value", or a label followed by its value */
+  const seen = new Set();
+  for (const el of doc.querySelectorAll('li, div, span, td, tr, dt, dd, p, b, strong')) {
+    const text = clean(el.textContent);
+    if (!text || text.length > 160 || seen.has(text)) continue;
+    const m = /^([^:：]{2,40})\s*[:：]\s*(.+)$/.exec(text);
+    let label, value;
+    if (m) { label = m[1].trim(); value = m[2].trim(); }
+    else if (/^(DT|B|STRONG)$/.test(el.tagName) && el.nextElementSibling) { label = text.replace(/\s*[:：]\s*$/, ''); value = clean(el.nextElementSibling.textContent); }
+    else continue;
+    if (!value) continue;
+    seen.add(text);
+    /* a list written as links has its items in the links; the text alone may run them together */
+    const links = [...(m ? el : el.nextElementSibling).querySelectorAll('a')].map(a => clean(a.textContent)).filter(x => x && x.length < 60);
+    const items = links.length >= 2 ? links : splitList(value);
+    if (FACT_LABELS.genres.test(label)) { for (const g of items) if (!out.genres.includes(g)) out.genres.push(g); }
+    else if (FACT_LABELS.studio.test(label)) out.studio = out.studio || items.join(', ');
+    else if (FACT_LABELS.origin.test(label)) out.origin = out.origin || value.slice(0, 60);
+    else if (FACT_LABELS.mpaa.test(label)) { const v = value.split(/\s/)[0]; if (MPAA.test(v)) out.mpaa = out.mpaa || v.toUpperCase(); }
+    else if (FACT_LABELS.age.test(label)) takeRating(value);
+    else if (FACT_LABELS.episodes.test(label)) {
+      const e = /(\d{1,4})(?:\s*(?:из|of|\/)\s*(\d{1,4}|\?+))?/.exec(value);
+      if (e) { if (e[2] && /^\d+$/.test(e[2])) { out.episodes = out.episodes ?? Number(e[1]); out.episodesTotal = out.episodesTotal ?? Number(e[2]); } else out.episodesTotal = out.episodesTotal ?? Number(e[1]); }
+    }
+    else if (FACT_LABELS.altTitles.test(label)) { for (const a of items) if (!out.altTitles.includes(a)) out.altTitles.push(a); }
+  }
+  out.genres = [...new Set(out.genres.filter(Boolean))].slice(0, 12);
+  out.altTitles = [...new Set(out.altTitles.filter(Boolean))].slice(0, 6);
+  return out;
+}
+
 /* What the page says of itself: in schema.org data (JSON-LD) the year
    it came out and what it is, a series or a film; failing that, the
    kind from the window's title and the year from a labelled field

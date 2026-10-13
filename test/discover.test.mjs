@@ -351,6 +351,42 @@ describe('episodes in the page\'s data', () => {
   });
 });
 
+/* The facts a page states of its series: in structured data and in
+   labelled fields, in whatever tags; what it does not state stays empty. */
+const FACTS = `<html><head><title>Рай - Site</title>
+<script type="application/ld+json">{"@type":"TVSeries","name":"Рай","alternateName":["Rai","楽園"],"genre":["Комедия","Приключения"],"contentRating":"16+","numberOfEpisodes":24,"productionCompany":{"@type":"Organization","name":"Studio Zero"}}</script>
+</head><body><h1>Рай</h1>
+<ul class="info"><li><b>Жанр:</b> Комедия, Сёнен</li><li>Первоисточник: Манга</li><li>Рейтинг MPAA: PG-13</li><li>Серий: 12 из 24</li><li>Другие названия: Rai, Paradise</li><li>Год выхода: 2024</li></ul>
+<dl><dt>Студия</dt><dd>Studio Zero</dd><dt>Возраст</dt><dd>16+</dd></dl>
+<div class="eps"><a href="/rai/1">1 серия</a> <a href="/rai/2">2 серия</a> <a href="/rai/3">3 серия</a></div>
+</body></html>`;
+describe('the facts a page states', () => {
+  const r = discover({ html: FACTS, url: 'https://site.example/rai' });
+  test('genres as a union, the studio, the source, both ratings, the episodes out of the planned, the other names', () => {
+    assert.deepEqual(r.facts.genres, ['Комедия', 'Приключения', 'Сёнен']);
+    assert.equal(r.facts.studio, 'Studio Zero');
+    assert.equal(r.facts.origin, 'Манга');
+    assert.equal(r.facts.age, '16+');
+    assert.equal(r.facts.mpaa, 'PG-13');
+    assert.deepEqual([r.facts.episodes, r.facts.episodesTotal], [12, 24]);
+    assert.deepEqual(r.facts.altTitles, ['Rai', '楽園', 'Paradise']);
+  });
+  test('into the catalog: the facts stated, the other names apart from the name; a page that states nothing gives nothing', () => {
+    const c = toContribution(r);
+    assert.deepEqual(c.series.facts, { genres: ['Комедия', 'Приключения', 'Сёнен'], studio: 'Studio Zero', origin: 'Манга', age: '16+', mpaa: 'PG-13', episodes: 12, episodesTotal: 24 });
+    assert.deepEqual(c.series.altTitles, ['Rai', '楽園', 'Paradise']);
+    const s = createSeries({ sourceUrl: 'https://site.example/rai' }); merge(s, c);
+    assert.deepEqual(s.facts.genres, ['Комедия', 'Приключения', 'Сёнен']);
+    assert.equal(s.facts.mpaa, 'PG-13');
+    merge(s, { origin: 'test', series: { facts: { genres: ['Драма'], studio: 'Other' } }, episodes: [] });
+    assert.deepEqual(s.facts.genres, ['Комедия', 'Приключения', 'Сёнен', 'Драма'], 'genres add up');
+    assert.equal(s.facts.studio, 'Studio Zero', 'the first word stands');
+    const bare = toContribution(discover({ html: '<html><head><title>Х</title></head><body><h1>Х</h1><a href="/x/1">1 серия</a><a href="/x/2">2 серия</a></body></html>', url: 'https://site.example/x' }));
+    assert.equal(bare.series.facts, undefined);
+    assert.equal(bare.series.altTitles, undefined);
+  });
+});
+
 /* Built to fool the heuristics: the "related" list is longer and more
    regular than the real episode list. A profile says which is which. */
 const TRICKY = `<html><head><title>Сериал</title></head><body><h1>Сериал</h1>

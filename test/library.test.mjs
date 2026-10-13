@@ -216,6 +216,11 @@ describe('the links pasted', () => {
     assert.equal(img.status, 200);
     assert.match(img.headers.get('content-type'), /image\/jpeg/);
     assert.ok((await img.arrayBuffer()).byteLength > 100);
+    /* the facts the page stated and its other names ride along, for a fuller row one day */
+    await post('/api/history?' + new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', episodes: '4', facts: JSON.stringify({ genres: ['Комедия'], mpaa: 'PG-13', episodesTotal: 12 }), altTitles: JSON.stringify(['Select', 'セレクト']) }));
+    const told = (await (await get('/api/history')).json()).history.at(-1);
+    assert.deepEqual(told.facts, { genres: ['Комедия'], mpaa: 'PG-13', episodesTotal: 12 });
+    assert.deepEqual(told.altTitles, ['Select', 'セレクト']);
     /* pasted again: one entry, moved to the end */
     await post('/api/history?' + new URLSearchParams({ url: site.base + '/s/links/ep-1', series: 'def456', title: 'Сериал Ссылки', episodes: '3' }));
     await post('/api/history?' + q);

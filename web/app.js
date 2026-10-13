@@ -1040,6 +1040,9 @@ function rememberLink(url, series) {
   if (series.season) q.set('season', String(series.season));
   /* the parts the link opened: where watching stops is looked for across them */
   q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null }))));
+  /* the facts the page stated of the series and its other names, for a fuller row one day */
+  if (series.facts && Object.keys(series.facts).length) q.set('facts', JSON.stringify(series.facts));
+  if (series.altTitles && series.altTitles.length) q.set('altTitles', JSON.stringify(series.altTitles.slice(0, 6)));
   post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
 }
 let histList = [];

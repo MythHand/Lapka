@@ -21,6 +21,7 @@ export function toSnapshot(series) {
     year: series.year,
     season: series.season,
     kind: series.kind,
+    facts: { ...(series.facts || {}) },
     franchise: series.franchise.map(f => ({ ...f })),
     updatedAt: series.updatedAt,
     provenance: series.provenance.map(p => ({ ...p, added: { ...p.added } })),
@@ -39,7 +40,7 @@ export function toSnapshot(series) {
 
 export function fromSnapshot(snap) {
   if (!snap || snap.v !== SNAPSHOT_V) throw new Error(`unknown snapshot version ${snap && snap.v}`);
-  const series = createSeries({ sourceUrl: snap.sourceUrl, title: snap.title, altTitles: snap.altTitles, cover: snap.cover, year: snap.year, season: snap.season ?? null, kind: snap.kind ?? null });
+  const series = createSeries({ sourceUrl: snap.sourceUrl, title: snap.title, altTitles: snap.altTitles, cover: snap.cover, year: snap.year, season: snap.season ?? null, kind: snap.kind ?? null, facts: snap.facts || {} });
   series.franchise = (snap.franchise || []).map(f => ({ ...f }));
   series.updatedAt = snap.updatedAt || series.updatedAt;
   series.provenance = (snap.provenance || []).map(p => ({ ...p }));

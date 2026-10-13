@@ -247,7 +247,9 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
           } catch { /* no cover: the row stands without a picture */ }
         }
         let parts = null; try { parts = JSON.parse(q.get('parts') || 'null'); } catch { /* no parts named */ }
-        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
+        let facts = null; try { facts = JSON.parse(q.get('facts') || 'null'); } catch { /* no facts named */ }
+        let altTitles = null; try { altTitles = JSON.parse(q.get('altTitles') || 'null'); } catch { /* no names named */ }
+        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, facts, altTitles, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
         return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
       }
       if (state && store && mutating && p === '/api/history/forget') {
