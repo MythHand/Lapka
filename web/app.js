@@ -3279,7 +3279,9 @@ function paintMeta() {
     if (it.dubs && it.dubs.length === 1) rest.push(escapeHtml(it.dubs[0].name));
     else if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
     if (it.stream) rest.push(`<span class="route">${it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
-    if (it.source) rest.push(`<span class="route route--off">${it.source.player}</span>`);
+    /* the sources of the dub in play, counted as the dub menu counts them */
+    const dubOf = it.dubs && it.dub ? it.dubs.find(d => d.key === it.dub.key) : null;
+    if (dubOf) rest.push(`<span class="route route--off">${dubOf.alive ? t('audio.sources', { n: dubOf.alive }) : dubOf.sources ? t('audio.dead') : ''}</span>`);
     box.innerHTML = fixed + rest.map(b => `<span>${b}</span>`).join('');
   }
 }
