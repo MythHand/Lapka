@@ -108,6 +108,14 @@ export function createSub({ url, lang = null, label = '', format = null, headers
 
 /* audio: for an HLS that carries several audio renditions (one per
    dub), which one this dub is: its index among them and its name */
+/* What a stream is, apart from where it is: its kind, its quality, its
+   sound; a subtitle track its language and name. Some players sign their
+   addresses for hours, so the address of one and the same stream changes
+   from one reading to the next; this is what stays. */
+export const streamTag = stream => stream.kind === 'sub'
+  ? `sub|${stream.lang || ''}|${stream.label || ''}|${stream.format || ''}`
+  : `${stream.kind}|${stream.quality || 'adaptive'}|${stream.audio ? stream.audio.index : ''}`;
+
 export function createStream({ kind, url, quality = null, headers = {}, expiresAt = null, audio = null }) {
   if (!kind || !url) throw new Error('a stream needs a kind and a url');
   return { kind, url, quality, headers: { ...headers }, expiresAt, audio: audio ? { index: Number(audio.index) || 0, name: audio.name || '' } : null };

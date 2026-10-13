@@ -42,7 +42,7 @@ export function createWarmer({ delivery, cache }) {
       const c = cacheOf();
       for (const u of pieces) {
         if (gone) return;
-        if (!(await c.has(entry.id, delivery.nameFor(u)))) await delivery.piece(entry, u);
+        if (!(await c.has(entry.id, delivery.nameFor(entry, u)))) await delivery.piece(entry, u);
         if (gone) return;
         job.done++;
       }

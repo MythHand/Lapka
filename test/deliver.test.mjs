@@ -17,6 +17,8 @@ import { build, haveFfmpeg } from './fixtures.mjs';
 import { startSite } from './site/serve.mjs';
 import { start } from '../core/main.mjs';
 import { openStore, HOT_MS } from '../core/store/index.mjs';
+import { createDelivery } from '../core/deliver/index.mjs';
+import http from 'node:http';
 
 const ffmpeg = await haveFfmpeg();
 let site, lapka, home;
@@ -101,6 +103,45 @@ describe('delivery', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     const js = await get('/vendor/hls.min.js');
     assert.equal(js.status, 200);
     assert.ok((await js.text()).length > 100000);
+  });
+});
+
+/* ── the same episode at an address signed anew ── */
+describe('a stream under a changing address', () => {
+  test('the episode keeps its id and its pieces when its address is signed anew; another quality is another stream', async () => {
+    /* an origin that serves the same clip under any signature in the path */
+    const srv = http.createServer((req, res) => {
+      const m = /^\/(\w+)\/(index\.m3u8|seg-(\d)\.ts)$/.exec(req.url);
+      if (!m) { res.writeHead(404); return res.end(); }
+      if (m[2] === 'index.m3u8') { res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl' }); return res.end('#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\nseg-1.ts\n#EXTINF:6,\nseg-2.ts\n#EXT-X-ENDLIST\n'); }
+      res.writeHead(200, { 'content-type': 'video/mp2t' }); res.end(`bytes of ${m[1]} ${m[3]}`);
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    const kept = new Map();
+    const cache = { has: async (id, n) => kept.has(`${id}/${n}`), read: async (id, n) => kept.get(`${id}/${n}`), write: async (id, n, b) => { kept.set(`${id}/${n}`, Buffer.from(b)); }, touch() {} };
+    const delivery = createDelivery({ session: { ua: 'test' }, cache });
+    const meta = { seriesId: 's1', episode: 3, dub: 'anidub', sourceId: 'src1' };
+    const firstSeg = async id => { const pl = await delivery.playlist(delivery.get(id)); return decodeURIComponent(/u=(\S+)/.exec(pl)[1]); };
+    try {
+      const id = delivery.register({ kind: 'hls', url: `${base}/sigA/index.m3u8`, quality: '720p', headers: {} }, meta);
+      const seg = await firstSeg(id);
+      assert.equal((await delivery.piece(delivery.get(id), seg)).hit, false);
+      assert.equal((await delivery.piece(delivery.get(id), seg)).hit, true);
+      assert.equal(delivery.nameFor(delivery.get(id), seg), 'main-0.ts', 'named by its place, not its address');
+      /* read again, signed anew: the same episode, another address */
+      const again = delivery.register({ kind: 'hls', url: `${base}/sigB/index.m3u8`, quality: '720p', headers: {} }, meta);
+      assert.equal(again, id, 'the id is the episode’s, not the address’s');
+      assert.equal(delivery.get(id).stream.url, `${base}/sigB/index.m3u8`, 'the fresh address is the one asked from now on');
+      const seg2 = await firstSeg(id);
+      assert.notEqual(seg2, seg);
+      const got = await delivery.piece(delivery.get(id), seg2);
+      assert.equal(got.hit, true, 'the piece is found by its place');
+      assert.equal(String(got.bytes), 'bytes of sigA 1', 'what was kept under the first address');
+      /* another quality of the same source is another stream; the same quality twice is told apart by order */
+      assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigB/index.m3u8`, quality: '480p', headers: {} }, meta), id);
+      assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigC/index.m3u8`, quality: '720p', headers: {} }, { ...meta, nth: 1 }), id);
+    } finally { srv.close(); }
   });
 });
 

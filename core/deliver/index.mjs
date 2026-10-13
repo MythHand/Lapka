@@ -16,26 +16,64 @@
    ═══════════════════════════════════════════════════════════ */
 import { createHash } from 'node:crypto';
 import { originReason } from '../reasons.mjs';
+import { streamTag } from '../catalog/model.mjs';
 
 const hash = s => createHash('sha1').update(s).digest('hex').slice(0, 16);
 const ATTR_URI = /URI="([^"]+)"/g;
 
 export function createDelivery({ session, cache }) {
-  const streams = new Map();          // id → { id, stream, allowed:Set, meta }
+  const streams = new Map();          // id → { id, stream, allowed:Set, meta, names:Map, tags:Map }
   /* the cache is asked for each time: the Lapka folder can change while running */
   const cacheOf = () => (typeof cache === 'function' ? cache() : cache);
 
+  /* the id is made of what stays when a player signs its address anew; the cache folder named by it stays with it */
   function register(stream, meta = {}) {
-    const id = hash(`${meta.sourceId || ''}|${stream.url}`);
-    if (!streams.has(id)) streams.set(id, { id, stream, meta, allowed: new Set([stream.url]) });
+    const id = meta.seriesId
+      ? hash(`${meta.seriesId}|${meta.episode}|${meta.dub}|${meta.sourceId || ''}|${streamTag(stream)}|${meta.nth || 0}`)
+      : hash(`${meta.sourceId || ''}|${stream.url}`);
+    const known = streams.get(id);
+    if (!known) streams.set(id, { id, stream, meta, allowed: new Set([stream.url]), names: new Map(), tags: new Map() });
+    else if (known.stream.url !== stream.url) { known.stream = stream; known.allowed.add(stream.url); }   // signed anew: the same episode at a fresh address
     return id;
   }
   const get = id => streams.get(id) || null;
-  const nameFor = url => { const u = new URL(url); return hash(u.host + u.pathname) + (u.pathname.match(/\.[a-z0-9]+$/i)?.[0] || ''); };
+
+  /* The name a piece is kept under in the cache: its place in its
+     playlist, so that the same piece at a fresh address is found; an
+     address never seen in a playlist is named by its path. */
+  const ext = url => { try { return new URL(url).pathname.match(/\.[a-z0-9]+$/i)?.[0] || ''; } catch { return ''; } };
+  const nameFor = (entry, url) => entry.names.get(url) || (() => { const u = new URL(url); return hash(u.host + u.pathname) + ext(url); })();
+  const playlistTag = (entry, url) => entry.tags.get(url) || 'main';
+  /* a playlist read: each address in it is named by its place, each variant and rendition tagged, before anything is asked for */
+  function learn(entry, text, base) {
+    const tag = playlistTag(entry, base);
+    const lines = String(text).split(/\r?\n/);
+    const abs = raw => { try { return new URL(raw.trim(), base).toString(); } catch { return null; } };
+    let seg = 0, key = 0, map = 0, media = 0, variant = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.trim()) continue;
+      if (line.startsWith('#')) {
+        const uri = /URI="([^"]+)"/.exec(line)?.[1];
+        if (!uri) continue;
+        const a = abs(uri); if (!a) continue;
+        if (/^#EXT-X-(KEY|SESSION-KEY)/.test(line)) entry.names.set(a, `${tag}-k${key++}${ext(a) || '.key'}`);
+        else if (/^#EXT-X-MAP/.test(line)) entry.names.set(a, `${tag}-map${map++}${ext(a)}`);
+        else if (/^#EXT-X-MEDIA/.test(line)) entry.tags.set(a, `${/TYPE=AUDIO/.test(line) ? 'a' : 'r'}${media++}`);
+        continue;
+      }
+      const a = abs(line); if (!a) continue;
+      const prev = lines.slice(0, i).reverse().find(l => l.startsWith('#EXT'));
+      if (prev && /^#EXT-X-STREAM-INF/.test(prev)) { const h = /RESOLUTION=\d+x(\d+)/.exec(prev)?.[1]; entry.tags.set(a, `v${h || variant}`); variant++; }
+      else entry.names.set(a, `${tag}-${seg++}${ext(a)}`);
+    }
+    return tag;
+  }
 
   /* Every address in a playlist, absolute, rewritten to us; the
      originals are remembered as the only ones we will fetch. */
   function rewrite(entry, text, base) {
+    learn(entry, text, base);
     const lines = String(text).split(/\r?\n/);
     const out = [];
     const toUs = (raw, kind) => {
@@ -91,8 +129,9 @@ export function createDelivery({ session, cache }) {
     const res = await fetchOrigin(entry, url);
     if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
     const text = await res.text();
-    const body = rewrite(entry, text, res.url || url);
-    cacheOf().write(entry.id, nameFor(url), text).catch(() => {});
+    const base = res.url || url;
+    const body = rewrite(entry, text, base);
+    cacheOf().write(entry.id, `${playlistTag(entry, base)}.m3u8`, text).catch(() => {});
     return body;
   }
 
@@ -103,7 +142,7 @@ export function createDelivery({ session, cache }) {
   const inFlight = new Map();         // id/name → the fetch under way
   async function piece(entry, url) {
     if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
-    const name = nameFor(url);
+    const name = nameFor(entry, url);
     const cache = cacheOf();
     if (await cache.has(entry.id, name)) { cache.touch(entry.id); return { bytes: await cache.read(entry.id, name), hit: true }; }
     const key = `${entry.id}/${name}`;
@@ -126,7 +165,7 @@ export function createDelivery({ session, cache }) {
     return res;
   }
 
-  return { register, get, playlist, text, piece, file, rewrite, streams, fetchOrigin, nameFor };
+  return { register, get, playlist, text, piece, file, rewrite, learn, streams, fetchOrigin, nameFor };
 }
 
 export const contentType = url => /\.m3u8(\?|$)/i.test(url) ? 'application/vnd.apple.mpegurl'

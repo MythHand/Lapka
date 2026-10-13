@@ -35,6 +35,7 @@ export async function segmentsOf(delivery, entry, url, depth = 0, level = null) 
   if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status} for the playlist`), { reason: originReason(res.status) });
   const text = await res.text();
   const base = res.url || url;
+  delivery.learn(entry, text, base);     // every piece named by its place, every variant tagged, as the player's path names them
   const lines = text.split(/\r?\n/);
   if (lines.some(l => l.startsWith('#EXT-X-STREAM-INF'))) {
     if (depth > 2) throw Object.assign(new Error('playlist points at playlists all the way down'), { reason: { key: 'playlist' } });
@@ -68,14 +69,14 @@ export async function segmentsOf(delivery, entry, url, depth = 0, level = null) 
       if (u) {
         const abs = new URL(u, base).toString();
         entry.allowed.add(abs); keys.push(abs);
-        out.push(line.replace(/URI="[^"]+"/, `URI="${delivery.nameFor(abs)}"`));
+        out.push(line.replace(/URI="[^"]+"/, `URI="${delivery.nameFor(entry, abs)}"`));
         continue;
       }
     }
     if (line.trim() && !line.startsWith('#')) {
       const abs = new URL(line.trim(), base).toString();
       entry.allowed.add(abs); segments.push(abs);
-      out.push(delivery.nameFor(abs));
+      out.push(delivery.nameFor(entry, abs));
       continue;
     }
     out.push(line);

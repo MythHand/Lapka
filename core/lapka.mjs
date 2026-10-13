@@ -16,6 +16,7 @@ import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
 import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS, dubKey } from './catalog/index.mjs';
 import { refuse, reasonOf } from './reasons.mjs';
+import { streamTag } from './catalog/model.mjs';
 
 export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), sites: await loadSites(), profiles: await loadProfiles(), ...opts });
@@ -120,15 +121,18 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   function registerStreams(series) {
     if (!delivery) return;
     for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) {
+      /* two streams of one source alike in kind and quality are told apart by their order */
+      const alike = new Map();
       for (const st of s.streams) {
         if (st.id) continue;
-        st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+        const tag = streamTag(st), nth = alike.get(tag) || 0; alike.set(tag, nth + 1);
+        st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key, nth });
         st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
       }
       /* a subtitle track gets an address of ours the same way: the browser takes a text track from its own origin only */
       for (const sb of s.subs || []) {
         if (sb.id) continue;
-        sb.id = delivery.register({ kind: 'sub', url: sb.url, headers: sb.headers, format: sb.format }, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+        sb.id = delivery.register({ kind: 'sub', url: sb.url, headers: sb.headers, format: sb.format, lang: sb.lang, label: sb.label }, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
         sb.play = `/api/stream/${sb.id}.vtt`;
       }
     }
