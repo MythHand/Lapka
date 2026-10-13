@@ -212,6 +212,44 @@ svg.ph{ fill:currentColor; stroke:none; }
 .stage.cursor-hidden{ cursor:none; }
 
 /* soft gradient at the top, mirrors the bottom one but lighter */
+/* ── what the page said of the series, while paused ──────────
+   Between the title chip and the deck, the width of the frame. The veil
+   is Lapka's dark over the frame with a blur, full on the left where the
+   text stands and thinning to nothing on the right, so the frame shows
+   through there; it comes in as a circle growing from the left edge. */
+.pauseinfo{
+  position:absolute; left:0; right:0; top:var(--pause-top, 96px); bottom:var(--pause-bottom, 126px);
+  z-index:4; pointer-events:none; opacity:0;
+  clip-path:circle(0% at 0 50%);
+  transition:clip-path .6s cubic-bezier(.2,.8,.3,1), opacity .2s;
+}
+.pauseinfo.show{ opacity:1; clip-path:circle(170% at 0 50%); }
+.pauseinfo__veil{
+  position:absolute; inset:0;
+  background:linear-gradient(to right, rgba(16,17,20,.9) 0%, rgba(16,17,20,.86) 56%, rgba(16,17,20,.35) 80%, rgba(16,17,20,0) 100%);
+  backdrop-filter:blur(24px) saturate(1.2); -webkit-backdrop-filter:blur(24px) saturate(1.2);
+  -webkit-mask-image:linear-gradient(to right, #000 0%, #000 60%, rgba(0,0,0,.3) 82%, transparent 100%);
+  mask-image:linear-gradient(to right, #000 0%, #000 60%, rgba(0,0,0,.3) 82%, transparent 100%);
+}
+.pauseinfo__box{
+  position:absolute; left:36px; top:50%; transform:translateY(-50%);
+  width:min(56%, 860px); max-height:100%;
+  display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 28px; align-items:start;
+}
+.pauseinfo__cover{ width:clamp(96px, 20vh, 168px); aspect-ratio:2/3; object-fit:cover; border-radius:10px; background:rgba(255,255,255,.06); }
+.pauseinfo__cover:not([src]){ display:none; }
+.pauseinfo__text{ min-width:0; }
+.pauseinfo__title{ font-size:calc(24px + var(--fs)); font-weight:600; line-height:1.2; color:var(--tx-1); }
+.pauseinfo__alt{ margin-top:4px; font-size:calc(13px + var(--fs)); line-height:1.4; color:var(--tx-2); }
+.pauseinfo__alt:empty{ display:none; }
+.pauseinfo__cols{
+  margin-top:16px; display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:7px 28px;
+  font-family:var(--mono); font-size:calc(12px + var(--fs)); line-height:1.45; letter-spacing:0; font-variant-ligatures:none;
+}
+.pauseinfo__row{ display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 12px; }
+.pauseinfo__k{ color:var(--tx-3); white-space:nowrap; }
+.pauseinfo__v{ color:var(--tx-2); }
+
 .scrim{
   position:absolute; top:0; left:0; right:0; height:150px;
   background:linear-gradient(to bottom, rgba(0,0,0,.32), rgba(0,0,0,0));

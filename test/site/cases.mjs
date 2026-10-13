@@ -37,6 +37,8 @@ export const CASES = [
     players: ['alpha', 'beta'],
     dubs: { alpha: ['AniLibria', 'Dream Cast'], beta: ['AniLibria', 'AniDub', 'JAM'] },
     layout: { episodes: 'select', dubs: 'per-player', player: 'iframe-switch' },
+    /* the facts the page states of itself, in structured data and in labelled fields */
+    facts: { altTitles: ['Select', 'セレクト'], genres: ['Комедия', 'Приключения'], studio: 'Студия Селект', origin: 'Манга', age: '16+', mpaa: 'PG-13', episodesTotal: 12 },
   },
   {
     id: 'subs',

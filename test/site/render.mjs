@@ -43,14 +43,17 @@ const seasonsNav = (c, season) => c.layout.seasons
   : '';
 const seasonTitle = (c, season) => c.layout.seasons && season > 1 ? `${c.title} ${season} сезон` : c.title;
 
+/* the facts a case states of itself: structured data in the head, labelled fields in the body */
+const factsHead = c => c.facts ? `<script type="application/ld+json">${JSON.stringify({ '@type': 'TVSeries', name: c.title, alternateName: c.facts.altTitles || [], genre: c.facts.genres || [], contentRating: c.facts.age || undefined, numberOfEpisodes: c.facts.episodesTotal || undefined })}</script>` : '';
+const factsBody = c => c.facts ? `<ul class="facts">${[['Студия', c.facts.studio], ['Первоисточник', c.facts.origin], ['Рейтинг MPAA', c.facts.mpaa], ['Серий', c.facts.episodesTotal ? `${c.episodes} из ${c.facts.episodesTotal}` : null]].filter(([, v]) => v).map(([k, v]) => `<li>${k}: ${esc(v)}</li>`).join('')}</ul>` : '';
 export function renderSeries(c, season = 1) {
-  const head = `<meta property="og:image" content="/media/cover-${c.id}.jpg">`;
+  const head = `<meta property="og:image" content="/media/cover-${c.id}.jpg">` + factsHead(c);
   const prefix = season > 1 ? `/s/${c.id}/season-${season}` : `/s/${c.id}`;
   const title = seasonTitle(c, season);
   const list = c.layout.episodes === 'select'
     ? `<select id="episodes" onchange="location.href=this.value">\n${episodes(c).map(n => `<option value="${prefix}/ep-${n}">${n} серия</option>`).join('\n')}\n</select>`
     : `<ul class="episodes">\n${episodes(c).map(n => `<li><a href="${prefix}/ep-${n}">${n} серия</a></li>`).join('\n')}\n</ul>`;
-  return page({ title, head, body: `<h1>${esc(title)}</h1>\n<p class="meta">Год: 2024 · Серий: ${c.episodes}</p>\n${seasonsNav(c, season)}\n<h2>Серии</h2>\n${list}` });
+  return page({ title, head, body: `<h1>${esc(title)}</h1>\n<p class="meta">Год: 2024 · Серий: ${c.episodes}</p>\n${factsBody(c)}\n${seasonsNav(c, season)}\n<h2>Серии</h2>\n${list}` });
 }
 
 export function renderEpisode(c, ep, season = 1) {

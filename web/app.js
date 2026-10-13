@@ -319,6 +319,8 @@ const SETTINGS = [
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'autoSkip', def: 'off', label: 'set.autoSkip',
     opts: [['on', 'common.on'], ['off', 'common.off']] },
+  { key: 'pauseInfo', def: 'on', label: 'set.pauseInfo',
+    opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'font', def: 'fixel', label: 'set.font',
     opts: [['fixel', 'set.font.fixel'], ['inter', 'set.font.inter']] },
   { key: 'histLinks', def: 'on', label: 'set.histLinks',
@@ -1531,6 +1533,7 @@ async function playItem(it, autoplay = true, glide = true) {
   skipNow = null; skipEl.hidden = true;
   if (!it.switching) hideNotice();   // the notice of a source being switched stays until the picture is back
   endCard.classList.remove('show');
+  hidePauseInfo();
   emptyEl.classList.add('hide');
   stage.classList.remove('is-empty');
 
@@ -1721,6 +1724,7 @@ function prev() {
 }
 function endOfQueue() {
   video.pause();
+  hidePauseInfo();
   paintEndMeta();
   endCard.classList.add('show');
   autoSwitch = false;        // there will be no more transitions
@@ -2295,6 +2299,7 @@ const narrowWindow = matchMedia('(max-width:820px)');
 function queueDocked() { return state.set.queueMode === 'docked' && !narrowWindow.matches; }
 narrowWindow.addEventListener('change', () => applySettings());
 function applySettings() {
+  paintPauseInfo();
   workspace.classList.toggle('queue-docked', queueDocked());
   queueList.classList.toggle('no-drag', state.set.drag === 'off');
   for (const li of queueList.children) li.draggable = state.set.drag === 'on';
@@ -4655,6 +4660,7 @@ function paintPlay() {
 }
 
 video.addEventListener('play', () => {
+  hidePauseInfo();
   paintPlay(); pipPoke(); pipGhost.classList.add('playing');
   pulse(true); syncStatus(); markPlaying(true);
   deckShow(false);
@@ -4667,7 +4673,39 @@ video.addEventListener('pause', () => {
   if (video.ended) return;
   if (loaded) markPos(loaded, video.currentTime);
   deckShow(true);
+  setTimeout(paintPauseInfo, 400);   // a moment after: a pause that turns into a seek or a switch shows nothing
 });
+
+/* ── what the page said of the series, while paused ──────────
+   The facts of the part the paused episode belongs to: the name and its
+   other names, then the rows the page gave, in two columns so nothing
+   scrolls; a row without a value is not drawn. Shown for as long as the
+   pause lasts, when the setting is on; a play, a switch, the end card
+   take it away. */
+const pauseInfo = $('#pauseInfo'), pauseCover = $('#pauseCover'), pauseTitle = $('#pauseTitle'), pauseAlt = $('#pauseAlt'), pauseCols = $('#pauseCols');
+function paintPauseInfo() {
+  const it = cur();
+  const due = state.set.pauseInfo !== 'off' && it && it.loadedSrc && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
+  if (!due) { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); return; }
+  const season = seasonOf(it);
+  const s = season ? season.series : state.series;
+  if (!s) { pauseInfo.classList.remove('show'); return; }
+  const f = s.facts || {};
+  if (s.cover) pauseCover.src = s.cover; else pauseCover.removeAttribute('src');
+  pauseTitle.textContent = s.title || '';
+  pauseAlt.textContent = (s.altTitles || []).filter(a => a && a.toLowerCase() !== String(s.title || '').toLowerCase()).join(' · ');
+  const episodes = f.episodesTotal ? (f.episodes && f.episodes < f.episodesTotal ? `${f.episodes} / ${f.episodesTotal}` : String(f.episodesTotal)) : s.episodes && s.episodes.length ? String(s.episodes.length) : null;
+  const rows = [
+    ['year', s.year], ['kind', kindLabel(s)], ['episodes', episodes],
+    ['dubs', it.dubs && it.dubs.length ? String(it.dubs.length) : null],
+    ['genres', (f.genres || []).join(', ')], ['studio', f.studio], ['origin', f.origin],
+    ['age', [f.age, f.mpaa].filter(Boolean).join(' · ')],
+  ].filter(([, v]) => v);
+  pauseCols.replaceChildren(...rows.map(([k, v]) => { const r = document.createElement('div'); r.className = 'pauseinfo__row'; const a = document.createElement('span'); a.className = 'pauseinfo__k'; a.textContent = t('info.' + k); const b = document.createElement('span'); b.className = 'pauseinfo__v'; b.textContent = String(v); r.append(a, b); return r; }));
+  pauseInfo.setAttribute('aria-hidden', 'false');
+  pauseInfo.classList.add('show');
+}
+const hidePauseInfo = () => { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); };
 let posT = 0;
 /* ── skipping the opening or the ending ─────────────────────────
    While the time is inside a mark the button is there; press it and

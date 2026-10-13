@@ -33,6 +33,21 @@
           </div>
         </div>
 
+        <!-- What the page said of the series, shown while paused: over the
+             frame between the title and the deck, a veil rising from the left
+             that thins to the right so the frame shows through. -->
+        <div class="pauseinfo hide-in-pip" id="pauseInfo" aria-hidden="true">
+          <div class="pauseinfo__veil"></div>
+          <div class="pauseinfo__box">
+            <img class="pauseinfo__cover" id="pauseCover" alt="">
+            <div class="pauseinfo__text">
+              <div class="pauseinfo__title" id="pauseTitle"></div>
+              <div class="pauseinfo__alt" id="pauseAlt"></div>
+              <div class="pauseinfo__cols" id="pauseCols"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- soft gradient at the top, mirrors the one at the bottom -->
         <div class="scrim" id="scrim" aria-hidden="true"></div>
 
