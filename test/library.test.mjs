@@ -442,6 +442,34 @@ describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
   });
 });
 
+/* ── the episode pulled into the cache ahead of the player ── */
+describe('warming the cache', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  test('an episode is pulled in whole when asked, one at a time, only with the setting on; MP4 is left to the browser', async () => {
+    const r = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/select/ep-2')}`)).json();
+    const al = r.series.episodes.find(e => e.number === 2).dubs.find(d => d.key === 'anilibria');
+    const hls = al.sources.find(s => s.player === 'embed/beta').streams[0];
+    const mp4 = al.sources.find(s => s.player === 'embed/alpha').streams[0];
+    assert.equal((await post(`/api/warm?stream=${hls.id}`)).status, 403, 'off by default');
+    await post('/api/state/setting?k=prefetch&v=on');
+    assert.equal((await post('/api/warm?stream=nope')).status, 404);
+    assert.equal((await (await post(`/api/warm?stream=${mp4.id}`)).json()).job.state, 'skipped', 'mp4 is read by ranges, not warmed');
+    let d = await (await post(`/api/warm?stream=${hls.id}`)).json();
+    assert.equal(d.job.state, 'working');
+    for (let i = 0; i < 100 && d.job.state === 'working'; i++) { await new Promise(r => setTimeout(r, 100)); d = await (await get('/api/warm')).json(); }
+    assert.equal(d.job.state, 'done', JSON.stringify(d.job.error));
+    assert.ok(d.job.total > 0 && d.job.done === d.job.total, 'every piece');
+    /* every piece now comes from the disk */
+    const pl = await (await get(hls.play)).text();
+    const segs = pl.split('\n').filter(l => l && !l.startsWith('#'));
+    assert.ok(segs.length && d.job.total >= segs.length);
+    for (const s of segs) assert.equal((await get(s)).headers.get('x-lapka-cache'), 'hit');
+    /* asked for the same again: the job stands as it is; stopped: nothing to stop */
+    assert.equal((await (await post(`/api/warm?stream=${hls.id}`)).json()).job.state, 'done');
+    assert.equal((await (await post('/api/warm/stop')).json()).job.state, 'done');
+    await post('/api/state/setting?k=prefetch&v=off');
+  });
+});
+
 /* ── saves that were cut short are taken up again ── */
 describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
   test('a pending record becomes a file, and goes; the routes list and forget', async () => {

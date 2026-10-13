@@ -76,7 +76,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
 
   const server = http.createServer(async (req, res) => {
     /* taken per request: the folder, and everything in it, can be switched while running */
-    const { lapka, delivery = null, store = null, state = null, library = null, saver = null } = ctx;
+    const { lapka, delivery = null, store = null, state = null, library = null, saver = null, warmer = null } = ctx;
     const url = new URL(req.url, `http://${host}`);
     const p = url.pathname;
     let m;
@@ -190,6 +190,14 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first', reason: { key: 'noStream' } });
         return json(res, 202, saver.start(ctx.stream.id, ctx, { first: url.searchParams.get('first') === '1', level: Number(url.searchParams.get('level')) || null }));
       }
+      /* the episode playing, pulled into the cache ahead of the player: asked by the page, read by it as it goes */
+      if (warmer && req.method === 'GET' && p === '/api/warm') return json(res, 200, { job: warmer.job() });
+      if (warmer && mutating && p === '/api/warm') {
+        if (!state || state.setting('prefetch') !== 'on') return json(res, 403, { error: 'warming is switched off' });
+        try { return json(res, 202, { job: warmer.warm(url.searchParams.get('stream') || '', { level: url.searchParams.get('level') }) }); }
+        catch (e) { return json(res, e.code || 500, { error: e.message, reason: e.reason || null }); }
+      }
+      if (warmer && mutating && p === '/api/warm/stop') return json(res, 200, { job: warmer.stop() });
       if (saver && mutating && p === '/api/saves/pause') return json(res, 200, { paused: saver.pauseAll().map(j => j.id) });
       if (saver && mutating && p === '/api/save/cancel') {
         const job = await saver.cancel(url.searchParams.get('id') || '');

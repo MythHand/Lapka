@@ -1409,6 +1409,52 @@ function prefetchNext() {
   if (nx && !nx.stream && !nx.err && !nx.opening) resolveItem(nx).then(() => paintMeta()).catch(() => {});
 }
 
+/* ── the episode ahead of the player ──────────────────────────
+   With loading ahead on, the episode playing is pulled into the cache
+   whole while it plays, and the next one once this one is there; the
+   player then reads from the disk, and a line that lags or an origin
+   that drops out is not seen. Off, the player asks for the half minute
+   it needs, as any player does. The server pulls one episode at a
+   time; the page asks for the one playing at the quality in play, and
+   reads how far it got now and then. */
+const prefetchOn = () => (state.remote.settings?.prefetch || 'off') === 'on';
+let warmT = null, warmedFor = null;
+const warmLevel = () => (hls && hls.levels && hls.levels.length > 1 && hls.currentLevel >= 0 && hls.levels[hls.currentLevel].height) || null;
+function warmCurrent() {
+  const it = cur();
+  if (!prefetchOn() || !it || !it.stream || it.stream.kind !== 'hls') return;
+  warmedFor = it.stream.id;
+  askWarm(it, warmLevel());
+}
+async function askWarm(it, level) {
+  try {
+    const r = await post('/api/warm?stream=' + it.stream.id + (level ? '&level=' + level : ''));
+    diary('warm', `episode ${it.number}${level ? ' ' + level + 'p' : ''}: ${r.job ? r.job.state : '?'}`);
+    watchWarm();
+  } catch (e) { diary('warm', `episode ${it.number}: refused, ${String(e.message).slice(0, 60)}`); }
+}
+function watchWarm() {
+  clearTimeout(warmT);
+  warmT = setTimeout(async () => {
+    if (!prefetchOn()) return;
+    let d; try { d = await api('/api/warm'); } catch (_) { return; }
+    const job = d.job;
+    if (!job) return;
+    if (job.state === 'working') return watchWarm();
+    diary('warm', `${job.done}/${job.total} ${job.state}${job.error ? ' ' + (job.error.key || '') : ''}`);
+    /* the episode playing is there whole: the next one follows, and no further */
+    const it = cur();
+    if (job.state === 'done' && it && it.stream && job.streamId === it.stream.id) warmNext(it, job.level);
+  }, 2500);
+}
+async function warmNext(it, level) {
+  const nx = state.list[idxOf(it) + 1];
+  if (!nx || nx.err) return;
+  if (!nx.stream) { try { await resolveItem(nx); } catch (_) { return; } }
+  if (cur() !== it || !prefetchOn() || !nx.stream || nx.stream.kind !== 'hls') return;
+  askWarm(nx, level);
+}
+
 /* ── changing the picture ─────────────────────────────────────
    Fade to black takes 0.22 s, the new frame appears over 0.32 s. It is
    revealed not on a timer but when the first frame is actually there:
@@ -1551,7 +1597,9 @@ function attachSource(stream) {
        answer is given up on in seconds, not in a minute, and its
        trouble is said on the stage as soon as it starts */
     const policy = (firstByte, whole, retries) => ({ default: { maxTimeToFirstByteMs: firstByte, maxLoadTimeMs: whole, timeoutRetry: { maxNumRetry: retries, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: retries, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } });
-    hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2) });
+    /* loading ahead: the player itself keeps a minute and a half instead of half a minute; the rest of the episode is the cache's */
+    const ahead = prefetchOn() ? { maxBufferLength: 90, maxBufferSize: 90 * 1000 * 1000 } : {};
+    hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2), ...ahead });
     hls.on(Hls.Events.ERROR, (_, d) => {
       diary('hls', `${d.type}/${d.details}${d.fatal ? ' fatal' : ''}${d.response && d.response.code ? ' code ' + d.response.code : ''}`);
       if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
@@ -1565,7 +1613,12 @@ function attachSource(stream) {
     hls.on(Hls.Events.LEVEL_LOADED, (_, d) => diary('hls', `level loaded, ${d.details ? d.details.fragments.length : '?'} fragments`));
     hls.on(Hls.Events.FRAG_LOADING, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loading`); });
     hls.on(Hls.Events.FRAG_LOADED, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loaded`); });
-    hls.on(Hls.Events.LEVEL_SWITCHED, () => { syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu(); });
+    hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+      syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu();
+      /* the quality in play is known: the episode is pulled ahead at it; a level hls.js picks by itself later does not start it over */
+      const it = cur();
+      if (it && it.stream && (warmedFor !== it.stream.id || state.quality !== 'auto')) warmCurrent();
+    });
     hls.loadSource(stream.play);
     hls.attachMedia(video);
     return;
@@ -2675,6 +2728,10 @@ function buildGearMenu() {
   switchRow(player, t('set.autoResume'), (state.remote.settings?.autoResume || 'on') !== 'off', on => {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
+  });
+  switchRow(player, t('set.prefetch'), prefetchOn(), on => {
+    state.remote.settings = { ...(state.remote.settings || {}), prefetch: on ? 'on' : 'off' };
+    post('/api/state/setting?k=prefetch&v=' + (on ? 'on' : 'off')).then(() => { if (on) warmCurrent(); else post('/api/warm/stop').catch(() => {}); }).catch(() => {});
   });
 
   /* ─ right: the storage ─ */

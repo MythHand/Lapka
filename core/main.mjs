@@ -10,6 +10,7 @@ import { openState } from './store/state.mjs';
 import { openLibrary } from './store/library.mjs';
 import { createDelivery } from './deliver/index.mjs';
 import { createSaver } from './deliver/save.mjs';
+import { createWarmer } from './deliver/warm.mjs';
 import { createSession } from './session/index.mjs';
 import fs from 'node:fs';
 import { readConfig, writeConfig, checkHome, homeInside } from './store/config.mjs';
@@ -60,6 +61,7 @@ export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
   const delivery = createDelivery({ session, cache: () => ctx.store.cache });
   Object.assign(ctx, await openHome(home, delivery));
   ctx.delivery = delivery;
+  ctx.warmer = createWarmer({ delivery, cache: () => ctx.store.cache });
   ctx.lapka = await bootLapka({ session, delivery });
   /* the folder can change while running: the user picks another one */
   ctx.switchHome = async (dir, { move = false } = {}) => {
