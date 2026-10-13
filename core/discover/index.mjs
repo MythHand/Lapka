@@ -15,6 +15,8 @@ import { numberFromText, numberFromUrl, tailNumberOfUrl, stemOfUrl } from './num
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
 import { template } from './numbers.mjs';
+import { payloadsIn } from './objects.mjs';
+import { episodesInData } from './data.mjs';
 import { UNNAMED_DUB } from '../catalog/model.mjs';
 
 export { UNNAMED_DUB };
@@ -22,11 +24,26 @@ export { UNNAMED_DUB };
 export function discover({ html, url, profile = null }) {
   const { document: doc } = parseHTML(String(html));
   const steps = [];
+  /* the page's data as its framework packed it, unpacked into a script of its own: every reader below reads scripts */
+  for (const text of payloadsIn(doc)) { const s = doc.createElement('script'); s.setAttribute('data-lapka', 'payload'); s.textContent = text; doc.body.append(s); }
 
   const title = findTitle(doc, { profile });
   const cover = findCover(doc, url);
   let episodes = findEpisodes(doc, url, { profile });
-  const { players, switches } = findPlayers(doc, url, { profile });
+  let { players, switches } = findPlayers(doc, url, { profile });
+  /* no list of links, but the episodes are in the page's data, each with its video: the
+     streams a script scan found are those episodes', not players of this page */
+  if (!episodes.items.length) {
+    const texts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent || '');
+    const data = episodesInData(texts);
+    if (data.length) {
+      episodes = { ...episodes, items: data.map(e => ({ ...e, url })), by: 'data', confidence: 0.8 };
+      /* by path: a scan of the raw payload may have cut an address at an escaped character of its query */
+      const path = u => { try { const x = new URL(u); return x.origin + x.pathname; } catch { return u; } };
+      const own = new Set(data.flatMap(e => e.streams.map(st => path(st.url))));
+      players = players.filter(p => !(p.kind === 'script' && own.has(path(p.url))));
+    }
+  }
   const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
   /* the series' own name, for a link that carries it: the heading without the episode and the tail */
   const probableSeries = tidyTitle(titleFromText(title[0]?.value || '') || title[0]?.value || '', host).title;
@@ -201,7 +218,14 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
     if (self && self.kind) c.series.kind = self.kind;   // a film among the parts is a film
   }
 
-  for (const e of report.episodes.items) c.episodes.push({ number: e.number, title: e.title || undefined, sourceUrl: e.url });
+  for (const e of report.episodes.items) {
+    const ep = { number: e.number, title: e.title || undefined, sourceUrl: e.url };
+    if (e.duration) ep.duration = e.duration;
+    if (e.marks) ep.marks = e.marks;
+    /* an episode the page's data names with its video: the page is its player, the dub what the profile calls it */
+    if (e.streams && e.streams.length) ep.dubs = [{ name: report.defaultDub || UNNAMED_DUB, sources: [{ player: 'page', embedUrl: e.url, streams: e.streams.map(st => ({ kind: st.kind, url: st.url, quality: st.quality || qualityOf(st.url) })) }] }];
+    c.episodes.push(ep);
+  }
 
   if (report.kind === 'episode' && report.episode.value !== null) {
     const number = report.episode.value;

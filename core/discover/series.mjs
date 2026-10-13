@@ -10,6 +10,8 @@ import { textOf } from './text.mjs';
 
 const SEO_HEAD = /^\s*(?:watch|ver|смотреть)\s+(?:anime\s+|аниме\s+)?(?=\S)/i;
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
+/* «Название» in a window's title: the quotes are the site's, not the name's */
+const unquote = s => String(s || '').replace(/^[«"“„‘']+|[»"”“’']+$/g, '').trim();
 
 /* "Название — Сайт", "Название | Сайт", "Название - смотреть онлайн" */
 const stripSite = t => clean(t).split(/\s+[|—–]\s+|\s+-\s+/)[0]
@@ -22,6 +24,15 @@ export function findTitle(doc, { profile } = {}) {
   add(doc.querySelector('meta[property="og:title"]')?.getAttribute('content'), 'og:title', 0.9, 'meta[property="og:title"]');
   const h1 = doc.querySelector('h1'); if (h1) add(textOf(h1), 'h1', 0.8, 'h1');
   add(stripSite(doc.querySelector('title')?.textContent), 'title', 0.5, 'title');
+  /* the name in the page's structured data: the site's own word, written for machines */
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    let d; try { d = JSON.parse(s.textContent); } catch { continue; }
+    for (const node of (Array.isArray(d) ? d : [d]).flatMap(x => x && x['@graph'] ? x['@graph'] : [x])) {
+      if (!node || typeof node !== 'object' || typeof node.name !== 'string') continue;
+      const type = String(Array.isArray(node['@type']) ? node['@type'][0] : node['@type'] || '');
+      if (/^(TVSeries|TVSeason|Movie|VideoObject|CreativeWorkSeries|Series)$/i.test(type)) add(node.name, 'ld+json', 0.85, 'script[type="application/ld+json"]');
+    }
+  }
   /* "Клинок, рассекающий демонов смотреть на джутсу" in og:title and
      "Клинок, рассекающий демонов" in the heading: the heading is the
      name, the rest is a tail for search engines */
@@ -31,10 +42,10 @@ export function findTitle(doc, { profile } = {}) {
      "Watch", is the name and the rest a tail for search engines. Not
      when the shorter one is the episode's own line ("Эпизод 8"). */
   const og = out.find(c => c.by === 'og:title');
-  const core = og ? og.value.replace(SEO_HEAD, '').toLowerCase() : '';
+  const core = og ? unquote(og.value.replace(SEO_HEAD, '')).toLowerCase() : '';
   for (const other of out) {
     if (!og || other === og || other.by === 'profile') continue;
-    const v = other.value.toLowerCase();
+    const v = unquote(other.value).toLowerCase();
     if (og.value.length > other.value.length && v.length >= 4 && core.startsWith(v) && numberFromText(other.value) === null) other.confidence = Math.max(other.confidence, 0.95);
   }
   out.sort((a, b) => b.confidence - a.confidence);
@@ -149,7 +160,7 @@ export function seasonFromUrl(url) {
    океан, Сезон 3 (2026) все серии онлайн". The name is what is left
    once the year in brackets and the tail of watch-words go; the year
    is kept. */
-const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+(?:хорошем|hd|высоком|отличном)\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:во\s+всех\s+озвучках|в\s+озвучке\s+[^\s|]+|все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+(?:хорошем|hd|высоком|отличном)\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
 export function tidyTitle(text, host = '') {
   let t = String(text || '').replace(SEO_HEAD, '');
   let year = null;
@@ -162,6 +173,7 @@ export function tidyTitle(text, host = '') {
   t = t.replace(/\s*\((?=[^()]*(?:сериал|сезон|season|series))[^()]*\)\s*/gi, ' ');
   for (let i = 0; i < 6; i++) { const was = t; t = t.replace(SEO_TAIL, ''); if (t === was) break; }
   t = t.replace(/\s+/g, ' ').replace(/[\s,:·|—–-]+$/g, '').trim();
+  t = unquote(t);
   return { title: t || String(text || '').trim(), year };
 }
 const TRAILING = /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i;

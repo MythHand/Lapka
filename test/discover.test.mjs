@@ -265,6 +265,59 @@ describe('players fetched after the page loads', () => {
   });
 });
 
+/* A page drawn by a script: no links to episodes, the episodes in the
+   framework's payload as data, each with its video by quality and its
+   opening and ending marked; the window's title in the site's quotes
+   with a tail, the name itself in the structured data. */
+const PAYLOAD = JSON.stringify({ alias: 'okean-3', title_main: 'Океан 3', year: 2026, episodes: [
+  { id: 1, ordinal: 1, name: '', duration: 1441, hls: { 480: 'https://cdn.example/v/1/480/a.m3u8?x=1', 720: 'https://cdn.example/v/1/720/a.m3u8?x=1', 1080: 'https://cdn.example/v/1/1080/a.m3u8?x=1' }, opening: { start: 55, stop: 145 }, ending: { start: 1335, stop: 1425 } },
+  { id: 2, ordinal: 2, name: 'Второй', duration: 1440, hls: { 480: 'https://cdn.example/v/2/480/b.m3u8', 720: 'https://cdn.example/v/2/720/b.m3u8' }, opening: null, ending: null },
+  { id: 3, ordinal: 3, name: '', duration: 1439, hls: { 720: 'https://cdn.example/v/3/720/c.m3u8' } },
+], dubs: [{ id: 7, studio: 'Другие', episodes_count: 3 }] });
+const NEXT = `<html><head><title>Смотреть «Океан 3» онлайн во всех озвучках бесплатно | next.example</title>
+<meta property="og:title" content="Смотреть «Океан 3» онлайн во всех озвучках бесплатно"/><meta property="og:type" content="video.tv_show"/>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TVSeries","name":"Океан 3"}</script></head>
+<body><h1>Океан 3</h1><div id="app"></div>
+<script>self.__next_f=self.__next_f||[];self.__next_f.push([0])</script>
+<script>self.__next_f.push([1,${JSON.stringify('3:I[1234,[],""]\n')}])</script>
+<script>self.__next_f.push([1,${JSON.stringify('c:["$","div",null,{"children":["$","$L5",null,{"anime":' + PAYLOAD + '}]}]\n')}])</script>
+</body></html>`;
+
+describe('episodes in the page\'s data', () => {
+  const r = discover({ html: NEXT, url: 'https://next.example/anime/okean-3' });
+  test('the framework\'s payload is read: the episodes with their videos by quality, their marks, their durations', () => {
+    assert.equal(r.kind, 'series');
+    assert.equal(r.episodes.by, 'data');
+    assert.deepEqual(r.episodes.items.map(e => e.number), [1, 2, 3]);
+    assert.deepEqual(r.episodes.items[0].streams.map(s => [s.kind, s.quality]), [['hls', '480p'], ['hls', '720p'], ['hls', '1080p']]);
+    assert.deepEqual(r.episodes.items[0].marks, { opening: { start: 55, stop: 145 }, ending: { start: 1335, stop: 1425 } });
+    assert.equal(r.episodes.items[1].marks, null);
+    assert.equal(r.episodes.items[1].title, 'Второй');
+    assert.equal(r.episodes.items[2].duration, 1439);
+    assert.equal(r.players.length, 0, 'the videos of the episodes are not players of the page');
+  });
+  test('the name is the site\'s own word: the quotes and the tail of the window\'s title go, the structured data agrees', () => {
+    assert.equal(r.title.value, 'Океан 3');
+    assert.equal(r.season, 3);
+    assert.equal(r.kind_, 'tv');
+  });
+  test('into the catalog: every episode with its page as the player and the videos as its streams', () => {
+    const c = toContribution(r);
+    assert.equal(c.episodes.length, 3);
+    const ep = c.episodes[0];
+    assert.equal(ep.duration, 1441);
+    assert.deepEqual(ep.marks.opening, { start: 55, stop: 145 });
+    assert.equal(ep.dubs.length, 1);
+    assert.equal(ep.dubs[0].name, UNNAMED_DUB);
+    assert.deepEqual(ep.dubs[0].sources[0].streams.map(s => s.quality), ['480p', '720p', '1080p']);
+    assert.equal(ep.dubs[0].sources[0].player, 'page');
+    const s = createSeries({ sourceUrl: 'https://next.example/anime/okean-3' }); merge(s, c);
+    assert.equal(s.episodes.length, 3);
+    assert.equal(s.episodes[0].dubs[0].sources[0].streams.length, 3);
+    assert.deepEqual(s.episodes[0].marks.ending, { start: 1335, stop: 1425 });
+  });
+});
+
 /* Built to fool the heuristics: the "related" list is longer and more
    regular than the real episode list. A profile says which is which. */
 const TRICKY = `<html><head><title>Сериал</title></head><body><h1>Сериал</h1>
