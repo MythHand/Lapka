@@ -1085,8 +1085,8 @@ svg.ph{ fill:currentColor; stroke:none; }
    title and the link as pasted, whole, and when. */
 .histpop{
   position:fixed; z-index:60;
-  width:653px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px);
-  display:flex; flex-direction:column; overflow:hidden;
+  width:1000px; max-width:calc(100vw - 24px); height:min(calc(100vh - 24px), 880px);   /* one tall height: nothing moves as the rows or the column change */
+  display:flex; overflow:hidden;
   border-radius:var(--r-lg); border:1px solid var(--line-2); box-shadow:var(--shadow);
   /* the veil of the queue over the video: nearly opaque, the picture only a blur behind */
   background:rgba(16,17,20,.93);
@@ -1097,8 +1097,17 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .histpop:not([hidden]){ opacity:1; transform:none; transition:opacity 120ms cubic-bezier(.33,.8,.45,1), transform 200ms cubic-bezier(.2,.8,.3,1), display 0s allow-discrete; }
 @starting-style{ .histpop:not([hidden]){ opacity:0; transform:translateX(-10px); } }
-/* On top the title and the count, under them the rows, which alone scroll;
-   the search is the footer's link field, which the list stands beside. */
+/* On the left the title and the count, under them the rows, which alone
+   scroll; the search is the footer's link field, which the list stands
+   beside. On the right the column of the row stood on. */
+.histpop__main{ flex:0 0 653px; min-width:0; display:flex; flex-direction:column; min-height:0; }
+.histpop__side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; min-height:0; border-left:1px solid var(--line-2); }
+.histpop__parts{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; }
+.histpop__part{ display:flex; gap:12px; align-items:flex-start; padding:10px 12px; color:var(--tx-2); }
+.histpop__parttitle{ color:var(--tx-1); font-size:calc(13px + var(--fs)); line-height:1.35; overflow-wrap:anywhere; }
+.histpop__partalt{ font-size:calc(12px + var(--fs)); line-height:1.4; color:var(--tx-2); margin-top:2px; overflow-wrap:anywhere; }
+.histpop__partmeta{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; margin-top:3px; }
+.histpop__hit{ background:rgba(255,255,255,.16); color:var(--tx-1); border-radius:3px; padding:0 1px; margin:0 -1px; }   /* the letters searched for */
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */

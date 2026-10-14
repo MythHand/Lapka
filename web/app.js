@@ -1042,7 +1042,7 @@ function rememberLink(url, series) {
   if (series.year) q.set('year', String(series.year));
   if (series.season) q.set('season', String(series.season));
   /* the parts the link opened: where watching stops is looked for across them */
-  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null }))));
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null, year: s.series.year || null, episodes: s.series.episodes.length, alt: otherName(s.series), cover: s.series.cover || null }))));
   /* the facts the page stated of the series and its other names, for a fuller row one day */
   if (series.facts && Object.keys(series.facts).length) q.set('facts', JSON.stringify(series.facts));
   if (series.altTitles && series.altTitles.length) q.set('altTitles', JSON.stringify(series.altTitles.slice(0, 6)));
@@ -1064,21 +1064,73 @@ function whenWords(at) {
   if (gone === 1) return t('hist.yesterday');
   try { return d.toLocaleDateString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }); } catch (_) { return ''; }
 }
-/* The frame of the list, once per opening: on top the title and, at the
-   right edge, how many links the history holds, whatever is searched;
-   under it the rows, the newest at the bottom, beside the footer's link
-   field. That field is the search: what is typed in it narrows the rows,
-   by the title, the link, the year or the name of any part the link
-   opened, and the frame takes the height of what is left, up to the window. */
+/* The frame, once per opening, of one tall height: on the left the title
+   with how many links the history holds, whatever is searched, and under
+   it the rows, the newest at the bottom, beside the footer's link field;
+   on the right the column that tells of the row stood on. The field is
+   the search: what is typed in it narrows the rows, by the title, the
+   other names, the link, the year or the name of any part the link opened. */
 function buildHistory() {
   histPop.replaceChildren();
+  const main = document.createElement('div'); main.className = 'histpop__main';
   const top = document.createElement('div'); top.className = 'histpop__top';
   const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.history');
   const count = document.createElement('span'); count.className = 'histpop__count';
   top.append(head, count);
   const list = document.createElement('div'); list.className = 'histpop__list';
-  histPop.append(top, list);
+  main.append(top, list);
+  const side = document.createElement('div'); side.className = 'histpop__side';
+  histPop.append(main, side);
   paintHistoryList();
+}
+/* the letters searched for, lit where they stand in a text */
+function markHits(text, q) {
+  const frag = document.createDocumentFragment(), str = String(text || '');
+  if (!q) { frag.append(str); return frag; }
+  const low = str.toLowerCase();
+  let i = 0;
+  for (let at = low.indexOf(q); at >= 0; at = low.indexOf(q, i)) {
+    if (at > i) frag.append(str.slice(i, at));
+    const m = document.createElement('mark'); m.className = 'histpop__hit'; m.textContent = str.slice(at, at + q.length); frag.append(m);
+    i = at + q.length;
+  }
+  if (i < str.length) frag.append(str.slice(i));
+  return frag;
+}
+/* The column: the parts of the franchise the row stood on holds, in their
+   order, each with its cover, its title, one other name, its year, its kind
+   and how many episodes; what a part did not say is left out. The letters
+   searched for are lit here too, so a row found by a part's name says why. */
+function paintHistorySide(h) {
+  const side = histPop.querySelector('.histpop__side');
+  if (!side) return;
+  side.replaceChildren();
+  if (!h) return;
+  const q = histQuery.trim().toLowerCase();
+  const parts = [...(h.parts || [])].sort((a, b) => (a.ordinal ?? 1e9) - (b.ordinal ?? 1e9));
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('hist.parts');
+  const count = document.createElement('span'); count.className = 'histpop__count'; count.textContent = String(parts.length);
+  top.append(head, count);
+  const list = document.createElement('div'); list.className = 'histpop__parts';
+  for (const p of parts) {
+    const el = document.createElement('div'); el.className = 'histpop__part';
+    const coverUrl = p.coverFile ? `/api/history/cover/${encodeURIComponent(p.id)}` : null;
+    const cover = coverUrl ? document.createElement('img') : document.createElement('span');
+    cover.className = 'histpop__cover' + (coverUrl ? '' : ' histpop__cover--none');
+    if (coverUrl) { cover.src = coverUrl; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
+    const body = document.createElement('div'); body.className = 'histpop__body';
+    const title = document.createElement('div'); title.className = 'histpop__parttitle'; title.append(markHits(p.title || '', q));
+    body.append(title);
+    if (p.alt) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
+    const kind = kindLabel(p) || (p.kind === 'tv' ? t('info.tv') : '');
+    const meta = document.createElement('div'); meta.className = 'histpop__partmeta';
+    meta.textContent = [p.year, kind, p.episodes ? t('pop.episodes', { n: p.episodes }) : null].filter(Boolean).join(' · ');
+    if (meta.textContent) body.append(meta);
+    el.append(cover, body);
+    list.append(el);
+  }
+  side.append(top, list);
 }
 /* a title without its season: "2 сезон", "Season 2", "TV-2", "Part 2", a
    closing number equal to the season; what is left says whose season it is */
@@ -1098,7 +1150,8 @@ function historyRow(h) {
   cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
   if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
   const body = document.createElement('div'); body.className = 'histpop__body';
-  const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+  row.__h = h;
+  const title = document.createElement('div'); title.className = 'histpop__title'; title.append(markHits(h.title || h.url, histQuery.trim().toLowerCase()));
   /* what the series is on the left, when it was pasted on the right */
   const meta = document.createElement('div'); meta.className = 'histpop__meta';
   const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
@@ -1147,13 +1200,18 @@ function historyRow(h) {
 /* The row stood on, lit as a row under the pointer is: there is always one
    while rows are shown, the newest at first; the arrows in the footer's
    field walk the rows up and down, the pointer takes the standing with it;
-   Enter opens the row stood on. */
-let histActive = null;
-function setHistActive(row) {
+   Enter opens the row stood on. The column follows the standing: at once
+   from the keys, and after the pointer has rested on a row a moment, so a
+   pointer crossing the list does not make the column flicker. */
+let histActive = null, histSideT = 0;
+const HIST_DWELL = 1300;
+function setHistActive(row, { dwell = false } = {}) {
   histPop.querySelector('.histpop__row.is-active')?.classList.remove('is-active');
   histActive = row || null;
-  if (!row) return;
+  clearTimeout(histSideT);
+  if (!row) { paintHistorySide(null); return; }
   row.classList.add('is-active');
+  if (dwell) histSideT = setTimeout(() => paintHistorySide(row.__h), HIST_DWELL); else paintHistorySide(row.__h);
   /* the list alone scrolls to show it: no ancestor is moved on the way */
   const list = row.parentElement, top = row.offsetTop, bottom = top + row.offsetHeight;
   if (top < list.scrollTop) list.scrollTop = top;
@@ -1177,55 +1235,54 @@ histPop.addEventListener('mousemove', e => {
   histPointer = { x: e.clientX, y: e.clientY };
   histPop.classList.remove('is-keys');
   const row = e.target.closest('.histpop__row');
-  if (row && row !== histActive) setHistActive(row);
+  if (row && row !== histActive) setHistActive(row, { dwell: true });
 });
 /* A row leaves the list from the top down. It is taken out of the flow at
-   once, the scroll gives back its height where it can, and the frame takes
-   its new place at the button; then everything that moved (the rows, the
-   frame's top edge) slides from where it was to where it is, together and
-   at one pace. So the rows above come down into the gap and the rows below
-   stand still, whether or not the list scrolls. A fading copy of the row
-   stays where it was meanwhile. The list answers no pointer until settled. */
+   once, the scroll gives back its height where it can, and the rows stand
+   where they now stand; then everything that moved slides from where it
+   was on the screen to where it is, together and at one pace. A fading copy
+   of the row stays where it was meanwhile. The list answers no pointer until
+   settled, and the standing passes to the row that took the place. */
 const LEAVE_MS = 450, LEAVE_EASE = 'cubic-bezier(.2,.8,.3,1)';
 function leaveHistoryRow(row) {
   const list = row.parentElement;
   if (!list) return Promise.resolve();
   const rows = [...list.querySelectorAll('.histpop__row')].filter(r => r !== row);
-  const seen = r => r.offsetTop - list.scrollTop;                 // where a row stands in the list's window
-  const before = new Map(rows.map(r => [r, seen(r)]));
-  const popTop0 = histPop.getBoundingClientRect().top, st0 = list.scrollTop, h = row.offsetHeight, was = row.getBoundingClientRect();
+  const at = r => r.getBoundingClientRect().top;
+  const before = new Map(rows.map(r => [r, at(r)]));
+  const was = row.getBoundingClientRect(), st0 = list.scrollTop, h = row.offsetHeight, i = [...list.querySelectorAll('.histpop__row')].indexOf(row);
   const ghost = row.cloneNode(true);
   ghost.classList.add('histpop__ghost');
   list.classList.add('is-settling');
   row.remove();
+  if (histActive === row) histActive = null;
   const count = histPop.querySelector('.histpop__count');
   if (count) count.textContent = String(histList.length);
   if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); list.append(e); }
   list.scrollTop = Math.max(0, st0 - h);
   placeHistory();
-  const pop1 = histPop.getBoundingClientRect(), popTop1 = pop1.top;
-  /* the fading copy: in the frame, where the row stood on the screen, moving with the frame's edge so it stays there */
-  ghost.style.left = (was.left - pop1.left) + 'px'; ghost.style.top = (was.top - pop1.top) + 'px'; ghost.style.width = was.width + 'px';
+  const pop = histPop.getBoundingClientRect();
+  ghost.style.left = (was.left - pop.left) + 'px'; ghost.style.top = (was.top - pop.top) + 'px'; ghost.style.width = was.width + 'px';
   histPop.append(ghost);
   /* first frame: everything held at its old place */
-  for (const r of rows) { r.style.transition = 'none'; r.style.transform = `translateY(${before.get(r) - seen(r)}px)`; }
-  ghost.style.transition = 'none'; ghost.style.transform = `translateY(${popTop1 - popTop0}px)`;
-  histPop.style.transition = 'none'; histPop.style.top = popTop0 + 'px';
+  for (const r of rows) { r.style.transition = 'none'; r.style.transform = `translateY(${before.get(r) - at(r)}px)`; }
+  ghost.style.transition = 'none';
   void histPop.offsetHeight;
   return new Promise(done => {
     requestAnimationFrame(() => {
       for (const r of rows) { r.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}`; r.style.transform = ''; }
-      histPop.style.transition = `top ${LEAVE_MS}ms ${LEAVE_EASE}`; histPop.style.top = popTop1 + 'px';
-      ghost.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}, opacity 220ms ease`; ghost.style.transform = ''; ghost.style.opacity = '0';
+      ghost.style.transition = `opacity 220ms ease`; ghost.style.opacity = '0';
       setTimeout(() => {
         for (const r of rows) { r.style.transition = ''; r.style.transform = ''; }
-        histPop.style.transition = ''; ghost.remove(); list.classList.remove('is-settling');
-        placeHistory(); done();
+        ghost.remove(); list.classList.remove('is-settling');
+        placeHistory();
+        if (!histActive) setHistActive(rows[Math.min(i, rows.length - 1)] || null);
+        done();
       }, LEAVE_MS + 20);
     });
   });
 }
-const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.parts || []).map(p => p.title)].some(x => String(x || '').toLowerCase().includes(q));
+const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.altTitles || []), ...(h.parts || []).flatMap(p => [p.title, p.alt])].some(x => String(x || '').toLowerCase().includes(q));
 function paintHistoryList() {
   const list = histPop.querySelector('.histpop__list');
   if (!list) return;
@@ -1233,26 +1290,34 @@ function paintHistoryList() {
   if (count) count.textContent = String(histList.length);
   const q = histQuery.trim().toLowerCase();
   const shown = q ? histList.filter(h => histMatches(h, q)) : histList;
-  /* A search keeps the frame at the height it had before, so it stands
-     still while the rows come and go; the rows left gather at its bottom,
-     by the field. The search cleared, the frame is its own height again. */
-  if (q) { if (!histPop.style.height && histPop.offsetHeight) histPop.style.height = histPop.offsetHeight + 'px'; } else histPop.style.height = '';
   list.replaceChildren(); histActive = null;
   const say = text => { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = text; list.append(e); };
   if (!histList.length) say(t('hist.empty'));
   else if (!shown.length) say(t('hist.nothing'));
   for (const h of shown) list.append(historyRow(h));
-  /* the height of what is shown, up to the window; the bottom stays at the button, the newest rows beside it */
   placeHistory();
   list.scrollTop = list.scrollHeight;
   /* one row always stands out: the newest of those shown, until the arrows or the pointer choose another */
   setHistActive(list.querySelector('.histpop__row:last-child'));
 }
-/* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
+/* To the right of the footer's buttons, so neither is covered, its bottom
+   at the button's. A window too narrow for that puts the frame above the
+   footer instead: to the left, and lower by what the footer takes. */
 function placeHistory() {
-  const r = btnHistory.getBoundingClientRect(), edge = queueAdd.getBoundingClientRect().right, w = histPop.offsetWidth, h = histPop.offsetHeight;
-  histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
-  histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
+  const r = btnHistory.getBoundingClientRect(), add = queueAdd.getBoundingClientRect();
+  histPop.style.height = '';
+  const w = histPop.offsetWidth, h = histPop.offsetHeight;
+  if (add.right + 8 + w + 12 <= window.innerWidth) {
+    histPop.classList.remove('is-above');
+    histPop.style.left = (add.right + 8) + 'px';
+    histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
+  } else {
+    histPop.classList.add('is-above');
+    const h2 = Math.max(240, Math.min(h, add.top - 8 - 12));
+    histPop.style.height = h2 + 'px';
+    histPop.style.left = Math.max(12, window.innerWidth - w - 12) + 'px';
+    histPop.style.top = Math.max(12, add.top - 8 - h2) + 'px';
+  }
 }
 /* The list opens from its button, or from the footer's link field as soon
    as it is focused, since the field searches the list; from the field it
@@ -1270,7 +1335,7 @@ async function openHistory({ fromField = false } = {}) {
   histPop.hidden = false; buildHistory();
   if (!fromField) { loadHistory(); queueLinkInput.focus({ preventScroll: true }); }
 }
-function closeHistory() { histPop.hidden = true; histPop.style.height = ''; }
+function closeHistory() { histPop.hidden = true; clearTimeout(histSideT); }
 btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
 queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory({ fromField: true }); });
 queueLinkInput.addEventListener('input', () => {

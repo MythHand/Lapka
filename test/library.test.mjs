@@ -236,11 +236,19 @@ describe('the links pasted', () => {
     await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv' }, { id: 'abc126', ordinal: 3, title: 'Фильм', kind: 'movie' }, { id: 'abc125', ordinal: 5 }]) }));
     const kept = (await (await get('/api/history')).json()).history.at(-1).parts;
     assert.deepEqual(kept.slice(0, 2).map(p => [p.season, p.kind]), [[2, 'tv'], [null, 'movie']]);
+    /* a part tells of itself for the column: its year, its episodes, one other name, its cover kept as a file like the row's */
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv', year: 2025, episodes: 12, alt: 'Select 2', cover: site.base + '/media/cover-b.jpg' }, { id: 'abc125', ordinal: 5 }]) }));
+    const told2 = (await (await get('/api/history')).json()).history.at(-1).parts.find(p => p.id === 'abc124');
+    assert.deepEqual([told2.year, told2.episodes, told2.alt], [2025, 12, 'Select 2']);
+    assert.equal((await get('/api/history/cover/abc124')).status, 200, 'a part\'s cover is served by its id');
+    const silent = (await (await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2 }, { id: 'abc125', ordinal: 5 }]) }))).json()).parts.find(p => p.id === 'abc124');
+    assert.deepEqual([silent.year, silent.alt, !!silent.coverFile], [2025, 'Select 2', true], 'a part that says nothing now keeps what it said');
     /* one link forgotten: its row and cover go, the other row stays, and what was watched stays with the series */
     await post('/api/state/position?series=abc125&episode=7&t=300&d=1400');
     assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 200);
     assert.deepEqual((await (await get('/api/history')).json()).history.map(h => h.url), [site.base + '/s/links/ep-1']);
     assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 404);
+    assert.equal((await get('/api/history/cover/abc124')).status, 404, 'the parts\' covers go with the row');
     assert.equal(lapka.state.position('abc125', 7), 300, 'the place kept in the series stays');
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);

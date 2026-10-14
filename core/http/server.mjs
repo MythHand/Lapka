@@ -229,38 +229,42 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (state && req.method === 'GET' && p === '/api/history') return json(res, 200, { history: state.history().map(h => ({ ...h, last: state.lastStop((h.parts || []).map(x => x.id).concat(h.seriesId ? [h.seriesId] : [])) })) });
       if (state && store && mutating && p === '/api/history') {
         const q = url.searchParams;
-        const seriesId = q.get('series') || null, coverUrl = q.get('cover') || null;
-        let coverFile = null;
-        if (seriesId && coverUrl && /^https?:/i.test(coverUrl)) {
+        const seriesId = q.get('series') || null;
+        /* a cover fetched once and kept as a file named by its series; none, and the row stands without a picture */
+        const keepCover = async (id, coverUrl) => {
+          if (!id || !coverUrl || !/^https?:/i.test(coverUrl)) return null;
           try {
             const r = await fetch(coverUrl, { headers: { 'user-agent': lapka.session.ua, referer: q.get('url') || coverUrl, accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
             const type = (r.headers.get('content-type') || '').split(';')[0].trim();
             const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' }[type];
-            if (r.ok && ext) {
-              const bytes = Buffer.from(await r.arrayBuffer());
-              if (bytes.length && bytes.length < 8 * 1024 * 1024) {
-                await fsp.mkdir(path.join(store.own, 'covers'), { recursive: true });
-                coverFile = `${seriesId.replace(/[^\w.-]/g, '_')}.${ext}`;
-                await fsp.writeFile(path.join(store.own, 'covers', coverFile), bytes);
-              }
-            }
-          } catch { /* no cover: the row stands without a picture */ }
-        }
+            if (!r.ok || !ext) return null;
+            const bytes = Buffer.from(await r.arrayBuffer());
+            if (!bytes.length || bytes.length >= 8 * 1024 * 1024) return null;
+            await fsp.mkdir(path.join(store.own, 'covers'), { recursive: true });
+            const file = `${id.replace(/[^\w.-]/g, '_')}.${ext}`;
+            await fsp.writeFile(path.join(store.own, 'covers', file), bytes);
+            return file;
+          } catch { return null; }
+        };
         let parts = null; try { parts = JSON.parse(q.get('parts') || 'null'); } catch { /* no parts named */ }
         let facts = null; try { facts = JSON.parse(q.get('facts') || 'null'); } catch { /* no facts named */ }
         let altTitles = null; try { altTitles = JSON.parse(q.get('altTitles') || 'null'); } catch { /* no names named */ }
+        /* the row's cover and each part's, fetched together; a part that is the row's series shares its file */
+        const [coverFile, ...partFiles] = await Promise.all([keepCover(seriesId, q.get('cover')), ...(Array.isArray(parts) ? parts.slice(0, 60).map(x => x && x.id !== seriesId ? keepCover(String(x.id), x.cover) : null) : [])]);
+        if (Array.isArray(parts)) parts = parts.slice(0, 60).map((x, i) => ({ ...x, coverFile: x.id === seriesId ? coverFile : partFiles[i] }));
         const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, facts, altTitles, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
         return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
       }
       if (state && store && mutating && p === '/api/history/forget') {
         const gone = state.forgetLink(url.searchParams.get('url'));
         if (!gone) return json(res, 404, { error: 'no such link' });
-        if (gone.coverFile) await fsp.rm(path.join(store.own, 'covers', gone.coverFile), { force: true }).catch(() => {});
+        for (const f of gone.files) await fsp.rm(path.join(store.own, 'covers', f), { force: true }).catch(() => {});
         return json(res, 200, { ok: true });
       }
       if (state && store && req.method === 'GET' && p.startsWith('/api/history/cover/')) {
         const id = decodeURIComponent(p.slice('/api/history/cover/'.length));
-        const rec = state.history().find(h => h.seriesId === id && h.coverFile);
+        /* the cover of a row's series, or of any part a row holds */
+        const rec = state.history().find(h => h.seriesId === id && h.coverFile) || state.history().flatMap(h => h.parts || []).find(x => x.id === id && x.coverFile);
         if (!rec) return json(res, 404, { error: 'no cover' });
         const file = path.join(store.own, 'covers', rec.coverFile);
         let bytes; try { bytes = await fsp.readFile(file); } catch { return json(res, 404, { error: 'no cover' }); }

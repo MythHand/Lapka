@@ -103,7 +103,15 @@ export async function openState(own) {
     remember(rec) {
       const url = String(rec.url || '').trim();
       if (!url) return null;
-      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(p => ({ id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || '', season: Number(p.season) || null, kind: p.kind || null })) : (rec.seriesId ? [{ id: String(rec.seriesId), ordinal: null, title: rec.title || '' }] : []);
+      /* each part with what a fuller row shows of it: its year, how many
+         episodes, one other name, its cover's file; what a part said of
+         itself before stays when it says nothing now */
+      const known = Object.values(data.history).flatMap(h => h.parts || []);
+      const part = p => {
+        const was = known.find(x => x.id === String(p.id)) || {};
+        return { id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || was.title || '', season: Number(p.season) || null, kind: p.kind || was.kind || null, year: Number(p.year) || was.year || null, episodes: Number(p.episodes) || was.episodes || 0, alt: p.alt ? String(p.alt).slice(0, 200) : was.alt || '', coverFile: p.coverFile || was.coverFile || null };
+      };
+      const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(part) : (rec.seriesId ? [part({ id: rec.seriesId, title: rec.title, kind: rec.kind, year: rec.year, episodes: rec.episodes, alt: (rec.altTitles || [])[0], coverFile: rec.coverFile })] : []);
       /* A franchise is one row: a link whose parts meet those of a row
          already kept (the first season pasted after the fifth, on the same
          site) takes that row's place. A link pasted again keeps the cover it
@@ -124,14 +132,14 @@ export async function openState(own) {
       soon();
       return entry;
     },
-    /* one link forgotten: the row goes, and the name of its cover file is
-       given back to be removed; what was watched stays, it is the series'
-       own memory, not the link's */
+    /* one link forgotten: the row goes, and the names of its cover files
+       (the row's, its parts') are given back to be removed; what was
+       watched stays, it is the series' own memory, not the link's */
     forgetLink(url) {
       const h = data.history[String(url || '').trim()];
       if (!h) return null;
       delete data.history[h.url]; soon();
-      return { coverFile: h.coverFile || null };
+      return { coverFile: h.coverFile || null, files: [...new Set([h.coverFile, ...(h.parts || []).map(p => p.coverFile)].filter(Boolean))] };
     },
     /* what was noted about watching: positions, watched marks, dub choices, the links pasted. Settings and save records stay. */
     notes() { return Object.keys(data.positions).length + Object.keys(data.watched).length + Object.keys(data.dubs).length + Object.keys(data.history).length; },
