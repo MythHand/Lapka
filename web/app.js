@@ -1017,6 +1017,7 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
     emptyEl.classList.add('hide'); stage.classList.remove('is-empty');
     paintTitle(); paintActive(); syncStatus();
     requestAnimationFrame(() => requestAnimationFrame(revealCurrent));
+    restoredIdle = true; setTimeout(paintPauseInfo, 400);   // the same pause as any: the facts show until play is pressed
   }
   return true;
 }
@@ -1533,7 +1534,7 @@ async function playItem(it, autoplay = true, glide = true) {
   skipNow = null; skipEl.hidden = true;
   if (!it.switching) hideNotice();   // the notice of a source being switched stays until the picture is back
   endCard.classList.remove('show');
-  hidePauseInfo();
+  restoredIdle = false; hidePauseInfo();
   emptyEl.classList.add('hide');
   stage.classList.remove('is-empty');
 
@@ -4700,9 +4701,10 @@ function otherName(series) {
   const cyr = /[\u0400-\u04ff]/;
   return pool.find(a => !cyr.test(a) && /[A-Za-z]/.test(a)) || pool.find(a => !cyr.test(a)) || pool[0];
 }
+let restoredIdle = false;   // a session brought back and not started: the stage shows the episode, paused in effect
 function paintPauseInfo() {
   const it = cur();
-  const due = state.set.pauseInfo !== 'off' && it && it.loadedSrc && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
+  const due = state.set.pauseInfo !== 'off' && it && (it.loadedSrc || restoredIdle) && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
   if (!due) { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); return; }
   const season = seasonOf(it);
   const s = season ? season.series : state.series;

@@ -218,19 +218,17 @@ svg.ph{ fill:currentColor; stroke:none; }
    one even run from the left, where it is deepest and blurred most, to
    the right, where it is thinner but never gone. It fades in, and the
    text rises into place a moment behind it; it fades out at once. */
-.pauseinfo{
-  position:absolute; inset:0;
-  pointer-events:none; opacity:0;
-  transition:opacity .22s ease;
-}
-.pauseinfo.show{ opacity:1; transition:opacity .55s ease; }
+.pauseinfo{ position:absolute; inset:0; pointer-events:none; visibility:hidden; transition:visibility 0s .22s; }
+.pauseinfo.show{ visibility:visible; transition:visibility 0s; }
+/* no mask and no opacity on an ancestor: both can rob the blur of its backdrop in some browsers;
+   the veil fades by its own opacity, the dark thins to the right by its own gradient */
 .pauseinfo__veil{
-  position:absolute; inset:0;
+  position:absolute; inset:0; opacity:0;
   background:linear-gradient(to right, rgba(16,17,20,.96), rgba(16,17,20,.72));
   backdrop-filter:blur(90px) saturate(1.1); -webkit-backdrop-filter:blur(90px) saturate(1.1);
-  -webkit-mask-image:linear-gradient(to right, #000, rgba(0,0,0,.7));
-  mask-image:linear-gradient(to right, #000, rgba(0,0,0,.7));
+  transition:opacity .22s ease;
 }
+.pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
 .pauseinfo__box{
   position:absolute; left:36px; top:150px;
   width:min(84%, 1500px); max-height:calc(100% - 300px);
