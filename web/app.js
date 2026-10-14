@@ -1142,7 +1142,6 @@ function historyRow(h) {
   row.append(cover, body, x);
   /* the link opens where it was left: the episode stopped in, or the one after the last finished */
   row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
-  row.onmouseenter = () => setHistActive(row);
   return row;
 }
 /* The row stood on, lit as a row under the pointer is: there is always one
@@ -1169,12 +1168,16 @@ queueLinkInput.addEventListener('keydown', e => {
   const i = histActive ? rows.indexOf(histActive) : rows.length;
   setHistActive(rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowUp' ? -1 : 1)))]);
 });
-/* the pointer moving over the list takes the standing back from the keys */
+/* The pointer takes the standing when it moves, and only then: the list
+   scrolling under a pointer at rest brings other rows under it, and the
+   browser reports those as entered, which is not a move of the hand. */
+let histPointer = null;
 histPop.addEventListener('mousemove', e => {
-  if (!histPop.classList.contains('is-keys')) return;
+  if (histPointer && histPointer.x === e.clientX && histPointer.y === e.clientY) return;
+  histPointer = { x: e.clientX, y: e.clientY };
   histPop.classList.remove('is-keys');
   const row = e.target.closest('.histpop__row');
-  if (row) setHistActive(row);
+  if (row && row !== histActive) setHistActive(row);
 });
 /* A row leaves the list from the top down. It is taken out of the flow at
    once, the scroll gives back its height where it can, and the frame takes
