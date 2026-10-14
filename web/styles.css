@@ -1077,7 +1077,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 .queue__add .tag--sq svg{ width:17px; height:17px; }
 .queue__add--grid .tag--sq{ width:auto; }
 /* the history and the trash stand apart: one remembers, the other empties */
-.queue__add .tag--sq + .tag--sq{ margin-left:10px; }
+.queue__add .linkform + .tag--sq{ margin-left:10px; }   /* the bin stands off the field by the 17px it stood off the history's button */
 
 /* ── the links pasted: a list beside the history button ──────────
    Fixed and on the body, as tall as the window allows, the newest at
