@@ -243,15 +243,15 @@ svg.ph{ fill:currentColor; stroke:none; }
   transition:opacity .2s ease, transform .2s ease;
 }
 .pauseinfo.show .pauseinfo__box{ opacity:1; transform:none; transition:opacity .6s ease .12s, transform .6s cubic-bezier(.2,.8,.3,1) .12s; }
-.pauseinfo__cover{ width:clamp(154px, min(34vh, 16vw), 280px); aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:rgba(255,255,255,.06); }
+.pauseinfo__cover{ width:clamp(154px, min(34vh, 15vw), 280px); aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:rgba(255,255,255,.06); }
 .pauseinfo__cover:not([src]){ display:none; }
 /* The text part is as wide as its two columns. The columns follow the window,
    not the frame, so the queue shown, hidden or resized never reflows them; and
    their share of the window is laid out for the frame left beside the queue at
    its widest (709px), with 36px on each side of the box, the cover and the gaps:
-   at 1920 that leaves 823px for the columns, 310 + 48 + 465; the floors meet a
-   1440 window with the queue at 504px exactly. */
-.pauseinfo__text{ --pi-facts:clamp(250px, calc(40vw - 458px), 500px); --pi-dubs:clamp(300px, calc(60vw - 687px), 620px); --pi-gap:48px; width:calc(var(--pi-facts) + var(--pi-gap) + var(--pi-dubs)); }
+   at 1920 that leaves 823px for the columns, 376 + 48 + 399; the floors meet a
+   1440 window with the queue at 504px. */
+.pauseinfo__text{ --pi-facts:clamp(280px, calc(46vw - 507px), 520px); --pi-dubs:clamp(280px, calc(54vw - 638px), 620px); --pi-gap:48px; width:calc(var(--pi-facts) + var(--pi-gap) + var(--pi-dubs)); }
 .pauseinfo__title{ font-size:calc(26px + var(--fs)); font-weight:600; line-height:1.2; color:var(--tx-1); }
 .pauseinfo__alt{ margin-top:4px; font-size:calc(14px + var(--fs)); line-height:1.4; color:var(--tx-2); }
 .pauseinfo__alt:empty{ display:none; }
