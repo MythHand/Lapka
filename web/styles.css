@@ -233,7 +233,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .pauseinfo__box{
   position:absolute; left:36px; top:150px;
-  width:min(72%, 1180px); max-height:calc(100% - 300px);
+  width:min(84%, 1500px); max-height:calc(100% - 300px);
   display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 36px; align-items:start;
   opacity:0; transform:translateY(10px);
   transition:opacity .2s ease, transform .2s ease;
@@ -247,14 +247,14 @@ svg.ph{ fill:currentColor; stroke:none; }
 .pauseinfo__alt:empty{ display:none; }
 /* two columns: the facts of the part, then its dubs by name */
 .pauseinfo__cols{
-  margin-top:18px; display:grid; grid-template-columns:minmax(0,5fr) minmax(0,4fr); gap:0 40px; align-items:start;
+  margin-top:18px; display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr); gap:0 48px; align-items:start;
   font-family:var(--mono); font-size:calc(12.5px + var(--fs)); line-height:1.5; letter-spacing:0; font-variant-ligatures:none;
 }
 /* the facts: label and value side by side, every label as wide as the widest */
 .pauseinfo__facts{ display:grid; grid-template-columns:max-content minmax(0,1fr); gap:7px 16px; align-content:start; }
 .pauseinfo__facts:empty{ display:none; }
 .pauseinfo__k{ color:var(--tx-3); white-space:nowrap; }
-.pauseinfo__v{ color:var(--tx-2); overflow-wrap:anywhere; }
+.pauseinfo__v{ color:var(--tx-2); min-width:0; }   /* wraps at spaces only: a word is never cut */
 /* the dubs: the label on top, the names flowing under it, the one in play brighter */
 .pauseinfo__dubs{ display:grid; grid-template-columns:minmax(0,1fr); gap:7px 0; align-content:start; }
 .pauseinfo__dubs:empty{ display:none; }

@@ -4715,7 +4715,7 @@ function paintPauseInfo() {
   const rows = [
     ['kind', kindLabel(s) || (s.kind === 'tv' ? t('info.tv') : null)], ['year', s.year], ['episodes', episodes],
     ['genres', (f.genres || []).join(', ')], ['origin', f.origin], ['studio', f.studio],
-    ['age', [f.age, f.mpaa].filter(Boolean).join(' · ')],
+    ['age', [f.age, f.mpaa].filter(Boolean).join(' · ').replace(/-/g, '\u2011')],   // PG‑13 stays on one line
   ].filter(([, v]) => v);
   pauseFacts.replaceChildren(...rows.flatMap(([k, v]) => { const a = document.createElement('span'); a.className = 'pauseinfo__k'; a.textContent = t('info.' + k); const b = document.createElement('span'); b.className = 'pauseinfo__v'; b.textContent = String(v); return [a, b]; }));
   const dubs = it.dubs || [];
