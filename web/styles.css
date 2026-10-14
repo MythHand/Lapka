@@ -249,9 +249,12 @@ svg.ph{ fill:currentColor; stroke:none; }
 .pauseinfo__title{ font-size:calc(26px + var(--fs)); font-weight:600; line-height:1.2; color:var(--tx-1); }
 .pauseinfo__alt{ margin-top:4px; font-size:calc(14px + var(--fs)); line-height:1.4; color:var(--tx-2); }
 .pauseinfo__alt:empty{ display:none; }
-/* two columns: the facts of the part, then its dubs by name */
+/* two columns: the facts of the part, then its dubs by name. The facts keep a
+   narrow column, a third of the width within 250…400px, and the dubs take the
+   rest up to their ceiling, since their names can run to dozens. On a tight
+   frame (queue open) the facts yield to half, so nothing runs past the box. */
 .pauseinfo__cols{
-  margin-top:18px; display:grid; grid-template-columns:minmax(0,3fr) minmax(0,2fr); gap:0 48px; align-items:start;
+  margin-top:18px; display:grid; grid-template-columns:min(max(34%, 250px), 400px, 55%) minmax(0, 1fr); gap:0 48px; align-items:start;
   font-family:var(--mono); font-size:calc(12.5px + var(--fs)); line-height:1.5; letter-spacing:0; font-variant-ligatures:none;
 }
 /* the facts: label and value side by side, every label as wide as the widest */
@@ -260,7 +263,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 .pauseinfo__k{ color:var(--tx-3); white-space:nowrap; }
 .pauseinfo__v{ color:var(--tx-2); min-width:0; }   /* wraps at spaces only: a word is never cut */
 /* the dubs: the label on top, the names flowing under it, the one in play brighter */
-.pauseinfo__dubs{ display:grid; grid-template-columns:minmax(0,1fr); gap:7px 0; align-content:start; }
+.pauseinfo__dubs{ display:grid; grid-template-columns:minmax(0,1fr); gap:7px 0; align-content:start; max-width:820px; }
 .pauseinfo__dubs:empty{ display:none; }
 .pauseinfo__names{ color:var(--tx-2); display:flex; flex-wrap:wrap; gap:4px 0; }
 .pauseinfo__names i{ font-style:normal; }
