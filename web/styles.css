@@ -1064,7 +1064,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .queue__sum{ display:flex; flex-direction:column; justify-content:center; gap:0; line-height:1.35; }
 #queueTotal{ display:none; }
-.queue__add{ display:flex; gap:7px; flex-wrap:wrap; }
+.queue__add{ display:flex; gap:12px; flex-wrap:wrap; }   /* the footer's own gap, between the field and the bin as between the footer's parts */
 /* When the buttons do not fit on one line they stand two by two (fitFoot
    in the player code). Left to wrap freely, one of them ended up alone on a line:
    "Leeren" in German at 504px, and at 360px in every language. */
@@ -1077,7 +1077,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 .queue__add .tag--sq svg{ width:17px; height:17px; }
 .queue__add--grid .tag--sq{ width:auto; }
 /* the history and the trash stand apart: one remembers, the other empties */
-.queue__add .linkform + .tag--sq{ margin-left:10px; }   /* the bin stands off the field by the 17px it stood off the history's button */
 
 /* ── the links pasted: a list beside the history button ──────────
    Fixed and on the body, as tall as the window allows, the newest at
@@ -1939,7 +1938,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
 /* the field keeps the width a bare input has, plus forty pixels; the footer's row is as it was */
 .linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
-.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 69px + var(--ctl-h)); }   /* the footer's field: a bare field's width, forty pixels, and the room of the history's button it took over */
+.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 64px + var(--ctl-h)); }   /* the footer's field: a bare field's width, forty pixels, and the room of the history's button it took over, less the wider gap */
 .linkform__enter{
   position:absolute; right:8px; top:50%; transform:translateY(-50%);
   font:inherit; font-size:calc(11px + var(--fs)); line-height:1; padding:3px 6px; border-radius:6px;
