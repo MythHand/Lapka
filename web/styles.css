@@ -236,20 +236,22 @@ svg.ph{ fill:currentColor; stroke:none; }
 .pauseinfo__veil:nth-child(4){ width:30%; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
 .pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
 .pauseinfo__box{
-  position:absolute; left:36px; top:125px;
-  max-height:calc(100% - 300px);
-  display:grid; grid-template-columns:auto auto; gap:0 36px; align-items:start;
+  position:absolute; left:36px; right:36px; top:125px;
+  max-width:1500px; max-height:calc(100% - 300px);
+  display:grid; grid-template-columns:auto auto; justify-content:start; gap:0 36px; align-items:start;
   opacity:0; transform:translateY(10px);
   transition:opacity .2s ease, transform .2s ease;
 }
 .pauseinfo.show .pauseinfo__box{ opacity:1; transform:none; transition:opacity .6s ease .12s, transform .6s cubic-bezier(.2,.8,.3,1) .12s; }
-.pauseinfo__cover{ width:clamp(154px, 34vh, 280px); aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:rgba(255,255,255,.06); }
+.pauseinfo__cover{ width:clamp(154px, min(34vh, 16vw), 280px); aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:rgba(255,255,255,.06); }
 .pauseinfo__cover:not([src]){ display:none; }
-/* the text part is as wide as its two columns. The columns follow the window,
-   not the frame: each a share of the viewport between a floor and a ceiling,
-   so the queue shown, hidden or resized never reflows the facts or the dubs,
-   while a larger screen gets wider columns */
-.pauseinfo__text{ --pi-facts:clamp(280px, 24vw, 520px); --pi-dubs:clamp(340px, 31vw, 680px); --pi-gap:48px; width:calc(var(--pi-facts) + var(--pi-gap) + var(--pi-dubs)); }
+/* The text part is as wide as its two columns. The columns follow the window,
+   not the frame, so the queue shown, hidden or resized never reflows them; and
+   their share of the window is laid out for the frame left beside the queue at
+   its widest (709px), with 36px on each side of the box, the cover and the gaps:
+   at 1920 that leaves 823px for the columns, 310 + 48 + 465; the floors meet a
+   1440 window with the queue at 504px exactly. */
+.pauseinfo__text{ --pi-facts:clamp(250px, calc(40vw - 458px), 500px); --pi-dubs:clamp(300px, calc(60vw - 687px), 620px); --pi-gap:48px; width:calc(var(--pi-facts) + var(--pi-gap) + var(--pi-dubs)); }
 .pauseinfo__title{ font-size:calc(26px + var(--fs)); font-weight:600; line-height:1.2; color:var(--tx-1); }
 .pauseinfo__alt{ margin-top:4px; font-size:calc(14px + var(--fs)); line-height:1.4; color:var(--tx-2); }
 .pauseinfo__alt:empty{ display:none; }
@@ -264,11 +266,11 @@ svg.ph{ fill:currentColor; stroke:none; }
 .pauseinfo__facts:empty{ display:none; }
 .pauseinfo__k{ color:var(--tx-3); white-space:nowrap; }
 .pauseinfo__v{ color:var(--tx-2); min-width:0; }   /* wraps at spaces only: a word is never cut */
-/* the dubs: the label on top, the names flowing under it, the one in play brighter */
+/* the dubs: the label on top, the names flowing under it, the one in play brighter; a name never breaks inside */
 .pauseinfo__dubs{ display:grid; grid-template-columns:minmax(0,1fr); gap:7px 0; align-content:start; }
 .pauseinfo__dubs:empty{ display:none; }
 .pauseinfo__names{ color:var(--tx-2); display:flex; flex-wrap:wrap; gap:4px 0; }
-.pauseinfo__names i{ font-style:normal; }
+.pauseinfo__names i{ font-style:normal; white-space:nowrap; }
 .pauseinfo__names i.is-dead{ color:var(--tx-3); }
 .pauseinfo__names i.is-on{ color:var(--tx-1); }
 .pauseinfo__names i:not(:last-child)::after{ content:' · '; color:var(--tx-3); white-space:pre; }
