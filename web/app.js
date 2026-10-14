@@ -1165,8 +1165,16 @@ queueLinkInput.addEventListener('keydown', e => {
   const rows = [...histPop.querySelectorAll('.histpop__row')];
   if (!rows.length) return;
   e.preventDefault();
+  histPop.classList.add('is-keys');
   const i = histActive ? rows.indexOf(histActive) : rows.length;
   setHistActive(rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowUp' ? -1 : 1)))]);
+});
+/* the pointer moving over the list takes the standing back from the keys */
+histPop.addEventListener('mousemove', e => {
+  if (!histPop.classList.contains('is-keys')) return;
+  histPop.classList.remove('is-keys');
+  const row = e.target.closest('.histpop__row');
+  if (row) setHistActive(row);
 });
 /* A row leaves the list from the top down. It is taken out of the flow at
    once, the scroll gives back its height where it can, and the frame takes
@@ -1264,6 +1272,7 @@ btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHisto
 queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory({ fromField: true }); });
 queueLinkInput.addEventListener('input', () => {
   histQuery = queueLinkInput.value;
+  histPop.classList.add('is-keys');   // typing stands on the newest row left, whatever the pointer is over
   if (histPop.hidden) { if (histList.length) openHistory({ fromField: true }); return; }
   paintHistoryList();
 });

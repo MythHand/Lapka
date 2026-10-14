@@ -1106,26 +1106,30 @@ svg.ph{ fill:currentColor; stroke:none; }
 .histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
 .histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px 12px; position:relative; margin-top:auto; }   /* at the frame's bottom when the frame is taller: a search in a frozen frame */
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
+/* a row's plate runs to the frame's edges, as a row of the queue does; its
+   words keep their place (the list's inset is given back as the row's own) */
 .histpop__row{
   position:relative;
-  display:flex; gap:12px; align-items:flex-start; width:100%; padding:8px 6px; border-radius:8px;
+  display:flex; gap:12px; align-items:flex-start; width:calc(100% + 24px); margin:0 -12px; padding:8px 18px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
-.histpop__row:hover, .histpop__row.is-active{ background:var(--glass-hi); color:var(--tx-1); }   /* under the pointer, or stood on by the arrows */
+/* one row lit at a time: the one stood on; the pointer lights the row under it
+   until the keys take over, and takes the standing back as soon as it moves */
+.histpop:not(.is-keys) .histpop__row:hover, .histpop__row.is-active{ background:var(--glass-hi); color:var(--tx-1); }
 /* the cross that forgets the link: in the row's top right corner, over the
    row but not over its words (the title keeps the corner free), shown while
    the pointer is on the row or the cross has the focus */
 .histpop__x{
-  position:absolute; top:6px; right:6px; width:26px; height:26px;
+  position:absolute; top:6px; right:18px; width:26px; height:26px;
   display:grid; place-items:center; color:var(--tx-3); opacity:0;   /* part of the row's hover: no pace of its own */
 }
 .histpop__x svg{ opacity:.55; }                                      /* quiet until the pointer is on it */
 .histpop__x:hover svg{ opacity:1; }
-.histpop__row:hover .histpop__x, .histpop__row.is-active .histpop__x, .histpop__x:focus-visible{ opacity:1; }
+.histpop:not(.is-keys) .histpop__row:hover .histpop__x, .histpop__row.is-active .histpop__x, .histpop__x:focus-visible{ opacity:1; }
 .histpop__x:hover{ color:var(--tx-1); }
 .histpop__x svg{ width:14px; height:14px; }
 /* a row on its way out: a fading copy where it stood, while the others slide; nothing answers the pointer meanwhile */
-.histpop__ghost{ position:absolute; pointer-events:none; }
+.histpop__ghost{ position:absolute; pointer-events:none; margin:0; }
 .histpop__ghost .histpop__x{ display:none; }
 .histpop__list.is-settling .histpop__row:hover{ background:transparent; color:var(--tx-2); }
 .histpop__list.is-settling .histpop__x{ opacity:0; }
