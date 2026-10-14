@@ -1102,12 +1102,12 @@ svg.ph{ fill:currentColor; stroke:none; }
    beside. On the right the column of the row stood on. */
 .histpop__main{ flex:0 0 653px; min-width:0; display:flex; flex-direction:column; min-height:0; }
 .histpop__side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; min-height:0; border-left:1px solid var(--line-2); }
-.histpop__parts{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; }
+.histpop__parts{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; position:relative; }
 .histpop__part{ display:flex; gap:12px; align-items:flex-start; padding:10px 12px; color:var(--tx-2); }
 .histpop__parttitle{ color:var(--tx-1); font-size:calc(13px + var(--fs)); line-height:1.35; overflow-wrap:anywhere; }
 .histpop__partalt{ font-size:calc(12px + var(--fs)); line-height:1.4; color:var(--tx-2); margin-top:2px; overflow-wrap:anywhere; }
 .histpop__partmeta{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; margin-top:3px; }
-.histpop__hit{ background:rgba(255,255,255,.16); color:var(--tx-1); border-radius:3px; padding:0 1px; margin:0 -1px; }   /* the letters searched for */
+.histpop__hit{ background:none; color:#e0a24a; }   /* the letters searched for, in the amber of a button armed to act */
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */
@@ -1121,9 +1121,11 @@ svg.ph{ fill:currentColor; stroke:none; }
   display:flex; gap:12px; align-items:flex-start; width:100%; padding:10px 12px; border-radius:6px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
-/* one row lit at a time: the one stood on; the pointer lights the row under it
-   until the keys take over, and takes the standing back as soon as it moves */
-.histpop:not(.is-keys) .histpop__row:hover, .histpop__row.is-active{ background:var(--glass-hi); color:var(--tx-1); }
+/* two marks: a faint plate under the pointer, at once and meaning nothing
+   more; the full plate on the row stood on, which the keys move at once and
+   the pointer only after resting on a row a moment */
+.histpop:not(.is-keys) .histpop__row:hover{ background:rgba(255,255,255,.04); }
+.histpop__row.is-active, .histpop:not(.is-keys) .histpop__row.is-active:hover{ background:var(--glass-hi); color:var(--tx-1); }
 /* the cross that forgets the link: in the row's top right corner, over the
    row but not over its words (the title keeps the corner free), shown while
    the pointer is on the row or the cross has the focus */

@@ -1131,6 +1131,9 @@ function paintHistorySide(h) {
     list.append(el);
   }
   side.append(top, list);
+  /* the column opens on the first part the search found, so what was found is in sight */
+  const hit = list.querySelector('.histpop__hit');
+  if (hit) list.scrollTop = Math.max(0, hit.closest('.histpop__part').offsetTop - 6);
 }
 /* a title without its season: "2 сезон", "Season 2", "TV-2", "Part 2", a
    closing number equal to the season; what is left says whose season it is */
@@ -1203,15 +1206,15 @@ function historyRow(h) {
    Enter opens the row stood on. The column follows the standing: at once
    from the keys, and after the pointer has rested on a row a moment, so a
    pointer crossing the list does not make the column flicker. */
-let histActive = null, histSideT = 0;
-const HIST_DWELL = 1300;
-function setHistActive(row, { dwell = false } = {}) {
+let histActive = null, histSideT = 0, histDwell = null;
+const HIST_DWELL = 700;
+function setHistActive(row) {
   histPop.querySelector('.histpop__row.is-active')?.classList.remove('is-active');
   histActive = row || null;
-  clearTimeout(histSideT);
+  clearTimeout(histSideT); histDwell = null;
   if (!row) { paintHistorySide(null); return; }
   row.classList.add('is-active');
-  if (dwell) histSideT = setTimeout(() => paintHistorySide(row.__h), HIST_DWELL); else paintHistorySide(row.__h);
+  paintHistorySide(row.__h);
   /* the list alone scrolls to show it: no ancestor is moved on the way */
   const list = row.parentElement, top = row.offsetTop, bottom = top + row.offsetHeight;
   if (top < list.scrollTop) list.scrollTop = top;
@@ -1226,17 +1229,23 @@ queueLinkInput.addEventListener('keydown', e => {
   const i = histActive ? rows.indexOf(histActive) : rows.length;
   setHistActive(rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowUp' ? -1 : 1)))]);
 });
-/* The pointer takes the standing when it moves, and only then: the list
-   scrolling under a pointer at rest brings other rows under it, and the
-   browser reports those as entered, which is not a move of the hand. */
+/* The pointer takes the standing when it has rested on a row a moment: a
+   pointer crossing the rows on its way to the column changes nothing. It
+   must move for that, too: the list scrolling under a pointer at rest brings
+   other rows under it, and the browser reports those as entered, which is
+   not a move of the hand. */
 let histPointer = null;
 histPop.addEventListener('mousemove', e => {
   if (histPointer && histPointer.x === e.clientX && histPointer.y === e.clientY) return;
   histPointer = { x: e.clientX, y: e.clientY };
   histPop.classList.remove('is-keys');
   const row = e.target.closest('.histpop__row');
-  if (row && row !== histActive) setHistActive(row, { dwell: true });
+  if (!row || row === histActive) { clearTimeout(histSideT); histDwell = null; return; }
+  if (row === histDwell) return;
+  clearTimeout(histSideT); histDwell = row;
+  histSideT = setTimeout(() => { if (histDwell === row && row.isConnected) setHistActive(row); }, HIST_DWELL);
 });
+histPop.addEventListener('mouseleave', () => { clearTimeout(histSideT); histDwell = null; });
 /* A row leaves the list from the top down. It is taken out of the flow at
    once, the scroll gives back its height where it can, and the rows stand
    where they now stand; then everything that moved slides from where it
