@@ -1145,10 +1145,10 @@ function historyRow(h) {
   row.onmouseenter = () => setHistActive(row);
   return row;
 }
-/* The row the keys stand on, lit as a row under the pointer is: the arrows
-   in the footer's field walk the rows, up from the field into the newest,
-   down past the oldest back to the field; Enter opens the row stood on.
-   The pointer takes the standing with it. */
+/* The row stood on, lit as a row under the pointer is: there is always one
+   while rows are shown, the newest at first; the arrows in the footer's
+   field walk the rows up and down, the pointer takes the standing with it;
+   Enter opens the row stood on. */
 let histActive = null;
 function setHistActive(row) {
   histPop.querySelector('.histpop__row.is-active')?.classList.remove('is-active');
@@ -1160,9 +1160,8 @@ queueLinkInput.addEventListener('keydown', e => {
   const rows = [...histPop.querySelectorAll('.histpop__row')];
   if (!rows.length) return;
   e.preventDefault();
-  const i = histActive ? rows.indexOf(histActive) : -1;
-  if (e.key === 'ArrowUp') setHistActive(rows[i < 0 ? rows.length - 1 : Math.max(0, i - 1)]);
-  else setHistActive(i < 0 || i === rows.length - 1 ? null : rows[i + 1]);
+  const i = histActive ? rows.indexOf(histActive) : rows.length;
+  setHistActive(rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowUp' ? -1 : 1)))]);
 });
 /* A row leaves the list from the top down. It is taken out of the flow at
    once, the scroll gives back its height where it can, and the frame takes
@@ -1230,6 +1229,8 @@ function paintHistoryList() {
   /* the height of what is shown, up to the window; the bottom stays at the button, the newest rows beside it */
   placeHistory();
   list.scrollTop = list.scrollHeight;
+  /* one row always stands out: the newest of those shown, until the arrows or the pointer choose another */
+  setHistActive(list.querySelector('.histpop__row:last-child'));
 }
 /* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
 function placeHistory() {
@@ -1274,8 +1275,7 @@ function escapeHistory() {
   if (queueLinkInput.value) { queueLinkInput.value = ''; histQuery = ''; paintHistoryList(); return true; }
   closeHistory(); return true;
 }
-/* the rows the search leaves, in the order they stand */
-const histShown = () => { const q = histQuery.trim().toLowerCase(); return q ? histList.filter(h => histMatches(h, q)) : histList; };
+
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
@@ -5023,16 +5023,14 @@ linkForm.addEventListener('submit', e => {
   if (u) openLink(u);
 });
 /* Enter in the footer's field: a link opens; other words are a search in
-   the history, and open the row the arrows stand on, or the one row left */
+   the history, and open the row stood on */
 const looksLikeLink = u => /^(?:https?:)?\/\//i.test(u) || /^[\w.-]+\.[a-z]{2,}(?:[/?#:]|$)/i.test(u);
 queueLinkForm.addEventListener('submit', e => {
   e.preventDefault();
   const u = queueLinkInput.value.trim();
   if (!u) return;
   if (looksLikeLink(u)) { queueLinkInput.value = ''; closeHistory(); openLink(u); return; }
-  if (histPop.hidden) return;
-  const pick = histActive || (histShown().length === 1 ? histPop.querySelector('.histpop__row') : null);
-  if (pick) pick.click();
+  if (!histPop.hidden && histActive) histActive.click();
 });
 
 const linkIn = dt => {
