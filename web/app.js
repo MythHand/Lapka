@@ -1122,7 +1122,7 @@ function paintHistorySide(h) {
     const body = document.createElement('div'); body.className = 'histpop__body';
     const title = document.createElement('div'); title.className = 'histpop__parttitle'; title.append(markHits(p.title || '', q));
     body.append(title);
-    if (p.alt && !sameName(p.alt, p.title)) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
+    if (p.alt && /[\u0400-\u04ff]/.test(p.title || '') && !/[\u0400-\u04ff]/.test(p.alt)) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
     const kind = kindLabel(p) || (p.kind === 'tv' ? t('info.tv') : '');
     const meta = document.createElement('div'); meta.className = 'histpop__partmeta';
     meta.textContent = [p.year, kind, p.episodes ? t('pop.episodes', { n: p.episodes }) : null].filter(Boolean).join(' · ');
@@ -4817,16 +4817,22 @@ const pauseInfo = $('#pauseInfo'), pauseCover = $('#pauseCover'), pauseTitle = $
    (і, ї, є, ґ, ё, the signs) brought to one */
 const nameKey = s => String(s || '').toLowerCase().replace(/[іїй]/g, 'и').replace(/[єё]/g, 'е').replace(/ґ/g, 'г').replace(/[ъьʼ'’]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
 const sameName = (a, b) => nameKey(a) === nameKey(b);
+/* The other name of a series is its international one (in Latin letters)
+   or its original one (in its own script); a title already in either needs
+   none, and a name in Cyrillic is a translation, never the other name. Of
+   the names the page gave, the one of the same part (the same trailing
+   number) in Latin letters comes first, then the original. */
 function otherName(series) {
   const title = String(series.title || '').trim();
-  const all = (series.altTitles || []).map(a => String(a).trim()).filter(a => a && !sameName(a, title));
+  const cyr = /[\u0400-\u04ff]/;
+  if (!cyr.test(title)) return '';
+  const all = (series.altTitles || []).map(a => String(a).trim()).filter(a => a && !cyr.test(a) && !sameName(a, title));
   if (!all.length) return '';
   const n = /(\d{1,2})\s*$/.exec(title)?.[1] || (series.season && series.season > 1 ? String(series.season) : null);
   const same = n ? all.filter(a => new RegExp(`(?:^|[^\\d])${n}(?:[^\\d]|$)`).test(a)) : all;
   const pool = same.length ? same : n ? [] : all;
   if (!pool.length) return '';
-  const cyr = /[\u0400-\u04ff]/;
-  return pool.find(a => !cyr.test(a) && /[A-Za-z]/.test(a)) || pool.find(a => !cyr.test(a)) || pool[0];
+  return pool.find(a => /[A-Za-z]/.test(a)) || pool[0];
 }
 let restoredIdle = false;   // a session brought back and not started: the stage shows the episode, paused in effect
 function paintPauseInfo() {
