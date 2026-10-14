@@ -5110,9 +5110,8 @@ const looksLikeLink = u => /^(?:https?:)?\/\//i.test(u) || /^[\w.-]+\.[a-z]{2,}(
 queueLinkForm.addEventListener('submit', e => {
   e.preventDefault();
   const u = queueLinkInput.value.trim();
-  if (!u) return;
-  if (looksLikeLink(u)) { queueLinkInput.value = ''; closeHistory(); openLink(u); return; }
-  if (!histPop.hidden && histActive) histActive.click();
+  if (u && looksLikeLink(u)) { queueLinkInput.value = ''; closeHistory(); openLink(u); return; }
+  if (!histPop.hidden && histActive) histActive.click();   // the field empty or a search: the row stood on
 });
 
 const linkIn = dt => {
