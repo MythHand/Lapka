@@ -1066,11 +1066,10 @@ function whenWords(at) {
 }
 /* The frame of the list, once per opening: on top the title and, at the
    right edge, how many links the history holds, whatever is searched;
-   under it the rows; at the bottom the search, next to the button the
-   list came from. Top and bottom stay while the rows scroll between
-   them. A search narrows the rows as it is typed, by the title, the
-   link, the year or the name of any part the link opened, and the frame
-   takes the height of what is left, up to the window. */
+   under it the rows, the newest at the bottom, beside the footer's link
+   field. That field is the search: what is typed in it narrows the rows,
+   by the title, the link, the year or the name of any part the link
+   opened, and the frame takes the height of what is left, up to the window. */
 function buildHistory() {
   histPop.replaceChildren();
   const top = document.createElement('div'); top.className = 'histpop__top';
@@ -1078,25 +1077,8 @@ function buildHistory() {
   const count = document.createElement('span'); count.className = 'histpop__count';
   top.append(head, count);
   const list = document.createElement('div'); list.className = 'histpop__list';
-  const bottom = document.createElement('div'); bottom.className = 'histpop__bottom';
-  const wrap = document.createElement('span'); wrap.className = 'histpop__field';
-  const search = document.createElement('input');
-  search.className = 'linkform__in histpop__search';
-  search.type = 'text'; search.spellcheck = false; search.autocomplete = 'off';
-  search.placeholder = t('hist.search');
-  search.value = histQuery;
-  /* the project's own cross, not the browser's: it clears the search and gives the field back */
-  const clear = document.createElement('button');
-  clear.type = 'button'; clear.className = 'histpop__clear'; clear.title = t('queue.clear');
-  clear.innerHTML = phSvg(PH.x);
-  clear.hidden = !histQuery;
-  search.oninput = () => { histQuery = search.value; clear.hidden = !histQuery; paintHistoryList(); };
-  clear.onclick = ev => { ev.stopPropagation(); search.value = ''; histQuery = ''; clear.hidden = true; paintHistoryList(); search.focus({ preventScroll: true }); };
-  wrap.append(search, clear);
-  bottom.append(wrap);
-  histPop.append(top, list, bottom);
+  histPop.append(top, list);
   paintHistoryList();
-  search.focus({ preventScroll: true });
 }
 /* a title without its season: "2 сезон", "Season 2", "TV-2", "Part 2", a
    closing number equal to the season; what is left says whose season it is */
@@ -1231,23 +1213,44 @@ function placeHistory() {
   histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
   histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
 }
-function openHistory() { histQuery = ''; histPop.hidden = false; buildHistory(); loadHistory(); }
+/* The list opens from its button, or from the footer's link field as soon
+   as it is focused, since the field searches the list; from the field it
+   opens only when there is something in the history, so a first link is
+   typed in peace. What the field holds is the search from the start. */
+let histOpening = null;
+async function openHistory({ fromField = false } = {}) {
+  histQuery = queueLinkInput.value;
+  if (fromField) {
+    const loading = histOpening || (histOpening = loadHistory().finally(() => { histOpening = null; }));
+    await loading;
+    if (!histList.length || document.activeElement !== queueLinkInput) return;
+  }
+  histPop.hidden = false; buildHistory();
+  if (!fromField) { loadHistory(); queueLinkInput.focus({ preventScroll: true }); }
+}
 function closeHistory() { histPop.hidden = true; }
 btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
+queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory({ fromField: true }); });
+queueLinkInput.addEventListener('input', () => {
+  histQuery = queueLinkInput.value;
+  if (histPop.hidden) { if (histList.length) openHistory({ fromField: true }); return; }
+  paintHistoryList();
+});
 histPop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
-  /* the button toggles the list itself; any other click closes it and does nothing else */
-  if (histPop.hidden || e.target.closest('#histPop, #btnHistory')) return;
+  /* the button toggles the list itself, the field keeps it; any other click closes it and does nothing else */
+  if (histPop.hidden || e.target.closest('#histPop, #btnHistory, #queueLinkForm')) return;
   e.stopPropagation(); e.preventDefault();
   closeHistory();
 }, true);
 /* Esc in the history: a search typed is cleared first, then the list closes */
 function escapeHistory() {
   if (histPop.hidden) return false;
-  const search = histPop.querySelector('.histpop__search');
-  if (search && search.value) { search.value = ''; histQuery = ''; const x = histPop.querySelector('.histpop__clear'); if (x) x.hidden = true; paintHistoryList(); return true; }
+  if (queueLinkInput.value) { queueLinkInput.value = ''; histQuery = ''; paintHistoryList(); return true; }
   closeHistory(); return true;
 }
+/* the rows the search leaves, in the order they stand */
+const histShown = () => { const q = histQuery.trim().toLowerCase(); return q ? histList.filter(h => histMatches(h, q)) : histList; };
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
 /* ── which dub and which stream play ─────────────────────────
@@ -4994,10 +4997,16 @@ linkForm.addEventListener('submit', e => {
   const u = linkInput.value.trim();
   if (u) openLink(u);
 });
+/* Enter in the footer's field: a link opens; other words are a search in
+   the history, and open the one row they leave, if it is one */
+const looksLikeLink = u => /^(?:https?:)?\/\//i.test(u) || /^[\w.-]+\.[a-z]{2,}(?:[/?#:]|$)/i.test(u);
 queueLinkForm.addEventListener('submit', e => {
   e.preventDefault();
   const u = queueLinkInput.value.trim();
-  if (u) { queueLinkInput.value = ''; openLink(u); }
+  if (!u) return;
+  if (looksLikeLink(u)) { queueLinkInput.value = ''; closeHistory(); openLink(u); return; }
+  const left = histShown();
+  if (left.length === 1 && !histPop.hidden) histPop.querySelector('.histpop__row')?.click();
 });
 
 const linkIn = dt => {

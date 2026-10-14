@@ -1097,26 +1097,14 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .histpop:not([hidden]){ opacity:1; transform:none; transition:opacity 120ms cubic-bezier(.33,.8,.45,1), transform 200ms cubic-bezier(.2,.8,.3,1), display 0s allow-discrete; }
 @starting-style{ .histpop:not([hidden]){ opacity:0; transform:translateX(-10px); } }
-/* On top the title and the count, at the bottom the search; only the rows
-   between them scroll, so neither needs a fill of its own and the veil
-   stays one from edge to edge. */
+/* On top the title and the count, under them the rows, which alone scroll;
+   the search is the footer's link field, which the list stands beside. */
 .histpop__top{
   flex:none; display:flex; justify-content:space-between; align-items:baseline; gap:12px;
   padding:16px 18px 10px;
 }
 .histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
-.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px; position:relative; }
-.histpop__bottom{ flex:none; padding:10px 12px 12px; }
-.histpop__field{ position:relative; display:flex; }
-.histpop__search{ width:100%; padding:0 40px 0 12px; }
-/* the cross inside the field, as the project draws its buttons: a quiet square that lights up under the pointer */
-.histpop__clear{
-  position:absolute; right:5px; top:50%; transform:translateY(-50%);
-  display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:6px;
-  color:var(--tx-3); background:transparent; transition:background .15s, color .15s;
-}
-.histpop__clear:hover{ color:var(--tx-1); background:var(--glass-hi); }
-.histpop__clear svg{ width:14px; height:14px; }
+.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px 12px; position:relative; }
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
 .histpop__row{
   position:relative;
