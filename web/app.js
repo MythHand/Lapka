@@ -1142,8 +1142,28 @@ function historyRow(h) {
   row.append(cover, body, x);
   /* the link opens where it was left: the episode stopped in, or the one after the last finished */
   row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
+  row.onmouseenter = () => setHistActive(row);
   return row;
 }
+/* The row the keys stand on, lit as a row under the pointer is: the arrows
+   in the footer's field walk the rows, up from the field into the newest,
+   down past the oldest back to the field; Enter opens the row stood on.
+   The pointer takes the standing with it. */
+let histActive = null;
+function setHistActive(row) {
+  histPop.querySelector('.histpop__row.is-active')?.classList.remove('is-active');
+  histActive = row || null;
+  if (row) { row.classList.add('is-active'); row.scrollIntoView({ block: 'nearest' }); }
+}
+queueLinkInput.addEventListener('keydown', e => {
+  if (histPop.hidden || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const rows = [...histPop.querySelectorAll('.histpop__row')];
+  if (!rows.length) return;
+  e.preventDefault();
+  const i = histActive ? rows.indexOf(histActive) : -1;
+  if (e.key === 'ArrowUp') setHistActive(rows[i < 0 ? rows.length - 1 : Math.max(0, i - 1)]);
+  else setHistActive(i < 0 || i === rows.length - 1 ? null : rows[i + 1]);
+});
 /* A row leaves the list from the top down. It is taken out of the flow at
    once, the scroll gives back its height where it can, and the frame takes
    its new place at the button; then everything that moved (the rows, the
@@ -1198,7 +1218,7 @@ function paintHistoryList() {
   if (count) count.textContent = String(histList.length);
   const q = histQuery.trim().toLowerCase();
   const shown = q ? histList.filter(h => histMatches(h, q)) : histList;
-  list.replaceChildren();
+  list.replaceChildren(); histActive = null;
   const say = text => { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = text; list.append(e); };
   if (!histList.length) say(t('hist.empty'));
   else if (!shown.length) say(t('hist.nothing'));
@@ -4998,15 +5018,16 @@ linkForm.addEventListener('submit', e => {
   if (u) openLink(u);
 });
 /* Enter in the footer's field: a link opens; other words are a search in
-   the history, and open the one row they leave, if it is one */
+   the history, and open the row the arrows stand on, or the one row left */
 const looksLikeLink = u => /^(?:https?:)?\/\//i.test(u) || /^[\w.-]+\.[a-z]{2,}(?:[/?#:]|$)/i.test(u);
 queueLinkForm.addEventListener('submit', e => {
   e.preventDefault();
   const u = queueLinkInput.value.trim();
   if (!u) return;
   if (looksLikeLink(u)) { queueLinkInput.value = ''; closeHistory(); openLink(u); return; }
-  const left = histShown();
-  if (left.length === 1 && !histPop.hidden) histPop.querySelector('.histpop__row')?.click();
+  if (histPop.hidden) return;
+  const pick = histActive || (histShown().length === 1 ? histPop.querySelector('.histpop__row') : null);
+  if (pick) pick.click();
 });
 
 const linkIn = dt => {

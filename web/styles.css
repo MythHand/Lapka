@@ -1111,7 +1111,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   display:flex; gap:12px; align-items:flex-start; width:100%; padding:8px 6px; border-radius:8px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
-.histpop__row:hover{ background:var(--glass-hi); color:var(--tx-1); }
+.histpop__row:hover, .histpop__row.is-active{ background:var(--glass-hi); color:var(--tx-1); }   /* under the pointer, or stood on by the arrows */
 /* the cross that forgets the link: in the row's top right corner, over the
    row but not over its words (the title keeps the corner free), shown while
    the pointer is on the row or the cross has the focus */
@@ -1121,7 +1121,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .histpop__x svg{ opacity:.55; }                                      /* quiet until the pointer is on it */
 .histpop__x:hover svg{ opacity:1; }
-.histpop__row:hover .histpop__x, .histpop__x:focus-visible{ opacity:1; }
+.histpop__row:hover .histpop__x, .histpop__row.is-active .histpop__x, .histpop__x:focus-visible{ opacity:1; }
 .histpop__x:hover{ color:var(--tx-1); }
 .histpop__x svg{ width:14px; height:14px; }
 /* a row on its way out: a fading copy where it stood, while the others slide; nothing answers the pointer meanwhile */
