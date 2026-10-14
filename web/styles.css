@@ -236,7 +236,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 .pauseinfo__veil:nth-child(4){ width:30%; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
 .pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
 .pauseinfo__box{
-  position:absolute; left:36px; top:150px;
+  position:absolute; left:36px; top:125px;
   width:min(84%, 1500px); max-height:calc(100% - 300px);
   display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 36px; align-items:start;
   opacity:0; transform:translateY(10px);
