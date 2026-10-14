@@ -1042,7 +1042,7 @@ function rememberLink(url, series) {
   if (series.year) q.set('year', String(series.year));
   if (series.season) q.set('season', String(series.season));
   /* the parts the link opened: where watching stops is looked for across them */
-  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null, year: s.series.year || null, episodes: s.series.episodes.length, alt: otherName(s.series), cover: s.series.cover || null }))));
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null, year: s.series.year || null, episodes: s.series.episodes.length, dubs: new Set(s.series.episodes.flatMap(e => (e.dubs || []).map(d => d.name || d.key))).size, alt: otherName(s.series), cover: s.series.cover || null }))));
   /* the facts the page stated of the series and its other names, for a fuller row one day */
   if (series.facts && Object.keys(series.facts).length) q.set('facts', JSON.stringify(series.facts));
   if (series.altTitles && series.altTitles.length) q.set('altTitles', JSON.stringify(series.altTitles.slice(0, 6)));
@@ -1125,7 +1125,7 @@ function paintHistorySide(h) {
     if (p.alt && /[\u0400-\u04ff]/.test(p.title || '') && !/[\u0400-\u04ff]/.test(p.alt)) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
     const kind = kindLabel(p) || (p.kind === 'tv' ? t('info.tv') : '');
     const meta = document.createElement('div'); meta.className = 'histpop__partmeta';
-    meta.textContent = [p.year, kind, p.episodes ? t('pop.episodes', { n: p.episodes }) : null].filter(Boolean).join(' · ');
+    meta.textContent = [p.year, kind, p.episodes ? t('pop.episodes', { n: p.episodes }) : null, p.dubs ? t('queue.dubs', { n: p.dubs }) : null].filter(Boolean).join(' · ');
     if (meta.textContent) body.append(meta);
     el.append(cover, body);
     list.append(el);

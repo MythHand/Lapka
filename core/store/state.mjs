@@ -109,7 +109,7 @@ export async function openState(own) {
       const known = Object.values(data.history).flatMap(h => h.parts || []);
       const part = p => {
         const was = known.find(x => x.id === String(p.id)) || {};
-        return { id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || was.title || '', season: Number(p.season) || null, kind: p.kind || was.kind || null, year: Number(p.year) || was.year || null, episodes: Number(p.episodes) || was.episodes || 0, alt: p.alt ? String(p.alt).slice(0, 200) : was.alt || '', coverFile: p.coverFile || was.coverFile || null };
+        return { id: String(p.id), ordinal: Number(p.ordinal) || null, title: p.title || was.title || '', season: Number(p.season) || null, kind: p.kind || was.kind || null, year: Number(p.year) || was.year || null, episodes: Number(p.episodes) || was.episodes || 0, dubs: Number(p.dubs) || was.dubs || 0, alt: p.alt ? String(p.alt).slice(0, 200) : was.alt || '', coverFile: p.coverFile || was.coverFile || null };
       };
       const parts = Array.isArray(rec.parts) && rec.parts.length ? rec.parts.map(part) : (rec.seriesId ? [part({ id: rec.seriesId, title: rec.title, kind: rec.kind, year: rec.year, episodes: rec.episodes, alt: (rec.altTitles || [])[0], coverFile: rec.coverFile })] : []);
       /* A franchise is one row: a link whose parts meet those of a row

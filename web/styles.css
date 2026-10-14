@@ -1103,10 +1103,13 @@ svg.ph{ fill:currentColor; stroke:none; }
 .histpop__main{ flex:0 0 653px; min-width:0; display:flex; flex-direction:column; min-height:0; }
 .histpop__side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; min-height:0; border-left:1px solid var(--line-2); }
 .histpop__parts{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; position:relative; }
-.histpop__part{ display:flex; gap:12px; align-items:flex-start; padding:10px 12px; color:var(--tx-2); }
-.histpop__parttitle{ color:var(--tx-1); font-size:calc(13px + var(--fs)); line-height:1.35; overflow-wrap:anywhere; }
-.histpop__partalt{ font-size:calc(12px + var(--fs)); line-height:1.4; color:var(--tx-2); margin-top:2px; overflow-wrap:anywhere; }
-.histpop__partmeta{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; margin-top:3px; }
+/* a part: its two names close together as one block, the facts a step below
+   in a quieter voice, so a title that runs to two lines still reads as a name */
+.histpop__part{ display:flex; gap:12px; align-items:flex-start; padding:12px 12px; color:var(--tx-2); }
+.histpop__part .histpop__body{ gap:0; }
+.histpop__parttitle{ color:var(--tx-1); font-size:calc(13px + var(--fs)); line-height:1.3; overflow-wrap:anywhere; }
+.histpop__partalt{ font-size:calc(12px + var(--fs)); line-height:1.35; color:var(--tx-2); margin-top:1px; overflow-wrap:anywhere; }
+.histpop__partmeta{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; margin-top:7px; }
 .histpop__hit{ background:none; color:#e0a24a; }   /* the letters searched for, in the amber of a button armed to act */
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */

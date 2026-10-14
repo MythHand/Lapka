@@ -237,9 +237,9 @@ describe('the links pasted', () => {
     const kept = (await (await get('/api/history')).json()).history.at(-1).parts;
     assert.deepEqual(kept.slice(0, 2).map(p => [p.season, p.kind]), [[2, 'tv'], [null, 'movie']]);
     /* a part tells of itself for the column: its year, its episodes, one other name, its cover kept as a file like the row's */
-    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv', year: 2025, episodes: 12, alt: 'Select 2', cover: site.base + '/media/cover-b.jpg' }, { id: 'abc125', ordinal: 5 }]) }));
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv', year: 2025, episodes: 12, dubs: 3, alt: 'Select 2', cover: site.base + '/media/cover-b.jpg' }, { id: 'abc125', ordinal: 5 }]) }));
     const told2 = (await (await get('/api/history')).json()).history.at(-1).parts.find(p => p.id === 'abc124');
-    assert.deepEqual([told2.year, told2.episodes, told2.alt], [2025, 12, 'Select 2']);
+    assert.deepEqual([told2.year, told2.episodes, told2.dubs, told2.alt], [2025, 12, 3, 'Select 2']);
     assert.equal((await get('/api/history/cover/abc124')).status, 200, 'a part\'s cover is served by its id');
     const silent = (await (await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2 }, { id: 'abc125', ordinal: 5 }]) }))).json()).parts.find(p => p.id === 'abc124');
     assert.deepEqual([silent.year, silent.alt, !!silent.coverFile], [2025, 'Select 2', true], 'a part that says nothing now keeps what it said');
