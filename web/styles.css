@@ -220,14 +220,20 @@ svg.ph{ fill:currentColor; stroke:none; }
    text rises into place a moment behind it; it fades out at once. */
 .pauseinfo{ position:absolute; inset:0; pointer-events:none; visibility:hidden; transition:visibility 0s .22s; }
 .pauseinfo.show{ visibility:visible; transition:visibility 0s; }
-/* no mask and no opacity on an ancestor: both can rob the blur of its backdrop in some browsers;
-   the veil fades by its own opacity, the dark thins to the right by its own gradient */
+/* No mask and no opacity on an ancestor: both can rob the blur of its
+   backdrop in some browsers. The blur grades from the left without a
+   mask: four veils nested from the left edge, each a little blur of its
+   own, add up where they overlap, deepest at the left and faint at the
+   right; the dark is one gradient on the widest. Each fades by its own
+   opacity. */
 .pauseinfo__veil{
-  position:absolute; inset:0; opacity:0;
-  background:linear-gradient(to right, rgba(16,17,20,.84), rgba(16,17,20,.52));
-  backdrop-filter:blur(14px) saturate(1.1); -webkit-backdrop-filter:blur(14px) saturate(1.1);
+  position:absolute; top:0; bottom:0; left:0; opacity:0;
   transition:opacity .22s ease;
 }
+.pauseinfo__veil:nth-child(1){ right:0; background:linear-gradient(to right, rgba(16,17,20,.84), rgba(16,17,20,.5)); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
+.pauseinfo__veil:nth-child(2){ width:72%; backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
+.pauseinfo__veil:nth-child(3){ width:50%; backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
+.pauseinfo__veil:nth-child(4){ width:30%; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
 .pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
 .pauseinfo__box{
   position:absolute; left:36px; top:150px;
