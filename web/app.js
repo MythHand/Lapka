@@ -4716,7 +4716,7 @@ function paintPauseInfo() {
   const episodes = f.episodesTotal ? (f.episodes && f.episodes < f.episodesTotal ? `${f.episodes} / ${f.episodesTotal}` : String(f.episodesTotal)) : s.episodes && s.episodes.length ? String(s.episodes.length) : null;
   const rows = [
     ['kind', kindLabel(s) || (s.kind === 'tv' ? t('info.tv') : null)], ['year', s.year], ['episodes', episodes],
-    ['genres', (f.genres || []).join(', ')], ['origin', f.origin], ['studio', f.studio],
+    ['genres', (f.genres || []).map(g => g.replace(/ /g, '\u00a0')).join(', ')], ['origin', f.origin], ['studio', f.studio],   // a genre's name stays on one line, the list breaks after a comma
     ['age', [f.age, f.mpaa].filter(Boolean).join(' · ').replace(/-/g, '\u2011')],   // PG‑13 stays on one line
   ].filter(([, v]) => v);
   pauseFacts.replaceChildren(...rows.flatMap(([k, v]) => { const a = document.createElement('span'); a.className = 'pauseinfo__k'; a.textContent = t('info.' + k); const b = document.createElement('span'); b.className = 'pauseinfo__v'; b.textContent = String(v); return [a, b]; }));
