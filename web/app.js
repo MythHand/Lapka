@@ -1153,7 +1153,12 @@ let histActive = null;
 function setHistActive(row) {
   histPop.querySelector('.histpop__row.is-active')?.classList.remove('is-active');
   histActive = row || null;
-  if (row) { row.classList.add('is-active'); row.scrollIntoView({ block: 'nearest' }); }
+  if (!row) return;
+  row.classList.add('is-active');
+  /* the list alone scrolls to show it: no ancestor is moved on the way */
+  const list = row.parentElement, top = row.offsetTop, bottom = top + row.offsetHeight;
+  if (top < list.scrollTop) list.scrollTop = top;
+  else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
 }
 queueLinkInput.addEventListener('keydown', e => {
   if (histPop.hidden || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.metaKey || e.ctrlKey || e.altKey) return;
