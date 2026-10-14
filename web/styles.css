@@ -224,8 +224,8 @@ svg.ph{ fill:currentColor; stroke:none; }
    the veil fades by its own opacity, the dark thins to the right by its own gradient */
 .pauseinfo__veil{
   position:absolute; inset:0; opacity:0;
-  background:linear-gradient(to right, rgba(16,17,20,.96), rgba(16,17,20,.72));
-  backdrop-filter:blur(28px) saturate(1.1); -webkit-backdrop-filter:blur(28px) saturate(1.1);
+  background:linear-gradient(to right, rgba(16,17,20,.84), rgba(16,17,20,.52));
+  backdrop-filter:blur(14px) saturate(1.1); -webkit-backdrop-filter:blur(14px) saturate(1.1);
   transition:opacity .22s ease;
 }
 .pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
