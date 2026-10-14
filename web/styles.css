@@ -1939,7 +1939,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
 /* the field keeps the width a bare input has, plus forty pixels; the footer's row is as it was */
 .linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
-.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 62px); }   /* the footer's field: a bare field's width and forty pixels */
+.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 69px + var(--ctl-h)); }   /* the footer's field: a bare field's width, forty pixels, and the room of the history's button it took over */
 .linkform__enter{
   position:absolute; right:8px; top:50%; transform:translateY(-50%);
   font:inherit; font-size:calc(11px + var(--fs)); line-height:1; padding:3px 6px; border-radius:6px;

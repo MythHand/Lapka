@@ -156,7 +156,7 @@ const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
 const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
-const btnHistory = $('#btnHistory'), histPop = $('#histPop');
+const histPop = $('#histPop');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, qualityMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
@@ -1313,13 +1313,13 @@ function paintHistoryList() {
    at the button's. A window too narrow for that puts the frame above the
    footer instead: to the left, and lower by what the footer takes. */
 function placeHistory() {
-  const r = btnHistory.getBoundingClientRect(), add = queueAdd.getBoundingClientRect();
+  const add = queueAdd.getBoundingClientRect();
   histPop.style.height = '';
   const w = histPop.offsetWidth, h = histPop.offsetHeight;
   if (add.right + 8 + w + 12 <= window.innerWidth) {
     histPop.classList.remove('is-above');
     histPop.style.left = (add.right + 8) + 'px';
-    histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
+    histPop.style.top = Math.max(12, Math.min(add.bottom - h, window.innerHeight - h - 12)) + 'px';
   } else {
     histPop.classList.add('is-above');
     const h2 = Math.max(240, Math.min(h, add.top - 8 - 12));
@@ -1328,35 +1328,30 @@ function placeHistory() {
     histPop.style.top = Math.max(12, add.top - 8 - h2) + 'px';
   }
 }
-/* The list opens from its button, or from the footer's link field as soon
-   as it is focused, since the field searches the list; from the field it
-   opens only when there is something in the history, so a first link is
-   typed in peace. What the field holds is the search from the start. */
+/* The list opens from the footer's link field as soon as it is focused,
+   since the field searches the list; only when there is something in the
+   history, so a first link is typed in peace. What the field holds is the
+   search from the start. */
 let histOpening = null;
-async function openHistory({ fromField = false } = {}) {
-  histQuery = queueLinkInput.value;
-  if (fromField) {
-    const loading = histOpening || (histOpening = loadHistory().finally(() => { histOpening = null; }));
-    await loading;
-    if (!histList.length || document.activeElement !== queueLinkInput) return;
-    histQuery = queueLinkInput.value;   // what was typed while the list loaded
-  }
+async function openHistory() {
+  const loading = histOpening || (histOpening = loadHistory().finally(() => { histOpening = null; }));
+  await loading;
+  if (!histList.length || document.activeElement !== queueLinkInput || !histPop.hidden) return;
+  histQuery = queueLinkInput.value;   // what was typed while the list loaded
   histPop.hidden = false; buildHistory();
-  if (!fromField) { loadHistory(); queueLinkInput.focus({ preventScroll: true }); }
 }
 function closeHistory() { histPop.hidden = true; clearTimeout(histSideT); }
-btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
-queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory({ fromField: true }); });
+queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory(); });
 queueLinkInput.addEventListener('input', () => {
   histQuery = queueLinkInput.value;
   histPop.classList.add('is-keys');   // typing stands on the newest row left, whatever the pointer is over
-  if (histPop.hidden) { if (histList.length) openHistory({ fromField: true }); return; }
+  if (histPop.hidden) { if (histList.length) openHistory(); return; }
   paintHistoryList();
 });
 histPop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
-  /* the button toggles the list itself, the field keeps it; any other click closes it and does nothing else */
-  if (histPop.hidden || e.target.closest('#histPop, #btnHistory, #queueLinkForm')) return;
+  /* the field keeps the list; any other click closes it and does nothing else */
+  if (histPop.hidden || e.target.closest('#histPop, #queueLinkForm')) return;
   e.stopPropagation(); e.preventDefault();
   closeHistory();
 }, true);
