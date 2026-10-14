@@ -214,31 +214,32 @@ svg.ph{ fill:currentColor; stroke:none; }
 /* soft gradient at the top, mirrors the bottom one but lighter */
 /* ── what the page said of the series, while paused ──────────
    The whole frame is the field: the veil covers it edge to edge, the
-   title chip and the deck stay above it. Lapka's dark over the frame,
-   blurred deep on the left where the text stands, thinner but never
-   gone on the right, so the frame still shows through there. It comes
-   in as a circle growing from the left edge. The text keeps clear of
-   the chip and the deck by its own margins. */
+   title chip and the deck stay above it. Lapka's dark over the frame in
+   one even run from the left, where it is deepest and blurred most, to
+   the right, where it is thinner but never gone. It fades in, and the
+   text rises into place a moment behind it; it fades out at once. */
 .pauseinfo{
   position:absolute; inset:0;
   pointer-events:none; opacity:0;
-  clip-path:circle(0% at 0 50%);
-  transition:clip-path .6s cubic-bezier(.2,.8,.3,1), opacity .2s;
+  transition:opacity .22s ease;
 }
-.pauseinfo.show{ opacity:1; clip-path:circle(170% at 0 50%); }
+.pauseinfo.show{ opacity:1; transition:opacity .55s ease; }
 .pauseinfo__veil{
   position:absolute; inset:0;
-  background:linear-gradient(to right, rgba(16,17,20,.9) 0%, rgba(16,17,20,.86) 55%, rgba(16,17,20,.55) 100%);
+  background:linear-gradient(to right, rgba(16,17,20,.92), rgba(16,17,20,.5));
   backdrop-filter:blur(56px) saturate(1.2); -webkit-backdrop-filter:blur(56px) saturate(1.2);
-  -webkit-mask-image:linear-gradient(to right, #000 0%, #000 55%, rgba(0,0,0,.45) 100%);
-  mask-image:linear-gradient(to right, #000 0%, #000 55%, rgba(0,0,0,.45) 100%);
+  -webkit-mask-image:linear-gradient(to right, #000, rgba(0,0,0,.4));
+  mask-image:linear-gradient(to right, #000, rgba(0,0,0,.4));
 }
 .pauseinfo__box{
-  position:absolute; left:36px; top:50%; transform:translateY(-50%);
-  width:min(72%, 1180px); max-height:calc(100% - 250px);
-  display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 32px; align-items:start;
+  position:absolute; left:36px; top:150px;
+  width:min(72%, 1180px); max-height:calc(100% - 300px);
+  display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 36px; align-items:start;
+  opacity:0; transform:translateY(10px);
+  transition:opacity .2s ease, transform .2s ease;
 }
-.pauseinfo__cover{ width:clamp(110px, 24vh, 200px); aspect-ratio:2/3; object-fit:cover; border-radius:10px; background:rgba(255,255,255,.06); }
+.pauseinfo.show .pauseinfo__box{ opacity:1; transform:none; transition:opacity .6s ease .12s, transform .6s cubic-bezier(.2,.8,.3,1) .12s; }
+.pauseinfo__cover{ width:clamp(154px, 34vh, 280px); aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:rgba(255,255,255,.06); }
 .pauseinfo__cover:not([src]){ display:none; }
 .pauseinfo__text{ min-width:0; }
 .pauseinfo__title{ font-size:calc(26px + var(--fs)); font-weight:600; line-height:1.2; color:var(--tx-1); }
