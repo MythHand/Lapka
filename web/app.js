@@ -1218,10 +1218,10 @@ function paintHistoryList() {
   if (count) count.textContent = String(histList.length);
   const q = histQuery.trim().toLowerCase();
   const shown = q ? histList.filter(h => histMatches(h, q)) : histList;
-  /* A search keeps the list at the height it had before, so the frame
-     stands still while the rows come and go; the rows left gather at the
-     bottom, by the field. The search cleared, the list is its own height again. */
-  if (q) { if (!list.style.height && list.clientHeight) list.style.height = list.clientHeight + 'px'; } else list.style.height = '';
+  /* A search keeps the frame at the height it had before, so it stands
+     still while the rows come and go; the rows left gather at its bottom,
+     by the field. The search cleared, the frame is its own height again. */
+  if (q) { if (!histPop.style.height && histPop.offsetHeight) histPop.style.height = histPop.offsetHeight + 'px'; } else histPop.style.height = '';
   list.replaceChildren(); histActive = null;
   const say = text => { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = text; list.append(e); };
   if (!histList.length) say(t('hist.empty'));
@@ -1253,7 +1253,7 @@ async function openHistory({ fromField = false } = {}) {
   histPop.hidden = false; buildHistory();
   if (!fromField) { loadHistory(); queueLinkInput.focus({ preventScroll: true }); }
 }
-function closeHistory() { histPop.hidden = true; }
+function closeHistory() { histPop.hidden = true; histPop.style.height = ''; }
 btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
 queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory({ fromField: true }); });
 queueLinkInput.addEventListener('input', () => {

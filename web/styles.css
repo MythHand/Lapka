@@ -1104,11 +1104,10 @@ svg.ph{ fill:currentColor; stroke:none; }
   padding:16px 18px 10px;
 }
 .histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
-.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px 12px; position:relative; display:flex; flex-direction:column; }
-.histpop__list > :first-child{ margin-top:auto; }   /* the rows stand at the bottom when the list is taller than they are (a search in a frozen frame) */
+.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px 12px; position:relative; margin-top:auto; }   /* at the frame's bottom when the frame is taller: a search in a frozen frame */
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
 .histpop__row{
-  position:relative; flex:none;
+  position:relative;
   display:flex; gap:12px; align-items:flex-start; width:100%; padding:8px 6px; border-radius:8px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
