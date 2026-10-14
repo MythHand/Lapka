@@ -1122,7 +1122,7 @@ function paintHistorySide(h) {
     const body = document.createElement('div'); body.className = 'histpop__body';
     const title = document.createElement('div'); title.className = 'histpop__parttitle'; title.append(markHits(p.title || '', q));
     body.append(title);
-    if (p.alt) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
+    if (p.alt && !sameName(p.alt, p.title)) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
     const kind = kindLabel(p) || (p.kind === 'tv' ? t('info.tv') : '');
     const meta = document.createElement('div'); meta.className = 'histpop__partmeta';
     meta.textContent = [p.year, kind, p.episodes ? t('pop.episodes', { n: p.episodes }) : null].filter(Boolean).join(' · ');
@@ -3884,6 +3884,9 @@ function ownScroll(el) {
   let hideT = 0, near = false, drag = null;
   const place = () => {
     if (!bar.isConnected) el.append(bar);            // a menu redrawn whole took the bar with it
+    /* the thumb is measured out of the way: standing where it stood for the
+       old content, it would stretch the scrollable area past the new one */
+    bar.style.transform = '';
     const sh = el.scrollHeight, ch = el.clientHeight;
     if (sh <= ch + 1) { bar.hidden = true; return false; }
     bar.hidden = false;
@@ -4809,9 +4812,14 @@ const pauseInfo = $('#pauseInfo'), pauseCover = $('#pauseCover'), pauseTitle = $
    the one that carries the same number as the title does (the second
    season's own), in another script by preference, else the first that
    is not the title itself. */
+/* the same name written another way is no other name: case, marks and
+   spaces aside, and the letters that differ between the Cyrillic alphabets
+   (і, ї, є, ґ, ё, the signs) brought to one */
+const nameKey = s => String(s || '').toLowerCase().replace(/[іїй]/g, 'и').replace(/[єё]/g, 'е').replace(/ґ/g, 'г').replace(/[ъьʼ'’]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+const sameName = (a, b) => nameKey(a) === nameKey(b);
 function otherName(series) {
   const title = String(series.title || '').trim();
-  const all = (series.altTitles || []).map(a => String(a).trim()).filter(a => a && a.toLowerCase() !== title.toLowerCase());
+  const all = (series.altTitles || []).map(a => String(a).trim()).filter(a => a && !sameName(a, title));
   if (!all.length) return '';
   const n = /(\d{1,2})\s*$/.exec(title)?.[1] || (series.season && series.season > 1 ? String(series.season) : null);
   const same = n ? all.filter(a => new RegExp(`(?:^|[^\\d])${n}(?:[^\\d]|$)`).test(a)) : all;
