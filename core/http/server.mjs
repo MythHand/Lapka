@@ -128,7 +128,21 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (mutating && p === '/api/log') {
         let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 65536) return json(res, 413, { error: 'too long' }); }
         let body = {}; try { body = JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'bad json' }); }
-        try { return json(res, 200, { ok: true, lines: await appendJournal(body.head, body.lines) }); }
+        /* the stream the page names: what the server gave for it lately, what of it is on the disk, what the warming is at */
+        const lines = Array.isArray(body.lines) ? body.lines.slice() : [];
+        const entry = delivery && body.stream ? delivery.get(String(body.stream)) : null;
+        if (entry) {
+          const now = Date.now();
+          lines.push(`-- server, stream ${entry.id}, ${entry.stream.kind || '?'} ${entry.stream.quality || ''}`);
+          for (const r of delivery.trace(entry)) lines.push(`${((r.at - now) / 1000).toFixed(1).padStart(7)}s ${r.who} ${r.name} ${r.from} ${r.ms}ms${r.size ? ' ' + Math.round(r.size / 1024) + 'K' : ''}${r.err ? ' ERR ' + r.err : ''}`);
+          try {
+            const d = await delivery.cached(entry, { level: Number(body.level) || null });
+            const have = d.ranges.reduce((n, [a, b]) => n + (b - a), 0);
+            lines.push(`on disk ${d.tag || '?'}: ${Math.round(have)}s of ${Math.round(d.duration)}s in ${d.ranges.length} stretches: ${d.ranges.map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ')}`);
+          } catch (e) { lines.push(`on disk: not read, ${e.message}`); }
+          if (warmer) lines.push(`warming: ${JSON.stringify(warmer.job())}`);
+        }
+        try { return json(res, 200, { ok: true, lines: await appendJournal(body.head, lines) }); }
         catch (e) { return json(res, 500, { error: e.message }); }
       }
 

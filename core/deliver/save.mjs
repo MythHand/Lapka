@@ -71,7 +71,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
       onProgress({ phase: 'fetch', done, total, unit: 'pieces' });
       for (const u of pieces) {
         if (signal && signal.aborted) throw stopped();
-        await delivery.piece(entry, u);
+        await delivery.piece(entry, u, 'save');
         onProgress({ phase: 'fetch', done: ++done, total, unit: 'pieces' });
       }
       const listFile = cache.fileFor(entry.id, 'local.m3u8');

@@ -1580,8 +1580,9 @@ function watchWarm() {
    through, played or pulled ahead, and the band under it shows that,
    in stretches, read from the server now and then while an HLS episode
    plays. A gap in the band is a gap on the disk. */
-let diskT = null;
+let diskT = null, lastDisk = null;   // the band as last read, told to the journal when a wait does not end
 function paintDisk(d) {
+  lastDisk = d;
   const dur = duration() || (d && d.duration) || 0;
   seekDisk.replaceChildren();
   if (!d || !dur) return;
@@ -1790,6 +1791,7 @@ function attachSource(stream) {
     hls.on(Hls.Events.LEVEL_LOADED, (_, d) => diary('hls', `level loaded, ${d.details ? d.details.fragments.length : '?'} fragments`));
     hls.on(Hls.Events.FRAG_LOADING, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loading`); });
     hls.on(Hls.Events.FRAG_LOADED, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loaded`); });
+    hls.on(Hls.Events.LEVEL_SWITCHED, (_, d) => diary('hls', `level switched to ${d && h.levels && h.levels[d.level] ? h.levels[d.level].height + 'p' : d && d.level}${h.autoLevelEnabled ? ' (auto)' : ''}`));
     hls.on(Hls.Events.LEVEL_SWITCHED, () => {
       syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu();
       /* the quality in play is known: the episode is pulled ahead at it; a level hls.js picks by itself later does not start it over */
@@ -3028,7 +3030,11 @@ function stallWatch(on) {
     stallSent = true;
     const it = cur();
     diary('stall', `${STALL_MS / 1000}s with the busy notice up; readyState ${video.readyState} paused ${video.paused} networkState ${video.networkState}`);
-    api('/api/log', { method: 'POST', body: JSON.stringify({ head: `playback stalled: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+    /* the moment itself: where the player stands, what it holds, which stream and quality, what the band said was on the disk */
+    const buf = []; for (let i = 0; i < video.buffered.length; i++) buf.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
+    diary('state', `at ${video.currentTime.toFixed(1)}s of ${(duration() || 0).toFixed(1)}s, buffered ${buf.join(' ') || 'nothing'}, stream ${it && it.stream ? `${it.stream.id} ${it.stream.kind} ${it.stream.quality || ''}` : 'none'}, loaded ${it && it.loadedSrc === (it.stream && it.stream.play) ? 'this' : 'other'}, hls level ${hls ? `${hls.currentLevel} of ${hls.levels ? hls.levels.length : '?'}${hls.autoLevelEnabled ? ' auto' : ''}` : 'none'}, wanted ${warmLevel() || 'auto'}p`);
+    diary('disk', lastDisk ? `${lastDisk.tag || '?'}: ${(lastDisk.ranges || []).map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ') || 'nothing'} of ${Math.round(lastDisk.duration || 0)}s` : 'not read');
+    api('/api/log', { method: 'POST', body: JSON.stringify({ head: `playback stalled: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines, stream: it && it.stream ? it.stream.id : null, level: warmLevel() || null }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
   }, STALL_MS);
 }
 function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {

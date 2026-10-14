@@ -148,6 +148,10 @@ describe('a stream under a changing address', () => {
       const pl2 = await delivery.playlist(delivery.get(id));
       await delivery.piece(delivery.get(id), decodeURIComponent(/u=(\S+)/.exec(pl2.split('\n').filter(l => l.includes('seg?u=')).pop())[1]));
       assert.deepEqual((await delivery.cached(delivery.get(id))).ranges, [[0, 12]], 'two pieces side by side are one stretch');
+      /* the trace tells who asked for what and who answered: the origin the first time, the disk after */
+      const trace = delivery.trace(delivery.get(id));
+      assert.deepEqual(trace.filter(r => r.name === 'main-0.ts').map(r => [r.who, r.from]), [['play', 'origin'], ['play', 'disk'], ['play', 'disk']]);
+      assert.ok(trace.every(r => typeof r.ms === 'number' && r.at > 0));
       /* another quality of the same source is another stream; the same quality twice is told apart by order */
       assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigB/index.m3u8`, quality: '480p', headers: {} }, meta), id);
       assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigC/index.m3u8`, quality: '720p', headers: {} }, { ...meta, nth: 1 }), id);

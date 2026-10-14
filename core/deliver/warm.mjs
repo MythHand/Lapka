@@ -52,7 +52,7 @@ export function createWarmer({ delivery, cache }) {
       for (const { url, seconds } of pieces) {
         if (gone) return;
         if (!(await c.has(entry.id, delivery.nameFor(entry, url)))) {
-          await delivery.piece(entry, url);
+          await delivery.piece(entry, url, 'warm');
           pulled += seconds;
           const due = began + pulled / PACE * 1000;
           if (Date.now() < due) await sleep(due - Date.now());

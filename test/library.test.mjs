@@ -477,6 +477,13 @@ describe('warming the cache', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
     const segs = pl.split('\n').filter(l => l && !l.startsWith('#'));
     assert.ok(segs.length && d.job.total >= segs.length);
     for (const s of segs) assert.equal((await get(s)).headers.get('x-lapka-cache'), 'hit');
+    /* a wait that does not end names its stream: the journal gets the server's account of it, who was given what from where, what is on the disk, what the warming is at */
+    assert.equal((await fetch(lapka.base + '/api/log', { method: 'POST', headers: { 'x-lapka': '1', 'content-type': 'application/json' }, body: JSON.stringify({ head: 'playback stalled: episode 2', lines: ['1.0s play episode 2'], stream: hls.id, level: null }) })).status, 200);
+    const told = await fsp.readFile(JOURNAL_FILE, 'utf8');
+    const entry = told.slice(told.lastIndexOf('playback stalled: episode 2'));
+    assert.ok(entry.includes(`-- server, stream ${hls.id}`), entry);
+    assert.ok(/ warm main-\d+\.ts origin \d+ms/.test(entry) && / play main-\d+\.ts disk \d+ms/.test(entry), 'the warming pulled from the origin, the player was served from the disk');
+    assert.ok(/on disk main: \d+s of \d+s in 1 stretches/.test(entry) && entry.includes('warming: {'), entry);
     /* asked for the same again: the job stands as it is; stopped: nothing to stop */
     assert.equal((await (await post(`/api/warm?stream=${hls.id}`)).json()).job.state, 'done');
     assert.equal((await (await post('/api/warm/stop')).json()).job.state, 'done');

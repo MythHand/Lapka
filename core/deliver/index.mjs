@@ -32,7 +32,7 @@ export function createDelivery({ session, cache }) {
       ? hash(`${meta.seriesId}|${meta.episode}|${meta.dub}|${meta.sourceId || ''}|${streamTag(stream)}|${meta.nth || 0}`)
       : hash(`${meta.sourceId || ''}|${stream.url}`);
     const known = streams.get(id);
-    if (!known) streams.set(id, { id, stream, meta, allowed: new Set([stream.url]), names: new Map(), tags: new Map() });
+    if (!known) streams.set(id, { id, stream, meta, allowed: new Set([stream.url]), names: new Map(), tags: new Map(), trace: [] });
     else if (known.stream.url !== stream.url) { known.stream = stream; known.allowed.add(stream.url); }   // signed anew: the same episode at a fresh address
     return id;
   }
@@ -124,15 +124,27 @@ export function createDelivery({ session, cache }) {
 
   /* The playlist: fetched every time (it may be live or signed
      anew), rewritten, and the media playlist kept for saving later. */
+  /* The trace: the last requests of a stream, who asked (the player, the
+     warming, a save), what, whether the disk or the origin answered, how
+     long it took, what went wrong. Read when a wait does not end, so the
+     journal can tell what the player was given. */
+  const TRACE_KEEP = 48;
+  function note(entry, rec) { entry.trace.push({ at: Date.now(), ...rec }); if (entry.trace.length > TRACE_KEEP) entry.trace.shift(); }
+  const trace = entry => entry.trace.slice();
+
   async function playlist(entry, url = entry.stream.url) {
     if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
-    const res = await fetchOrigin(entry, url);
-    if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
-    const text = await res.text();
-    const base = res.url || url;
-    const body = rewrite(entry, text, base);
-    cacheOf().write(entry.id, `${playlistTag(entry, base)}.m3u8`, text).catch(() => {});
-    return body;
+    const t0 = Date.now();
+    try {
+      const res = await fetchOrigin(entry, url);
+      if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
+      const text = await res.text();
+      const base = res.url || url;
+      const body = rewrite(entry, text, base);
+      cacheOf().write(entry.id, `${playlistTag(entry, base)}.m3u8`, text).catch(() => {});
+      note(entry, { who: 'play', name: `${playlistTag(entry, base)}.m3u8`, from: 'origin', ms: Date.now() - t0 });
+      return body;
+    } catch (e) { note(entry, { who: 'play', name: 'playlist', from: 'origin', ms: Date.now() - t0, err: e.reason?.key || e.code || e.message }); throw e; }
   }
 
   /* A segment or a key: from the cache if it passed through before,
@@ -140,13 +152,17 @@ export function createDelivery({ session, cache }) {
      asked for twice at once (the player and the warming of the episode
      both want it) is fetched once and given to both. */
   const inFlight = new Map();         // id/name → the fetch under way
-  async function piece(entry, url) {
-    if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
+  async function piece(entry, url, who = 'play') {
+    if (!entry.allowed.has(url)) { note(entry, { who, name: nameFor(entry, url), from: 'none', ms: 0, err: 'noStream' }); throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } }); }
     const name = nameFor(entry, url);
     const cache = cacheOf();
-    if (await cache.has(entry.id, name)) { cache.touch(entry.id); return { bytes: await cache.read(entry.id, name), hit: true }; }
+    const t0 = Date.now();
+    if (await cache.has(entry.id, name)) { cache.touch(entry.id); const bytes = await cache.read(entry.id, name); note(entry, { who, name, from: 'disk', ms: Date.now() - t0, size: bytes.length }); return { bytes, hit: true }; }
     const key = `${entry.id}/${name}`;
-    if (inFlight.has(key)) return { bytes: await inFlight.get(key), hit: true };
+    if (inFlight.has(key)) {
+      try { const bytes = await inFlight.get(key); note(entry, { who, name, from: 'shared', ms: Date.now() - t0, size: bytes.length }); return { bytes, hit: true }; }
+      catch (e) { note(entry, { who, name, from: 'shared', ms: Date.now() - t0, err: e.reason?.key || e.code || e.message }); throw e; }
+    }
     const fetching = (async () => {
       const res = await fetchOrigin(entry, url);
       if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
@@ -155,7 +171,8 @@ export function createDelivery({ session, cache }) {
       return bytes;
     })().finally(() => inFlight.delete(key));
     inFlight.set(key, fetching);
-    return { bytes: await fetching, hit: false };
+    try { const bytes = await fetching; note(entry, { who, name, from: 'origin', ms: Date.now() - t0, size: bytes.length }); return { bytes, hit: false }; }
+    catch (e) { note(entry, { who, name, from: 'origin', ms: Date.now() - t0, err: e.reason?.key || e.code || e.message }); throw e; }
   }
 
   /* MP4: the browser's range request goes to the origin as it is. */
@@ -194,7 +211,7 @@ export function createDelivery({ session, cache }) {
     return { ranges: ranges.map(([a, b]) => [Math.round(a * 10) / 10, Math.round(b * 10) / 10]), duration: Math.round(duration * 10) / 10, tag };
   }
 
-  return { register, get, playlist, text, piece, file, rewrite, learn, cached, streams, fetchOrigin, nameFor };
+  return { register, get, playlist, text, piece, file, rewrite, learn, cached, streams, fetchOrigin, nameFor, trace };
 }
 
 export const contentType = url => /\.m3u8(\?|$)/i.test(url) ? 'application/vnd.apple.mpegurl'

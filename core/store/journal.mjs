@@ -18,7 +18,7 @@ import { CONFIG_FILE } from './config.mjs';
 
 export const JOURNAL_FILE = path.join(path.dirname(CONFIG_FILE), 'lapka.log');
 export const JOURNAL_CAP = 1024 * 1024;
-const MAX_LINES = 120, MAX_LINE = 400;
+const MAX_LINES = 160, MAX_LINE = 400;
 
 /* the lines as they are kept: strings only, cut to a length, every address replaced by its mark */
 export function cleanLines(lines) {
