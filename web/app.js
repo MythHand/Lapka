@@ -156,7 +156,7 @@ const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
 const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
-const histPop = $('#histPop');
+const histPop = $('#histPop'), btnOverview = $('#btnOverview'), overview = $('#overview');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, qualityMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
@@ -1363,6 +1363,69 @@ function escapeHistory() {
 }
 
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
+
+/* ── the overview: which dubs the parts have ──────────────────
+   Built from what the queue already holds: every row's dubs. The dubs
+   stand on top by name, those in the most episodes first; under them
+   each part is its episodes as cells. A dub under the pointer lights
+   the cells that have it, a click keeps it lit. Nothing is chosen here:
+   the window is for looking. */
+let overPinned = null;
+function buildOverview() {
+  overview.replaceChildren();
+  overPinned = null; overview.classList.remove('is-keyed');
+  const dubs = new Map();
+  for (const it of state.list) for (const d of it.dubs || []) {
+    const k = d.key || d.name; if (!k) continue;
+    const o = dubs.get(k) || { key: k, name: d.name || k, n: 0 };
+    o.n++; dubs.set(k, o);
+  }
+  const names = [...dubs.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  const groups = state.seasons.length
+    ? state.seasons.map(s => ({ title: s.series.title || '', year: s.series.year, items: state.list.filter(it => it.seriesId === s.series.id) })).filter(g => g.items.length)
+    : [{ title: '', year: null, items: state.list.slice() }];
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
+  const count = document.createElement('span'); count.className = 'histpop__count'; count.textContent = String(names.length);
+  top.append(head, count);
+  const list = document.createElement('div'); list.className = 'over__dubs';
+  const cells = [];
+  const key = k => {
+    overview.classList.toggle('is-keyed', !!k);
+    for (const c of cells) c.classList.toggle('is-on', !!k && c.__dubs.has(k));
+    for (const b of list.children) b.classList.toggle('is-on', !!overPinned && b.__key === overPinned);
+  };
+  for (const d of names) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'over__dub'; b.textContent = d.name; b.__key = d.key;
+    b.onmouseenter = () => key(d.key);
+    b.onmouseleave = () => key(overPinned);
+    b.onclick = ev => { ev.stopPropagation(); overPinned = overPinned === d.key ? null : d.key; key(overPinned || d.key); };
+    list.append(b);
+  }
+  const map = document.createElement('div'); map.className = 'over__map';
+  for (const g of groups) {
+    const part = document.createElement('div'); part.className = 'over__part';
+    if (g.title) { const name = document.createElement('div'); name.className = 'over__partname'; name.textContent = [g.title, g.year].filter(Boolean).join(' · '); part.append(name); }
+    const row = document.createElement('div'); row.className = 'over__cells';
+    for (const it of [...g.items].sort((a, b) => (a.number || 0) - (b.number || 0))) {
+      const c = document.createElement('span'); c.className = 'over__cell'; c.textContent = it.number ?? '';
+      c.__dubs = new Set((it.dubs || []).map(d => d.key || d.name));
+      c.dataset.tip = (it.dubs || []).map(d => d.name).join(' · ') || t('queue.dubs', { n: 0 });
+      cells.push(c); row.append(c);
+    }
+    part.append(row); map.append(part);
+  }
+  overview.append(top, list, map);
+}
+function openOverview() { if (!state.list.length) return; buildOverview(); overview.hidden = false; }
+function closeOverview() { overview.hidden = true; }
+btnOverview.onclick = ev => { ev.stopPropagation(); if (overview.hidden) openOverview(); else closeOverview(); };
+overview.addEventListener('click', e => e.stopPropagation());
+document.addEventListener('click', e => {
+  if (overview.hidden || e.target.closest('#overview, #btnOverview')) return;
+  e.stopPropagation(); e.preventDefault();
+  closeOverview();
+}, true);
 
 /* ── which dub and which stream play ─────────────────────────
    The server opens the episode's page if it has not, takes the dub
@@ -5212,6 +5275,7 @@ function onKey(e) {
 function onEscape(e) {
   if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (!saveMenu.hidden) closeSaveMenu();
+  else if (!overview.hidden) closeOverview();
   else if (escapeHistory()) { /* cleared or closed */ }
   else if (popPinned) unpinSavePop();
   else if (anyMenuOpen()) closeMenus();

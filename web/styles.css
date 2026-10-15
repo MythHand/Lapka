@@ -1110,6 +1110,39 @@ svg.ph{ fill:currentColor; stroke:none; }
 .histpop__partalt{ font-size:calc(12px + var(--fs)); line-height:1.35; color:var(--tx-2); margin-top:1px; overflow-wrap:anywhere; }
 .histpop__partmeta{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; margin-top:7px; }
 .histpop__hit{ background:none; color:#e0a24a; }   /* the letters searched for, in the amber of a button armed to act */
+
+/* ── the overview: which dubs the parts have ──
+   A window in the history's manner, centred. On top the dubs by name,
+   the ones that run through the most episodes first; under them the
+   parts, each its episodes as a row of cells that wraps, the number in
+   the cell. A dub under the pointer lights the cells that have it; a
+   click keeps it lit while the pointer goes to read the map. */
+.over{
+  position:fixed; z-index:60; left:50%; top:50%; transform:translate(-50%,-50%);
+  width:min(1100px, calc(100vw - 24px)); max-height:calc(100vh - 24px);
+  display:flex; flex-direction:column; overflow:hidden;
+  border-radius:var(--r-lg); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  background:rgba(16,17,20,.93);
+  backdrop-filter:blur(28px) saturate(1.3); -webkit-backdrop-filter:blur(28px) saturate(1.3);
+  font-size:calc(12.5px + var(--fs)); line-height:1.45; color:var(--tx-2);
+}
+.over__dubs{ flex:none; display:flex; flex-wrap:wrap; gap:6px 16px; padding:2px 19px 14px; border-bottom:1px solid var(--line); }
+.over__dub{ font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2); cursor:pointer; transition:color .12s; }
+.over__dub:hover, .over__dub.is-on{ color:#e0a24a; }
+.over__map{ flex:0 1 auto; min-height:0; overflow:auto; padding:8px 19px 19px; }
+.over__part{ padding:10px 0 4px; }
+.over__partname{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); margin-bottom:7px; font-variant-numeric:tabular-nums; }
+.over__cells{ display:flex; flex-wrap:wrap; gap:4px; }
+.over__cell{
+  width:30px; height:30px; border-radius:6px; display:grid; place-items:center;
+  background:rgba(255,255,255,.06); color:rgba(255,255,255,.38);
+  font-family:var(--mono); font-size:calc(11px + var(--fs)); letter-spacing:0; font-variant-numeric:tabular-nums;
+  transition:background .12s, color .12s;
+}
+.over.is-keyed .over__cell{ background:rgba(255,255,255,.035); color:rgba(255,255,255,.22); }
+.over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.82); color:rgba(16,17,20,.9); }
+.saveall--sq{ width:32px; padding:0; justify-content:center; }
+.saveall--sq svg{ width:16px; height:16px; }
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */
