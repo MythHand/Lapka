@@ -1125,7 +1125,21 @@ svg.ph{ fill:currentColor; stroke:none; }
   background:rgba(16,17,20,.93);
   backdrop-filter:blur(28px) saturate(1.3); -webkit-backdrop-filter:blur(28px) saturate(1.3);
   font-size:calc(12.5px + var(--fs)); line-height:1.45; color:var(--tx-2);
+  /* the way in and out as the settings sheet has them: the window comes whole,
+     already filled, rising a little as it fades in; it fades on the spot going
+     out and stays drawn until that is over */
+  opacity:0; transform:translate(-50%, calc(-50% + 14px));
+  transition:opacity 170ms cubic-bezier(.35,0,.65,1),
+             transform 260ms cubic-bezier(.25,.45,.55,.95),
+             display 260ms allow-discrete;
 }
+.over:not([hidden]){
+  opacity:1; transform:translate(-50%, -50%);
+  transition:opacity 180ms cubic-bezier(.33,.8,.45,1),
+             transform 300ms cubic-bezier(.2,.8,.3,1),
+             display 0s allow-discrete;
+}
+@starting-style{ .over:not([hidden]){ opacity:0; transform:translate(-50%, calc(-50% + 14px)); } }
 .over__dubs{ flex:none; display:flex; flex-wrap:wrap; gap:6px 16px; padding:2px 19px 14px; border-bottom:1px solid var(--line); }
 .over__dub{ font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2); cursor:pointer; transition:color .12s; }
 .over__dub:hover, .over__dub.is-on{ color:#e0a24a; }
@@ -1144,8 +1158,7 @@ svg.ph{ fill:currentColor; stroke:none; }
   cursor:default; user-select:none;
   transition:background .12s, color .12s;
 }
-.over.is-keyed .over__cell{ background:rgba(255,255,255,.035); color:rgba(255,255,255,.22); }
-.over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill */
+.over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill; the other cells stay as they are */
 .over.is-cell .over__cell:hover:not(.is-on){ background:rgba(255,255,255,.12); color:var(--tx-1); }
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
