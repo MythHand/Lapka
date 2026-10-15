@@ -1131,9 +1131,10 @@ svg.ph{ fill:currentColor; stroke:none; }
 .over__dub:hover, .over__dub.is-on{ color:#e0a24a; }
 .over__map{ flex:0 1 auto; min-height:0; overflow:auto; padding:8px 19px 19px; }
 .over__part{ padding:10px 0 4px; }
-/* the part's line starts at the window's edge, as a bookmark does in the queue; the tab in the same grey as the name */
-.over__partname{ display:flex; align-items:center; gap:10px; margin:0 0 8px -19px; font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
+.over__partname{ display:flex; align-items:center; gap:10px; margin:0 0 8px; font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
+/* the queue's tab without its left block, in the name's grey: the number and the bar */
 .over__partname .queue__group-label, .over__partname .queue__group-label::after{ color:var(--tx-3); }
+.over__partname .queue__group-label::before{ content:none; }
 .over__parttitle{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .over__cells{ display:flex; flex-wrap:wrap; gap:4px; }
 .over__cell{
@@ -1145,7 +1146,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .over.is-keyed .over__cell{ background:rgba(255,255,255,.035); color:rgba(255,255,255,.22); }
 .over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill */
-.over.is-cell .over__cell:hover{ background:rgba(255,255,255,.12); color:var(--tx-1); }
+.over.is-cell .over__cell:hover:not(.is-on){ background:rgba(255,255,255,.12); color:var(--tx-1); }
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */

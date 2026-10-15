@@ -1390,16 +1390,17 @@ function buildOverview() {
   top.append(head, count);
   const list = document.createElement('div'); list.className = 'over__dubs';
   const cells = [];
-  /* one way: a dub lights the cells that have it; the other: a cell under the pointer lights its dubs in the list */
+  /* Two lights. A dub under the pointer, or the one kept by a click, lights
+     the cells that have it. A cell under the pointer lights its own dubs in
+     the list, and only those; the map keeps showing the kept dub meanwhile. */
   const key = k => {
-    overview.classList.toggle('is-keyed', !!k); overview.classList.remove('is-cell');
+    overview.classList.toggle('is-keyed', !!k);
     for (const c of cells) c.classList.toggle('is-on', !!k && c.__dubs.has(k));
     for (const b of list.children) b.classList.toggle('is-on', !!k && b.__key === k);
   };
   const byCell = c => {
-    overview.classList.toggle('is-cell', !!c); overview.classList.remove('is-keyed');
-    for (const x of cells) x.classList.remove('is-on');
-    for (const b of list.children) b.classList.toggle('is-on', !!c && c.__dubs.has(b.__key));
+    overview.classList.toggle('is-cell', !!c);
+    for (const b of list.children) b.classList.toggle('is-on', c ? c.__dubs.has(b.__key) : !!overPinned && b.__key === overPinned);
   };
   for (const d of names) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'over__dub'; b.textContent = d.name; b.__key = d.key;
@@ -1409,11 +1410,13 @@ function buildOverview() {
     list.append(b);
   }
   const map = document.createElement('div'); map.className = 'over__map';
-  let cellT = 0;
+  /* a cell speaks after the pointer has rested on it a moment, so a pointer crossing
+     the map does not flicker the list; inside the part already spoken for, at once */
+  let cellT = 0, spokenRow = null;
   for (const g of groups) {
     const part = document.createElement('div'); part.className = 'over__part';
     if (g.title) {
-      /* the part named as the queue names it: the bookmark with its number, then the title and the year */
+      /* the part named as the queue names it, the number and the tab's bar, then the title and the year */
       const name = document.createElement('div'); name.className = 'over__partname';
       if (g.ordinal) { const tab = document.createElement('span'); tab.className = 'queue__group-label'; tab.append(Object.assign(document.createElement('span'), { className: 'n', textContent: String(g.ordinal) })); name.append(tab); }
       name.append(Object.assign(document.createElement('span'), { className: 'over__parttitle', textContent: [g.title, g.year].filter(Boolean).join(' · ') }));
@@ -1423,11 +1426,13 @@ function buildOverview() {
     for (const it of [...g.items].sort((a, b) => (a.number || 0) - (b.number || 0))) {
       const c = document.createElement('span'); c.className = 'over__cell'; c.textContent = it.number ?? '';
       c.__dubs = new Set((it.dubs || []).map(d => d.key || d.name));
-      /* a cell speaks after the pointer has rested on it a moment, so a pointer crossing the map does not flicker the list */
-      c.onmouseenter = () => { clearTimeout(cellT); cellT = setTimeout(() => byCell(c), 400); };
-      c.onmouseleave = () => { clearTimeout(cellT); key(overPinned); };
+      c.onmouseenter = () => {
+        clearTimeout(cellT);
+        if (spokenRow === row) byCell(c); else cellT = setTimeout(() => { spokenRow = row; byCell(c); }, 200);
+      };
       cells.push(c); row.append(c);
     }
+    row.onmouseleave = () => { clearTimeout(cellT); spokenRow = null; byCell(null); };
     part.append(row); map.append(part);
   }
   overview.append(top, list, map);
