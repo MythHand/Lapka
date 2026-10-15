@@ -1382,8 +1382,8 @@ function buildOverview() {
   }
   const names = [...dubs.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   const groups = state.seasons.length
-    ? state.seasons.map(s => ({ title: s.series.title || '', year: s.series.year, items: state.list.filter(it => it.seriesId === s.series.id) })).filter(g => g.items.length)
-    : [{ title: '', year: null, items: state.list.slice() }];
+    ? state.seasons.map(s => ({ ordinal: s.ordinal || null, title: s.series.title || '', year: s.series.year, items: state.list.filter(it => it.seriesId === s.series.id) })).filter(g => g.items.length)
+    : [{ ordinal: null, title: '', year: null, items: state.list.slice() }];
   const top = document.createElement('div'); top.className = 'histpop__top';
   const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
   const count = document.createElement('span'); count.className = 'histpop__count'; count.textContent = String(names.length);
@@ -1409,15 +1409,23 @@ function buildOverview() {
     list.append(b);
   }
   const map = document.createElement('div'); map.className = 'over__map';
+  let cellT = 0;
   for (const g of groups) {
     const part = document.createElement('div'); part.className = 'over__part';
-    if (g.title) { const name = document.createElement('div'); name.className = 'over__partname'; name.textContent = [g.title, g.year].filter(Boolean).join(' · '); part.append(name); }
+    if (g.title) {
+      /* the part named as the queue names it: the bookmark with its number, then the title and the year */
+      const name = document.createElement('div'); name.className = 'over__partname';
+      if (g.ordinal) { const tab = document.createElement('span'); tab.className = 'queue__group-label'; tab.append(Object.assign(document.createElement('span'), { className: 'n', textContent: String(g.ordinal) })); name.append(tab); }
+      name.append(Object.assign(document.createElement('span'), { className: 'over__parttitle', textContent: [g.title, g.year].filter(Boolean).join(' · ') }));
+      part.append(name);
+    }
     const row = document.createElement('div'); row.className = 'over__cells';
     for (const it of [...g.items].sort((a, b) => (a.number || 0) - (b.number || 0))) {
       const c = document.createElement('span'); c.className = 'over__cell'; c.textContent = it.number ?? '';
       c.__dubs = new Set((it.dubs || []).map(d => d.key || d.name));
-      c.onmouseenter = () => byCell(c);
-      c.onmouseleave = () => key(overPinned);
+      /* a cell speaks after the pointer has rested on it a moment, so a pointer crossing the map does not flicker the list */
+      c.onmouseenter = () => { clearTimeout(cellT); cellT = setTimeout(() => byCell(c), 400); };
+      c.onmouseleave = () => { clearTimeout(cellT); key(overPinned); };
       cells.push(c); row.append(c);
     }
     part.append(row); map.append(part);
