@@ -1140,7 +1140,10 @@ svg.ph{ fill:currentColor; stroke:none; }
              display 0s allow-discrete;
 }
 @starting-style{ .over:not([hidden]){ opacity:0; transform:translate(-50%, calc(-50% + 14px)); } }
+.dubmap{ display:flex; flex-direction:column; min-height:0; }
 .over__dubs{ flex:none; display:flex; flex-wrap:wrap; gap:6px 16px; padding:2px 19px 14px; border-bottom:1px solid var(--line); }
+.menu .over__dubs{ padding:2px 12px 10px; }
+.menu .over__map{ padding:8px 12px 8px; }
 .over__dub{ font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2); cursor:pointer; transition:color .12s; }
 .over__dub:hover, .over__dub.is-on{ color:#e0a24a; }
 .over__map{ flex:0 1 auto; min-height:0; overflow:auto; padding:8px 19px 19px; }
@@ -1158,8 +1161,8 @@ svg.ph{ fill:currentColor; stroke:none; }
   cursor:default; user-select:none;
   transition:background .12s, color .12s;
 }
-.over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill; the other cells stay as they are */
-.over.is-cell .over__cell:hover:not(.is-on){ background:rgba(255,255,255,.12); color:var(--tx-1); }
+.dubmap.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill; the other cells stay as they are */
+.dubmap.is-cell .over__cell:hover:not(.is-on){ background:rgba(255,255,255,.12); color:var(--tx-1); }
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */
@@ -1996,8 +1999,16 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 }
 .linkform__in:not(:placeholder-shown) + .linkform__enter{ opacity:1; }
 
-/* ── the audio menu: room for the qualities each dub can play in ── */
+/* ── the audio menu: room for the qualities each dub can play in; and, past
+   the divider, the map of which dubs the parts have, the column of the
+   choice keeping its width. In the PiP window the map column is not drawn
+   and the menu is its narrow self. ── */
 #audioMenu{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); }
+#audioMenu.menu--split{ min-width:min(1100px, calc(100vw - 24px)); max-width:min(1500px, calc(100vw - 24px)); max-height:calc(100vh - 130px); }
+#audioMenu .menu__col--pick{ flex:0 0 auto; width:auto; min-width:480px; max-width:min(560px, calc(100vw - 24px)); }   /* the column of the choice as the menu was: its own width, 480 to 560 */
+#audioMenu .menu__col--map{ flex:1 1 0; display:flex; flex-direction:column; overflow:hidden; }
+.stage.pip-mode #audioMenu.menu--split{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); max-height:min(340px, calc(100vh - 130px)); }
+.stage.pip-mode #audioMenu .menu__col--pick{ flex:1 1 0; min-width:0; }
 .menu__item--dub{ align-items:center; }
 .menu__tags{ flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:210px; margin-left:8px; }
 /* .qtag, not .tag: .tag is the queue's round button and must stay so */

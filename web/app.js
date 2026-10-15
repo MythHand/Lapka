@@ -1364,16 +1364,16 @@ function escapeHistory() {
 
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
 
-/* ── the overview: which dubs the parts have ──────────────────
+/* ── the map of dubs across the parts ─────────────────────────
    Built from what the queue already holds: every row's dubs. The dubs
    stand on top by name, those in the most episodes first; under them
-   each part is its episodes as cells. A dub under the pointer lights
-   the cells that have it, a click keeps it lit. Nothing is chosen here:
-   the window is for looking. */
-let overPinned = null;
-function buildOverview() {
-  overview.replaceChildren();
-  overPinned = null; overview.classList.remove('is-keyed');
+   each part is its episodes as cells. A dub under the pointer lights the
+   cells that have it, a click keeps it lit; a cell under the pointer
+   lights its own dubs in the list. Nothing is chosen here: the map is
+   for looking. The overview window and the audio menu draw the same map. */
+function buildDubMap(host) {
+  host.replaceChildren(); host.classList.remove('is-keyed', 'is-cell');
+  let pinned = null;
   const dubs = new Map();
   for (const it of state.list) for (const d of it.dubs || []) {
     const k = d.key || d.name; if (!k) continue;
@@ -1384,29 +1384,25 @@ function buildOverview() {
   const groups = state.seasons.length
     ? state.seasons.map(s => ({ ordinal: s.ordinal || null, title: s.series.title || '', year: s.series.year, items: state.list.filter(it => it.seriesId === s.series.id) })).filter(g => g.items.length)
     : [{ ordinal: null, title: '', year: null, items: state.list.slice() }];
-  const top = document.createElement('div'); top.className = 'histpop__top';
-  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
-  const count = document.createElement('span'); count.className = 'histpop__count'; count.textContent = String(names.length);
-  top.append(head, count);
   const list = document.createElement('div'); list.className = 'over__dubs';
   const cells = [];
   /* Two lights. A dub under the pointer, or the one kept by a click, lights
      the cells that have it. A cell under the pointer lights its own dubs in
      the list, and only those; the map keeps showing the kept dub meanwhile. */
   const key = k => {
-    overview.classList.toggle('is-keyed', !!k);
+    host.classList.toggle('is-keyed', !!k);
     for (const c of cells) c.classList.toggle('is-on', !!k && c.__dubs.has(k));
     for (const b of list.children) b.classList.toggle('is-on', !!k && b.__key === k);
   };
   const byCell = c => {
-    overview.classList.toggle('is-cell', !!c);
-    for (const b of list.children) b.classList.toggle('is-on', c ? c.__dubs.has(b.__key) : !!overPinned && b.__key === overPinned);
+    host.classList.toggle('is-cell', !!c);
+    for (const b of list.children) b.classList.toggle('is-on', c ? c.__dubs.has(b.__key) : !!pinned && b.__key === pinned);
   };
   for (const d of names) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'over__dub'; b.textContent = d.name; b.__key = d.key;
     b.onmouseenter = () => key(d.key);
-    b.onmouseleave = () => key(overPinned);
-    b.onclick = ev => { ev.stopPropagation(); overPinned = overPinned === d.key ? null : d.key; key(overPinned || d.key); };
+    b.onmouseleave = () => key(pinned);
+    b.onclick = ev => { ev.stopPropagation(); pinned = pinned === d.key ? null : d.key; key(pinned || d.key); };
     list.append(b);
   }
   const map = document.createElement('div'); map.className = 'over__map';
@@ -1435,7 +1431,19 @@ function buildOverview() {
     row.onmouseleave = () => { clearTimeout(cellT); spokenRow = null; byCell(null); };
     part.append(row); map.append(part);
   }
-  overview.append(top, list, map);
+  host.append(list, map);
+  return { dubs: names.length };
+}
+/* ── the overview window: the map on its own, from the queue's header ── */
+function buildOverview() {
+  overview.replaceChildren();
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
+  const count = document.createElement('span'); count.className = 'histpop__count';
+  top.append(head, count);
+  const host = document.createElement('div'); host.className = 'dubmap';
+  count.textContent = String(buildDubMap(host).dubs);
+  overview.append(top, host);
 }
 function openOverview() { if (!state.list.length) return; buildOverview(); overview.hidden = false; }
 function closeOverview() { overview.hidden = true; }
@@ -2135,20 +2143,32 @@ function syncAudioButton() {
 }
 
 let dubsInfo = null;          // what the server said each dub offers, for the episode the menu was built for
+/* The audio menu is two columns, as the subtitle menu is: on the left the
+   dubs to choose from, as they were; on the right, past the divider, the map
+   of which dubs the parts have, so the choice is made in sight of where it
+   holds. The map is not drawn in the PiP window, where the menu stays narrow. */
 function buildAudioMenu() {
   const opts = audioOptions();
   const it = cur();
   audioMenu.replaceChildren();
+  const pick = document.createElement('div'); pick.className = 'menu__col menu__col--pick';
   const head = document.createElement('div');
   head.className = 'menu__title';
   head.textContent = t('audio.title');
-  audioMenu.append(head);
+  pick.append(head);
+  const side = document.createElement('div'); side.className = 'menu__col menu__col--map hide-in-pip';
+  const sideHead = document.createElement('div'); sideHead.className = 'menu__title'; sideHead.textContent = t('queue.overview');
+  const host = document.createElement('div'); host.className = 'dubmap';
+  side.append(sideHead, host);
+  audioMenu.append(pick, side);
+  audioMenu.classList.toggle('menu--split', state.list.length > 0);
+  if (state.list.length) buildDubMap(host);
 
   if (!opts.length) {
     const e = document.createElement('div');
     e.className = 'menu__empty';
     e.textContent = t('audio.none');
-    audioMenu.append(e);
+    pick.append(e);
     return;
   }
 
@@ -2181,7 +2201,7 @@ function buildAudioMenu() {
       }
     } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'qtag qtag--wait'; w.textContent = '…'; tags.append(w); }
     b.onclick = () => { pickAudio(o); markPicked(b); };
-    audioMenu.append(b);
+    pick.append(b);
   }
   /* what each dub can play in is asked once per episode; the sources
      not yet opened are opened for it, and the menu is drawn again */
@@ -3078,6 +3098,17 @@ btnAudio.onclick = e => {
   closeMenus(audioMenu);
   audioMenu.classList.toggle('open');
 };
+/* With a menu of the deck open, a click anywhere outside it closes it and
+   does nothing else, as a click on the picture does: the button under the
+   pointer (the queue's, a control's) does not act on that click. Inside a
+   menu's wrap the click goes on: the menu's own button toggles it, another
+   menu's button switches. */
+document.addEventListener('click', e => {
+  if (!panelOpen() || e.target.closest('.menuwrap, #deckPack')) return;
+  e.stopPropagation(); e.preventDefault();
+  justClosed = Date.now();
+  closeMenus(); closePack(); closePipMenus();
+}, true);
 document.addEventListener('click', e => {
   if (!e.target.closest('.menuwrap')) closeMenus();
   if (!e.target.closest('#deckPack')) closePack();
