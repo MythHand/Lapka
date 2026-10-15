@@ -1131,7 +1131,9 @@ svg.ph{ fill:currentColor; stroke:none; }
 .over__dub:hover, .over__dub.is-on{ color:#e0a24a; }
 .over__map{ flex:0 1 auto; min-height:0; overflow:auto; padding:8px 19px 19px; }
 .over__part{ padding:10px 0 4px; }
-.over__partname{ display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); margin-bottom:8px; font-variant-numeric:tabular-nums; }
+/* the part's line starts at the window's edge, as a bookmark does in the queue; the tab in the same grey as the name */
+.over__partname{ display:flex; align-items:center; gap:10px; margin:0 0 8px -19px; font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
+.over__partname .queue__group-label, .over__partname .queue__group-label::after{ color:var(--tx-3); }
 .over__parttitle{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .over__cells{ display:flex; flex-wrap:wrap; gap:4px; }
 .over__cell{
