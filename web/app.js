@@ -1432,7 +1432,8 @@ function buildDubMap(host) {
     part.append(row); map.append(part);
   }
   host.append(list, map);
-  return { dubs: names.length };
+  /* the map can be lit from outside too, as a name under the pointer lights it: the audio menu's rows do this */
+  return { dubs: names.length, light: k => key(k || pinned) };
 }
 /* ── the overview window: the map on its own, from the queue's header ── */
 function buildOverview() {
@@ -2162,7 +2163,7 @@ function buildAudioMenu() {
   side.append(sideHead, host);
   audioMenu.append(pick, side);
   audioMenu.classList.toggle('menu--split', state.list.length > 0);
-  if (state.list.length) buildDubMap(host);
+  const dubMap = state.list.length ? buildDubMap(host) : null;
 
   if (!opts.length) {
     const e = document.createElement('div');
@@ -2201,6 +2202,8 @@ function buildAudioMenu() {
       }
     } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'qtag qtag--wait'; w.textContent = '…'; tags.append(w); }
     b.onclick = () => { pickAudio(o); markPicked(b); };
+    /* a row under the pointer lights the map on the right as its name there would: the name itself and the episodes that have it */
+    if (dubMap) { b.onmouseenter = () => dubMap.light(o.id); b.onmouseleave = () => dubMap.light(null); }
     pick.append(b);
   }
   /* what each dub can play in is asked once per episode; the sources
