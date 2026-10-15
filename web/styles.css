@@ -1137,12 +1137,12 @@ svg.ph{ fill:currentColor; stroke:none; }
   width:30px; height:30px; border-radius:6px; display:grid; place-items:center;
   background:rgba(255,255,255,.06); color:rgba(255,255,255,.38);
   font-family:var(--mono); font-size:calc(11px + var(--fs)); letter-spacing:0; font-variant-numeric:tabular-nums;
+  cursor:default; user-select:none;
   transition:background .12s, color .12s;
 }
 .over.is-keyed .over__cell{ background:rgba(255,255,255,.035); color:rgba(255,255,255,.22); }
-.over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.82); color:rgba(16,17,20,.9); }
-.saveall--sq{ width:32px; padding:0; justify-content:center; }
-.saveall--sq svg{ width:16px; height:16px; }
+.over.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill */
+.over.is-cell .over__cell:hover{ background:rgba(255,255,255,.12); color:var(--tx-1); }
 .histpop__top{
   flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */
