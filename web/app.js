@@ -1436,6 +1436,9 @@ function openOverview() { if (!state.list.length) return; buildOverview(); overv
 function closeOverview() { overview.hidden = true; }
 btnOverview.onclick = ev => { ev.stopPropagation(); if (overview.hidden) openOverview(); else closeOverview(); };
 overview.addEventListener('click', e => e.stopPropagation());
+/* a click outside only closes the window: the press itself gives no focus
+   away (a field focused would open the history), the click does nothing else */
+document.addEventListener('mousedown', e => { if (!overview.hidden && !e.target.closest('#overview, #btnOverview')) e.preventDefault(); }, true);
 document.addEventListener('click', e => {
   if (overview.hidden || e.target.closest('#overview, #btnOverview')) return;
   e.stopPropagation(); e.preventDefault();
