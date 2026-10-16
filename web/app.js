@@ -497,7 +497,7 @@ const state = {
   seasons: [],       // every series of its franchise that was opened, in viewing order: [{ series, entry }]
   dubKey: null,      // the dub chosen, carried to every episode and every season
   quality: strFromStore('lapka.quality', 'auto'),   // '1080p', '720p', … or 'auto' for the best there is
-  saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, size, path }]
+  saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, dubKey, quality, size, path }]
   positions: {},     // series/episode → { t: seconds, d: duration }, mirrored from the server
   watched: {},       // series/episode → true, mirrored from the server
   remote: {},        // the server's state as it was at boot
@@ -1591,8 +1591,34 @@ btnQuality.onclick = e => {
   qualityMenu.classList.toggle('open');
 };
 
+/* ── the library before the net ───────────────────────────────
+   An episode saved in the dub wanted plays from its file: no page is
+   read, no source is asked, nothing is pulled ahead. Another dub
+   chosen and no file of it, and the net is asked as before. A file
+   that fails to play is passed over for that start, and the net takes
+   it; the mark in the dub menu brings the file back. */
+function localFor(it) {
+  if (!it || it.noLocal) return null;
+  const files = state.saved.get(savedKey(it)) || [];
+  if (!files.length) return null;
+  return (state.dubKey ? files.find(x => x.dubKey === state.dubKey) : files[0]) || null;
+}
+
 async function sourceFor(it) {
   const avoid = it.avoid; it.avoid = null;
+  const loc = localFor(it);
+  if (loc) {
+    diary('local', `episode ${it.number} from the library, dub ${loc.dub}${loc.quality ? ' ' + loc.quality : ''}`);
+    it.err = false;
+    it.dub = { key: loc.dubKey, name: loc.dub };
+    if (loc.dubKey) state.dubKey = loc.dubKey;
+    it.source = { player: t('audio.disk'), local: true };
+    it.streams = []; it.subs = []; it.marks = null;
+    if (!it.subPicked) it.subIndex = preferredSub(it);
+    it.stream = { kind: 'mp4', quality: loc.quality, play: '/api/library/file?path=' + encodeURIComponent(loc.path), local: true, id: null, player: null };
+    paintMeta();
+    return it.stream;
+  }
   const slow = setTimeout(() => showProgress(it, 'prep.players'), 400);
   let r;
   try { r = await resolveItem(it, { avoid }); }
@@ -1626,7 +1652,7 @@ async function sourceFor(it) {
    its streams are ready when it is its turn. */
 function prefetchNext() {
   const nx = state.list[idxOf(cur()) + 1];
-  if (nx && !nx.stream && !nx.err && !nx.opening) resolveItem(nx).then(() => paintMeta()).catch(() => {});
+  if (nx && !nx.stream && !nx.err && !nx.opening && !localFor(nx)) resolveItem(nx).then(() => paintMeta()).catch(() => {});   // a saved one needs no opening
 }
 
 /* ── the episode ahead of the player ──────────────────────────
@@ -1691,7 +1717,10 @@ function paintDisk(d) {
 async function watchDisk() {
   clearTimeout(diskT);
   const it = cur();
-  if (!it || !it.stream || it.stream.kind !== 'hls' || it.loadedSrc !== it.stream.play) { paintDisk(null); return; }
+  if (!it || !it.stream || it.loadedSrc !== it.stream.play) { paintDisk(null); return; }
+  /* a file from the library is on the disk whole */
+  if (it.stream.local) { const dur = duration(); paintDisk(dur ? { ranges: [[0, dur]], duration: dur, tag: 'file' } : null); return; }
+  if (it.stream.kind !== 'hls') { paintDisk(null); return; }
   const level = warmLevel();
   let d = null;
   try { d = await api(`/api/stream/${it.stream.id}/cached${level ? '?level=' + level : ''}`); } catch (_) { /* the server will answer next time */ }
@@ -1811,7 +1840,7 @@ function loadSource(it, src, token, onMeta, play) {
   const reveal = fadeIn();
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
-  video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); } }, { once: true });
+  video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); watchDisk(); } }, { once: true });   // the length is known: the band can be drawn
   if (play) video.play().catch(e => diary('play() refused', e && e.name));
 }
 
@@ -1866,6 +1895,7 @@ function attachSource(stream) {
     hls.on(Hls.Events.ERROR, (_, d) => {
       diary('hls', `${d.type}/${d.details}${d.fatal ? ' fatal' : ''}${d.response && d.response.code ? ' code ' + d.response.code : ''}`);
       const it = cur();
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR) bufferErrAt = performance.now();
       if (d.fatal) {
         if (d.type === Hls.ErrorTypes.NETWORK_ERROR && again < 3) {
           again++;
@@ -1906,7 +1936,6 @@ function attachSource(stream) {
       watchDisk();
     });
     hls.loadSource(stream.play);
-      if (d.type === Hls.ErrorTypes.MEDIA_ERROR) bufferErrAt = performance.now();
     hls.attachMedia(video);
     return;
   }
@@ -2196,6 +2225,22 @@ function buildAudioMenu() {
     b.querySelector('.menu__main').textContent = o.main;
     if (o.sub) b.querySelector('.menu__sub').textContent = o.sub;
     const tags = b.querySelector('.menu__tags');
+    /* the dub saved on the disk is marked so; the mark plays the file */
+    const onDisk = (state.saved.get(savedKey(it)) || []).find(x => x.dubKey === o.id);
+    if (onDisk) {
+      const tg = document.createElement('span');
+      tg.className = 'qtag qtag--disk' + (o.sel && it.stream && it.stream.local ? ' sel' : '');
+      tg.textContent = t('audio.disk');
+      if (onDisk.quality) tg.title = onDisk.quality;
+      tg.onclick = ev => {
+        ev.stopPropagation();
+        it.noLocal = false;
+        if (it.dub && it.dub.key === o.id) { if (!(it.stream && it.stream.local)) switchTrack(it); }
+        else pickAudio(o);
+        markPicked(b);
+      };
+      tags.append(tg);
+    }
     if (info && info.qualities.length) {
       for (const q of info.qualities) {
         const tg = document.createElement('span');
@@ -3164,6 +3209,17 @@ function stallWatch(on) {
     sendDiary('playback stalled');
   }, STALL_MS);
 }
+/* The diary to the journal, headed by what happened and where: the moment itself first
+   (where the player stands, what it holds, which stream and quality, what the band said
+   was on the disk), then the lines kept. Sent at a wait that does not end and at a mend. */
+let bufferErrAt = -1e9;   // when hls.js last reported the buffer refusing a piece
+function sendDiary(what) {
+  const it = cur();
+  const buf = []; for (let i = 0; i < video.buffered.length; i++) buf.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
+  diary('state', `at ${video.currentTime.toFixed(1)}s of ${(duration() || 0).toFixed(1)}s, buffered ${buf.join(' ') || 'nothing'}, stream ${it && it.stream ? `${it.stream.id} ${it.stream.kind} ${it.stream.quality || ''}` : 'none'}, loaded ${it && it.loadedSrc === (it.stream && it.stream.play) ? 'this' : 'other'}, hls level ${hls ? `${hls.currentLevel} of ${hls.levels ? hls.levels.length : '?'}${hls.autoLevelEnabled ? ' auto' : ''}` : 'none'}, wanted ${warmLevel() || 'auto'}p`);
+  diary('disk', lastDisk ? `${lastDisk.tag || '?'}: ${(lastDisk.ranges || []).map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ') || 'nothing'} of ${Math.round(lastDisk.duration || 0)}s` : 'not read');
+  api('/api/log', { method: 'POST', body: JSON.stringify({ head: `${what}: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines, stream: it && it.stream ? it.stream.id : null, level: warmLevel() || null }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+}
 function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {
   noticeText.textContent = text;
   if (more) noticeText.append(more);
@@ -3209,25 +3265,16 @@ function hideNotice(kind = null) {
   if (noticeKind === 'busy') stallWatch(false);
   notice.classList.remove('show', 'notice--busy', 'notice--mid'); noticeDo = null; noticeUndo = null; noticeKind = null;
 }
-/* The diary to the journal, headed by what happened and where: the moment itself first
-   (where the player stands, what it holds, which stream and quality, what the band said
-   was on the disk), then the lines kept. Sent at a wait that does not end and at a mend. */
-let bufferErrAt = -1e9;   // when hls.js last reported the buffer refusing a piece
-function sendDiary(what) {
-  const it = cur();
-  const buf = []; for (let i = 0; i < video.buffered.length; i++) buf.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
-  diary('state', `at ${video.currentTime.toFixed(1)}s of ${(duration() || 0).toFixed(1)}s, buffered ${buf.join(' ') || 'nothing'}, stream ${it && it.stream ? `${it.stream.id} ${it.stream.kind} ${it.stream.quality || ''}` : 'none'}, loaded ${it && it.loadedSrc === (it.stream && it.stream.play) ? 'this' : 'other'}, hls level ${hls ? `${hls.currentLevel} of ${hls.levels ? hls.levels.length : '?'}${hls.autoLevelEnabled ? ' auto' : ''}` : 'none'}, wanted ${warmLevel() || 'auto'}p`);
-  diary('disk', lastDisk ? `${lastDisk.tag || '?'}: ${(lastDisk.ranges || []).map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ') || 'nothing'} of ${Math.round(lastDisk.duration || 0)}s` : 'not read');
-  api('/api/log', { method: 'POST', body: JSON.stringify({ head: `${what}: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines, stream: it && it.stream ? it.stream.id : null, level: warmLevel() || null }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
-}
 /* the busy lines: what is being opened, a source that is slow to answer */
 let loadingT = 0, stallT = 0;
 function sayLoading(it) {
   clearTimeout(loadingT);
+  if (it.stream && it.stream.local) return;   // a file from the disk has no source to wait for
   loadingT = setTimeout(() => { if (it === cur() && !it.switching && video.paused === false && video.readyState < 3) showNotice(t('notice.loading', { name: it.name, player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 1500);
 }
 function sayStalled(it) {
   clearTimeout(stallT);
+  if (it.stream && it.stream.local) return;
   /* a wait right after the buffer refused a piece is the buffer's, not the source's */
   stallT = setTimeout(() => { if (it === cur() && !it.switching && video.readyState < 3) showNotice(performance.now() - bufferErrAt < 10000 ? t('notice.buffer') : t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 2500);
 }
@@ -3551,7 +3598,7 @@ function paintMeta() {
     /* one dub is named; several are counted */
     if (it.dubs && it.dubs.length === 1) rest.push(escapeHtml(it.dubs[0].name));
     else if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
-    if (it.stream) rest.push(`<span class="route">${it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
+    if (it.stream) rest.push(`<span class="route">${it.stream.local ? t('audio.disk') : it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
     /* the sources of the dub in play, counted as the dub menu counts them */
     const dubOf = it.dubs && it.dub ? it.dubs.find(d => d.key === it.dub.key) : null;
     if (dubOf) rest.push(`<span class="route route--off">${dubOf.alive ? t('audio.sources', { n: dubOf.alive }) : dubOf.sources ? t('audio.dead') : ''}</span>`);
@@ -3825,7 +3872,7 @@ async function loadLibrary() {
     for (const s of lib.series) for (const e of s.episodes) {
       const k = `${e.seriesId}/${e.episode}`;
       if (!state.saved.has(k)) state.saved.set(k, []);
-      state.saved.get(k).push({ dub: e.dub, size: e.size, path: e.path });
+      state.saved.get(k).push({ dub: e.dub, dubKey: e.dubKey || null, quality: e.quality || null, size: e.size, path: e.path });
     }
   } catch (_) { /* the server may be starting */ }
   paintSaved();
@@ -5134,6 +5181,8 @@ video.addEventListener('error', () => {
      broken. Seen, not guessed at: the stage says the source failed and
      which one is being tried, so a pause here never reads as a dead
      player. */
+  /* the file from the library did not play: this start goes to the net, the file is left where it is */
+  if (it.stream && it.stream.local) { it.noLocal = true; busyOver(); toast(t('toast.localFailed')); playItem(it, !video.paused, false); return; }
   const failed = it.stream && it.stream.id;
   it.retries = (it.retries || 0) + 1;
   if (failed && it.retries <= 3) {

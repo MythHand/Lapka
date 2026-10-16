@@ -102,6 +102,7 @@ export function createSaver({ delivery, cache, library, state = null }) {
       dub: dub.name, dubKey: dub.key,
       player: source.player, extractor: source.extractor, embedUrl: source.embedUrl,
       streamKind: stream.kind, streamUrl: stream.url,
+      quality: level ? `${level}p` : stream.quality || null,   // what the file holds, for the player to say when it plays it
     });
     await cache.drop(entry.id);
     return { file: place.file, sidecar: place.sidecar, size: st.size };

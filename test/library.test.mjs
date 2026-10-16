@@ -85,6 +85,7 @@ describe('saving', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.equal(side.dubKey, 'anilibria');
     assert.equal(side.player, 'embed/beta');
     assert.equal(side.file, '01 [AniLibria].mp4');
+    assert.ok('quality' in side, 'the sidecar says what quality the file holds, for the player to show when it plays it');
     const snap = JSON.parse(await fsp.readFile(path.join(path.dirname(job.file), 'series.json'), 'utf8'));
     assert.equal(snap.id, seriesId);
     assert.equal(snap.episodes.length, 4);
