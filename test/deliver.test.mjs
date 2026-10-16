@@ -157,6 +157,52 @@ describe('a stream under a changing address', () => {
       assert.notEqual(delivery.register({ kind: 'hls', url: `${base}/sigC/index.m3u8`, quality: '720p', headers: {} }, { ...meta, nth: 1 }), id);
     } finally { srv.close(); }
   });
+
+  test('another cut under the same name of quality drops what was on the disk of the stream', async () => {
+    /* an origin whose "720" served one file one night and another the next: the pieces are named otherwise */
+    const srv = http.createServer((req, res) => {
+      const m = /^\/(\w+)\/(index\.m3u8|(\w+)-(\d)\.ts)$/.exec(req.url);
+      if (!m) { res.writeHead(404); return res.end(); }
+      if (m[2] === 'index.m3u8') {
+        const stem = m[1] === 'night' ? '480' : '720';
+        res.writeHead(200, { 'content-type': 'application/vnd.apple.mpegurl' });
+        return res.end(`#EXTM3U\n#EXT-X-TARGETDURATION:6\n#EXTINF:6,\n${stem}-1.ts\n#EXTINF:6,\n${stem}-2.ts\n#EXT-X-ENDLIST\n`);
+      }
+      res.writeHead(200, { 'content-type': 'video/mp2t' }); res.end(`bytes of ${m[3]} ${m[4]}`);
+    });
+    await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${srv.address().port}`;
+    const kept = new Map();
+    const cache = {
+      has: async (id, n) => kept.has(`${id}/${n}`), read: async (id, n) => { if (!kept.has(`${id}/${n}`)) throw new Error('none'); return kept.get(`${id}/${n}`); },
+      write: async (id, n, b) => { kept.set(`${id}/${n}`, Buffer.from(b)); }, touch() {},
+      drop: async id => { for (const k of [...kept.keys()]) if (k.startsWith(`${id}/`)) kept.delete(k); },
+    };
+    const delivery = createDelivery({ session: { ua: 'test' }, cache });
+    const meta = { seriesId: 's1', episode: 5, dub: 'anilibria', sourceId: 'src1' };
+    const segsOf = async id => { const pl = await delivery.playlist(delivery.get(id)); return pl.split('\n').filter(l => l.includes('seg?u=')).map(l => decodeURIComponent(/u=(\S+)/.exec(l)[1])); };
+    try {
+      const id = delivery.register({ kind: 'hls', url: `${base}/night/index.m3u8`, quality: '720p', headers: {} }, meta);
+      const [a1, a2] = await segsOf(id);
+      await delivery.piece(delivery.get(id), a1); await delivery.piece(delivery.get(id), a2);
+      assert.deepEqual((await delivery.cached(delivery.get(id))).ranges, [[0, 12]], 'the whole night cut is on the disk');
+      /* read anew the next day: the same id, the same name of quality, another cut */
+      assert.equal(delivery.register({ kind: 'hls', url: `${base}/day/index.m3u8`, quality: '720p', headers: {} }, meta), id);
+      const [b1] = await segsOf(id);
+      assert.deepEqual((await delivery.cached(delivery.get(id))).ranges, [], 'the night pieces are gone: they would not join the day ones');
+      const got = await delivery.piece(delivery.get(id), b1);
+      assert.equal(got.hit, false); assert.equal(String(got.bytes), 'bytes of 720 1');
+      assert.equal(delivery.nameFor(delivery.get(id), b1), 'main-0.ts', 'the day cut takes the places from the start');
+      assert.ok(await cache.has(id, 'main-0.ts'));
+      const dropped = delivery.trace(delivery.get(id)).find(r => r.from === 'dropped');
+      assert.ok(dropped && /another cut: 2 pieces of main dropped/.test(dropped.err), 'the trace says what went and why');
+      /* the same day cut read once more, signed anew: nothing is dropped */
+      assert.equal(delivery.register({ kind: 'hls', url: `${base}/day2/index.m3u8`, quality: '720p', headers: {} }, meta), id);
+      await segsOf(id);
+      assert.ok(await cache.has(id, 'main-0.ts'), 'the same cut under a fresh signature keeps its pieces');
+      assert.equal(delivery.trace(delivery.get(id)).filter(r => r.from === 'dropped').length, 1);
+    } finally { srv.close(); }
+  });
 });
 
 describe('the cache', () => {

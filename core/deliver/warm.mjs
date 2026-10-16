@@ -36,10 +36,11 @@ export function createWarmer({ delivery, cache }) {
     const entry = delivery.get(streamId);
     if (!entry) throw Object.assign(new Error('unknown stream'), { code: 404, reason: { key: 'noStream' } });
     if (entry.stream.kind !== 'hls') return { streamId, state: 'skipped', done: 0, total: 0, error: null };
-    /* the same episode, the same quality: already at it, or already done */
-    if (current && current.streamId === streamId && current.level === level && (current.state === 'working' || current.state === 'done')) return view();
+    /* the same episode, the same quality, the same address: already at it, or already done;
+       a stream signed anew since is read again, its pieces found on the disk or fetched */
+    if (current && current.streamId === streamId && current.level === level && current.url === entry.stream.url && (current.state === 'working' || current.state === 'done')) return view();
     if (stop) stop();
-    const job = { streamId, level, state: 'working', done: 0, total: 0, error: null };
+    const job = { streamId, level, url: entry.stream.url, state: 'working', done: 0, total: 0, error: null };
     let gone = false;
     stop = () => { gone = true; if (job.state === 'working') job.state = 'stopped'; };
     current = job;

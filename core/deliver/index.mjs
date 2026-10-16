@@ -132,6 +132,40 @@ export function createDelivery({ session, cache }) {
   function note(entry, rec) { entry.trace.push({ at: Date.now(), ...rec }); if (entry.trace.length > TRACE_KEEP) entry.trace.shift(); }
   const trace = entry => entry.trace.slice();
 
+  /* The cut of a media playlist: its pieces, each by its length and its
+     file name, hosts and signatures aside. A stream read anew can come as
+     another file under the same name of quality (one night a "720" link
+     served 480, the next it served 720): the pieces on the disk are then
+     of another cut and will not join the new ones in the player's buffer.
+     Before a playlist is learnt it is held against the one kept: another
+     cut drops the folder, forgets the old names, and says so in the trace.
+     A playlist without its end (live, growing on each read) is left alone. */
+  const shapeOf = (text, base) => {
+    const out = []; let next = '';
+    for (const line of String(text).split(/\r?\n/)) {
+      const inf = /^#EXTINF:\s*([\d.]+)/.exec(line); if (inf) { next = inf[1]; continue; }
+      if (!line.trim() || line.startsWith('#')) continue;
+      let name = line.trim().split(/[?#]/)[0]; try { name = new URL(line.trim(), base).pathname; } catch {}
+      out.push(`${next}|${name.split('/').pop()}`); next = '';
+    }
+    return out.join('\n');
+  };
+  async function keep(entry, text, base) {
+    const tag = playlistTag(entry, base);
+    const c = cacheOf();
+    if (/#EXT-X-ENDLIST/.test(text)) {
+      let old = null; try { old = String(await c.read(entry.id, `${tag}.m3u8`)); } catch {}
+      if (old && /#EXT-X-ENDLIST/.test(old) && shapeOf(old, base) !== shapeOf(text, base)) {
+        const had = (await Promise.all([...new Set(entry.names.values())].filter(n => n.startsWith(`${tag}-`)).map(n => c.has(entry.id, n)))).filter(Boolean).length;
+        await c.drop(entry.id).catch(() => {});
+        for (const [u, n] of [...entry.names]) if (n.startsWith(`${tag}-`)) entry.names.delete(u);
+        note(entry, { who: 'cache', name: `${tag}.m3u8`, from: 'dropped', ms: 0, err: `another cut: ${had} pieces of ${tag} dropped` });
+      }
+    }
+    c.write(entry.id, `${tag}.m3u8`, text).catch(() => {});
+    return tag;
+  }
+
   async function playlist(entry, url = entry.stream.url) {
     if (!entry.allowed.has(url)) throw Object.assign(new Error('not in this stream'), { code: 403, reason: { key: 'noStream' } });
     const t0 = Date.now();
@@ -140,9 +174,9 @@ export function createDelivery({ session, cache }) {
       if (!res.ok) throw Object.assign(new Error(`origin answered ${res.status}`), { code: 502, reason: originReason(res.status) });
       const text = await res.text();
       const base = res.url || url;
+      const tag = await keep(entry, text, base);
       const body = rewrite(entry, text, base);
-      cacheOf().write(entry.id, `${playlistTag(entry, base)}.m3u8`, text).catch(() => {});
-      note(entry, { who: 'play', name: `${playlistTag(entry, base)}.m3u8`, from: 'origin', ms: Date.now() - t0 });
+      note(entry, { who: 'play', name: `${tag}.m3u8`, from: 'origin', ms: Date.now() - t0 });
       return body;
     } catch (e) { note(entry, { who: 'play', name: 'playlist', from: 'origin', ms: Date.now() - t0, err: e.reason?.key || e.code || e.message }); throw e; }
   }
@@ -211,7 +245,7 @@ export function createDelivery({ session, cache }) {
     return { ranges: ranges.map(([a, b]) => [Math.round(a * 10) / 10, Math.round(b * 10) / 10]), duration: Math.round(duration * 10) / 10, tag };
   }
 
-  return { register, get, playlist, text, piece, file, rewrite, learn, cached, streams, fetchOrigin, nameFor, trace };
+  return { register, get, playlist, text, piece, file, rewrite, learn, keep, cached, streams, fetchOrigin, nameFor, trace };
 }
 
 export const contentType = url => /\.m3u8(\?|$)/i.test(url) ? 'application/vnd.apple.mpegurl'

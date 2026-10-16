@@ -1874,7 +1874,18 @@ function attachSource(stream) {
           setTimeout(() => { if (hls === h && cur() === it) h.startLoad(); }, 4000);
           return;
         }
-        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !mended) { mended = true; diary('hls', 'media error: mending once'); h.recoverMediaError(); return; }
+        /* a broken buffer is mended once: the buffers are built anew, which stops the video;
+           what played goes on by itself when it can, and the diary goes to the journal at once */
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !mended) {
+          mended = true;
+          const wasPlaying = !video.paused;
+          diary('hls', `media error: mending once, ${wasPlaying ? 'playing' : 'paused'} before`);
+          if (it && !it.switching) showNotice(t('notice.buffer'), { kind: 'busy', busy: true });
+          h.recoverMediaError();
+          if (wasPlaying) video.addEventListener('canplay', () => { if (hls === h && cur() === it) { diary('video', 'playing on after the mend'); video.play().catch(() => {}); } }, { once: true });
+          sendDiary('buffer mended');
+          return;
+        }
         video.dispatchEvent(new Event('error')); return;
       }
       /* a network error while the picture still moves is nothing to say; stalled, it is said at once */
@@ -1895,6 +1906,7 @@ function attachSource(stream) {
       watchDisk();
     });
     hls.loadSource(stream.play);
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR) bufferErrAt = performance.now();
     hls.attachMedia(video);
     return;
   }
@@ -3148,13 +3160,8 @@ function stallWatch(on) {
     stallWatchT = 0;
     if (!notice.classList.contains('show') || noticeKind !== 'busy' || stallSent) return;
     stallSent = true;
-    const it = cur();
     diary('stall', `${STALL_MS / 1000}s with the busy notice up; readyState ${video.readyState} paused ${video.paused} networkState ${video.networkState}`);
-    /* the moment itself: where the player stands, what it holds, which stream and quality, what the band said was on the disk */
-    const buf = []; for (let i = 0; i < video.buffered.length; i++) buf.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
-    diary('state', `at ${video.currentTime.toFixed(1)}s of ${(duration() || 0).toFixed(1)}s, buffered ${buf.join(' ') || 'nothing'}, stream ${it && it.stream ? `${it.stream.id} ${it.stream.kind} ${it.stream.quality || ''}` : 'none'}, loaded ${it && it.loadedSrc === (it.stream && it.stream.play) ? 'this' : 'other'}, hls level ${hls ? `${hls.currentLevel} of ${hls.levels ? hls.levels.length : '?'}${hls.autoLevelEnabled ? ' auto' : ''}` : 'none'}, wanted ${warmLevel() || 'auto'}p`);
-    diary('disk', lastDisk ? `${lastDisk.tag || '?'}: ${(lastDisk.ranges || []).map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ') || 'nothing'} of ${Math.round(lastDisk.duration || 0)}s` : 'not read');
-    api('/api/log', { method: 'POST', body: JSON.stringify({ head: `playback stalled: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines, stream: it && it.stream ? it.stream.id : null, level: warmLevel() || null }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+    sendDiary('playback stalled');
   }, STALL_MS);
 }
 function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {
@@ -3202,6 +3209,17 @@ function hideNotice(kind = null) {
   if (noticeKind === 'busy') stallWatch(false);
   notice.classList.remove('show', 'notice--busy', 'notice--mid'); noticeDo = null; noticeUndo = null; noticeKind = null;
 }
+/* The diary to the journal, headed by what happened and where: the moment itself first
+   (where the player stands, what it holds, which stream and quality, what the band said
+   was on the disk), then the lines kept. Sent at a wait that does not end and at a mend. */
+let bufferErrAt = -1e9;   // when hls.js last reported the buffer refusing a piece
+function sendDiary(what) {
+  const it = cur();
+  const buf = []; for (let i = 0; i < video.buffered.length; i++) buf.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
+  diary('state', `at ${video.currentTime.toFixed(1)}s of ${(duration() || 0).toFixed(1)}s, buffered ${buf.join(' ') || 'nothing'}, stream ${it && it.stream ? `${it.stream.id} ${it.stream.kind} ${it.stream.quality || ''}` : 'none'}, loaded ${it && it.loadedSrc === (it.stream && it.stream.play) ? 'this' : 'other'}, hls level ${hls ? `${hls.currentLevel} of ${hls.levels ? hls.levels.length : '?'}${hls.autoLevelEnabled ? ' auto' : ''}` : 'none'}, wanted ${warmLevel() || 'auto'}p`);
+  diary('disk', lastDisk ? `${lastDisk.tag || '?'}: ${(lastDisk.ranges || []).map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ') || 'nothing'} of ${Math.round(lastDisk.duration || 0)}s` : 'not read');
+  api('/api/log', { method: 'POST', body: JSON.stringify({ head: `${what}: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines, stream: it && it.stream ? it.stream.id : null, level: warmLevel() || null }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+}
 /* the busy lines: what is being opened, a source that is slow to answer */
 let loadingT = 0, stallT = 0;
 function sayLoading(it) {
@@ -3210,7 +3228,8 @@ function sayLoading(it) {
 }
 function sayStalled(it) {
   clearTimeout(stallT);
-  stallT = setTimeout(() => { if (it === cur() && !it.switching && video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 2500);
+  /* a wait right after the buffer refused a piece is the buffer's, not the source's */
+  stallT = setTimeout(() => { if (it === cur() && !it.switching && video.readyState < 3) showNotice(performance.now() - bufferErrAt < 10000 ? t('notice.buffer') : t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 2500);
 }
 function busyOver() { clearTimeout(loadingT); clearTimeout(stallT); hideNotice('busy'); }
 $('#noticeClose').onclick = () => { const f = noticeUndo; hideNotice(); if (f) f(); };
