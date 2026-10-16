@@ -220,20 +220,23 @@ svg.ph{ fill:currentColor; stroke:none; }
    text rises into place a moment behind it; it fades out at once. */
 .pauseinfo{ position:absolute; inset:0; pointer-events:none; visibility:hidden; transition:visibility 0s .22s; }
 .pauseinfo.show{ visibility:visible; transition:visibility 0s; }
-/* No mask and no opacity on an ancestor: both can rob the blur of its
-   backdrop in some browsers. The blur grades from the left without a
-   mask: four veils nested from the left edge, each a little blur of its
-   own, add up where they overlap, deepest at the left and faint at the
-   right; the dark is one gradient on the widest. Each fades by its own
-   opacity. */
+/* Two veils over the whole frame and not one seam. The first is the
+   ground: a light blur everywhere, so the right side stays a picture, and
+   the dark as one gradient, deep at the left. The second is the strong
+   blur, and its own transparency is the gradient: whole at the left edge,
+   a quarter at the right, through a mask on the veil itself; so the blur
+   grades continuously from strong to faint, never to the ground alone. No opacity on an ancestor: that would
+   rob the blur of its backdrop. Each veil fades in by its own opacity. */
 .pauseinfo__veil{
-  position:absolute; top:0; bottom:0; left:0; opacity:0;
+  position:absolute; inset:0; opacity:0;
   transition:opacity .22s ease;
 }
-.pauseinfo__veil:nth-child(1){ right:0; background:linear-gradient(to right, rgba(16,17,20,.84), rgba(16,17,20,.5)); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); }
-.pauseinfo__veil:nth-child(2){ width:72%; backdrop-filter:blur(4px); -webkit-backdrop-filter:blur(4px); }
-.pauseinfo__veil:nth-child(3){ width:50%; backdrop-filter:blur(5px); -webkit-backdrop-filter:blur(5px); }
-.pauseinfo__veil:nth-child(4){ width:30%; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+.pauseinfo__veil:nth-child(1){ background:linear-gradient(to right, rgba(16,17,20,.84), rgba(16,17,20,.5)); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+.pauseinfo__veil:nth-child(2){
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  -webkit-mask-image:linear-gradient(to right, #000 0%, rgba(0,0,0,.6) 45%, rgba(0,0,0,.175) 100%);
+  mask-image:linear-gradient(to right, #000 0%, rgba(0,0,0,.6) 45%, rgba(0,0,0,.175) 100%);
+}
 .pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
 .pauseinfo__box{
   position:absolute; left:36px; right:36px; top:125px;
