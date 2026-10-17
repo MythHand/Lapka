@@ -47,6 +47,7 @@ export function extractorFor(extractors, url) {
 const CLOSED_DOORS = [
   { host: /(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i, why: 'closed door' },  // it plays only in a browser,
   { host: /(^|\.)(gencit\.info|ceramet\.net)$/i, why: 'closed door' },                       // an aggregator's stub that unfolds only inside a frame
+  { host: /(^|\.)rutube\.ru$/i, why: 'closed door' },                                           // not read on principle (2026-10-17), as YouTube is not
 ];
 export function closedDoor(url) {
   let host; try { host = new URL(url).hostname; } catch { return null; }

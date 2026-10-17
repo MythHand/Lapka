@@ -201,7 +201,13 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     if (ep.opened) return ep;
     /* an episode without a page of its own has nothing to read */
     if (!ep.sourceUrl || ep.sourceUrl === s.sourceUrl) { ep.opened = true; return ep; }
-    const report = await readPage(ep.sourceUrl, s.sourceUrl);
+    let report;
+    try { report = await readPage(ep.sourceUrl, s.sourceUrl); }
+    catch (e) {
+      /* the page refused, but an adapter already named the episode's sources: they are what there is to play */
+      if (!ep.dubs.some(d => d.sources.length)) throw e;
+      ep.opened = true; registerStreams(s); return ep;
+    }
     if (report.kind === 'episode' && report.episode.value === null) report.episode.value = number;
     merge(s, toContribution(report));
     if (report.kind === 'episode') await openPlayers(s, report);
@@ -237,6 +243,9 @@ export function createLapka({ session = createSession(), profiles = [], extracto
         return fresh;
       } catch (e) { markHealth(source, false, reasonOf(e)); return false; }
     }
+    /* a source an adapter named behind a closed door is refused as a page's player would be: no request, the reason said */
+    const shut = closedDoor(source.embedUrl);
+    if (shut) { markHealth(source, false, shut); return false; }
     const x = (source.extractor && extractors.find(e => e.name === source.extractor)) || extractorFor(extractors, source.embedUrl);
     if (!x) { markHealth(source, false, 'no extractor'); return false; }
     try {
