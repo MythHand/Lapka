@@ -96,10 +96,12 @@ export default {
         marks: marksOf(e),
         dubs: [{
           name: STUDIO, lang: 'ru',
-          sources: [{
+          /* the site's own video when it has it; a release kept only on Rutube
+             names that player, so the refusal says which door is closed */
+          sources: QUALITIES.some(q => e[`hls_${q}`]) || !e.rutube_id ? [{
             player: 'aniliberty', embedUrl: `${site}/anime/video/episode/${e.id}`, extractor: 'site:aniliberty',
             streams: QUALITIES.filter(q => e[`hls_${q}`]).map(q => ({ kind: 'hls', url: e[`hls_${q}`], quality: `${q}p`, headers: { referer: `${site}/` } })),
-          }],
+          }] : [{ player: 'rutube.ru', embedUrl: `https://rutube.ru/play/embed/${e.rutube_id}`, streams: [] }],
         }],
       })).filter(e => Number.isFinite(e.number)),
     };

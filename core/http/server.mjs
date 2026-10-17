@@ -18,11 +18,13 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { createRequire } from 'node:module';
 import { contentType } from '../deliver/index.mjs';
 import { canPick, canOpen, pickFolder, openFolder } from '../store/folder.mjs';
 import { homeInside } from '../store/config.mjs';
 import { appendJournal } from '../store/journal.mjs';
+import { reasonOf } from '../reasons.mjs';
 import { VERSION, checkUpdate, checkNpm, runUpdate, restartAfterExit, installKind } from '../update.mjs';
 export { VERSION };
 
@@ -75,7 +77,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
 
   const server = http.createServer(async (req, res) => {
     /* taken per request: the folder, and everything in it, can be switched while running */
-    const { lapka, delivery = null, store = null, state = null, library = null, saver = null } = ctx;
+    const { lapka, delivery = null, store = null, state = null, library = null, saver = null, warmer = null } = ctx;
     const url = new URL(req.url, `http://${host}`);
     const p = url.pathname;
     let m;
@@ -110,7 +112,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         const q = url.searchParams;
         try {
           return json(res, 200, await lapka.resolve({ seriesId: q.get('series'), number: Number(q.get('episode')), dubKey: q.get('dub') || null, avoid: q.get('avoid') || null }));
-        } catch (e) { return json(res, e.code || 500, { error: e.message }); }
+        } catch (e) { return json(res, e.code || 500, { error: e.message, reason: reasonOf(e) }); }
       }
 
       /* anything that changes the machine wants a header a cross-site form cannot set */
@@ -126,7 +128,21 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (mutating && p === '/api/log') {
         let raw = ''; for await (const chunk of req) { raw += chunk; if (raw.length > 65536) return json(res, 413, { error: 'too long' }); }
         let body = {}; try { body = JSON.parse(raw || '{}'); } catch { return json(res, 400, { error: 'bad json' }); }
-        try { return json(res, 200, { ok: true, lines: await appendJournal(body.head, body.lines) }); }
+        /* the stream the page names: what the server gave for it lately, what of it is on the disk, what the warming is at */
+        const lines = Array.isArray(body.lines) ? body.lines.slice() : [];
+        const entry = delivery && body.stream ? delivery.get(String(body.stream)) : null;
+        if (entry) {
+          const now = Date.now();
+          lines.push(`-- server, stream ${entry.id}, ${entry.stream.kind || '?'} ${entry.stream.quality || ''}`);
+          for (const r of delivery.trace(entry)) lines.push(`${((r.at - now) / 1000).toFixed(1).padStart(7)}s ${r.who} ${r.name} ${r.from} ${r.ms}ms${r.size ? ' ' + Math.round(r.size / 1024) + 'K' : ''}${r.err ? ' ERR ' + r.err : ''}`);
+          try {
+            const d = await delivery.cached(entry, { level: Number(body.level) || null });
+            const have = d.ranges.reduce((n, [a, b]) => n + (b - a), 0);
+            lines.push(`on disk ${d.tag || '?'}: ${Math.round(have)}s of ${Math.round(d.duration)}s in ${d.ranges.length} stretches: ${d.ranges.map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ')}`);
+          } catch (e) { lines.push(`on disk: not read, ${e.message}`); }
+          if (warmer) lines.push(`warming: ${JSON.stringify(warmer.job())}`);
+        }
+        try { return json(res, 200, { ok: true, lines: await appendJournal(body.head, lines) }); }
         catch (e) { return json(res, 500, { error: e.message }); }
       }
 
@@ -189,6 +205,14 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first', reason: { key: 'noStream' } });
         return json(res, 202, saver.start(ctx.stream.id, ctx, { first: url.searchParams.get('first') === '1', level: Number(url.searchParams.get('level')) || null }));
       }
+      /* the episode playing, pulled into the cache ahead of the player: asked by the page, read by it as it goes */
+      if (warmer && req.method === 'GET' && p === '/api/warm') return json(res, 200, { job: warmer.job() });
+      if (warmer && mutating && p === '/api/warm') {
+        if (!state || state.setting('prefetch') === 'off') return json(res, 403, { error: 'warming is switched off' });   // on unless switched off
+        try { return json(res, 202, { job: warmer.warm(url.searchParams.get('stream') || '', { level: url.searchParams.get('level') }) }); }
+        catch (e) { return json(res, e.code || 500, { error: e.message, reason: e.reason || null }); }
+      }
+      if (warmer && mutating && p === '/api/warm/stop') return json(res, 200, { job: warmer.stop() });
       if (saver && mutating && p === '/api/saves/pause') return json(res, 200, { paused: saver.pauseAll().map(j => j.id) });
       if (saver && mutating && p === '/api/save/cancel') {
         const job = await saver.cancel(url.searchParams.get('id') || '');
@@ -219,36 +243,42 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (state && req.method === 'GET' && p === '/api/history') return json(res, 200, { history: state.history().map(h => ({ ...h, last: state.lastStop((h.parts || []).map(x => x.id).concat(h.seriesId ? [h.seriesId] : [])) })) });
       if (state && store && mutating && p === '/api/history') {
         const q = url.searchParams;
-        const seriesId = q.get('series') || null, coverUrl = q.get('cover') || null;
-        let coverFile = null;
-        if (seriesId && coverUrl && /^https?:/i.test(coverUrl)) {
+        const seriesId = q.get('series') || null;
+        /* a cover fetched once and kept as a file named by its series; none, and the row stands without a picture */
+        const keepCover = async (id, coverUrl) => {
+          if (!id || !coverUrl || !/^https?:/i.test(coverUrl)) return null;
           try {
             const r = await fetch(coverUrl, { headers: { 'user-agent': lapka.session.ua, referer: q.get('url') || coverUrl, accept: 'image/*' }, redirect: 'follow', signal: AbortSignal.timeout(15000) });
             const type = (r.headers.get('content-type') || '').split(';')[0].trim();
             const ext = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' }[type];
-            if (r.ok && ext) {
-              const bytes = Buffer.from(await r.arrayBuffer());
-              if (bytes.length && bytes.length < 8 * 1024 * 1024) {
-                await fsp.mkdir(path.join(store.own, 'covers'), { recursive: true });
-                coverFile = `${seriesId.replace(/[^\w.-]/g, '_')}.${ext}`;
-                await fsp.writeFile(path.join(store.own, 'covers', coverFile), bytes);
-              }
-            }
-          } catch { /* no cover: the row stands without a picture */ }
-        }
+            if (!r.ok || !ext) return null;
+            const bytes = Buffer.from(await r.arrayBuffer());
+            if (!bytes.length || bytes.length >= 8 * 1024 * 1024) return null;
+            await fsp.mkdir(path.join(store.own, 'covers'), { recursive: true });
+            const file = `${id.replace(/[^\w.-]/g, '_')}.${ext}`;
+            await fsp.writeFile(path.join(store.own, 'covers', file), bytes);
+            return file;
+          } catch { return null; }
+        };
         let parts = null; try { parts = JSON.parse(q.get('parts') || 'null'); } catch { /* no parts named */ }
-        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
+        let facts = null; try { facts = JSON.parse(q.get('facts') || 'null'); } catch { /* no facts named */ }
+        let altTitles = null; try { altTitles = JSON.parse(q.get('altTitles') || 'null'); } catch { /* no names named */ }
+        /* the row's cover and each part's, fetched together; a part that is the row's series shares its file */
+        const [coverFile, ...partFiles] = await Promise.all([keepCover(seriesId, q.get('cover')), ...(Array.isArray(parts) ? parts.slice(0, 60).map(x => x && x.id !== seriesId ? keepCover(String(x.id), x.cover) : null) : [])]);
+        if (Array.isArray(parts)) parts = parts.slice(0, 60).map((x, i) => ({ ...x, coverFile: x.id === seriesId ? coverFile : partFiles[i] }));
+        const rec = state.remember({ url: q.get('url'), seriesId, title: q.get('title'), kind: q.get('kind'), year: q.get('year'), season: q.get('season'), episodes: q.get('episodes'), parts, facts, altTitles, cover: coverFile ? `/api/history/cover/${encodeURIComponent(seriesId)}` : null, coverFile });
         return rec ? json(res, 200, rec) : json(res, 400, { error: 'no link' });
       }
       if (state && store && mutating && p === '/api/history/forget') {
         const gone = state.forgetLink(url.searchParams.get('url'));
         if (!gone) return json(res, 404, { error: 'no such link' });
-        if (gone.coverFile) await fsp.rm(path.join(store.own, 'covers', gone.coverFile), { force: true }).catch(() => {});
+        for (const f of gone.files) await fsp.rm(path.join(store.own, 'covers', f), { force: true }).catch(() => {});
         return json(res, 200, { ok: true });
       }
       if (state && store && req.method === 'GET' && p.startsWith('/api/history/cover/')) {
         const id = decodeURIComponent(p.slice('/api/history/cover/'.length));
-        const rec = state.history().find(h => h.seriesId === id && h.coverFile);
+        /* the cover of a row's series, or of any part a row holds */
+        const rec = state.history().find(h => h.seriesId === id && h.coverFile) || state.history().flatMap(h => h.parts || []).find(x => x.id === id && x.coverFile);
         if (!rec) return json(res, 404, { error: 'no cover' });
         const file = path.join(store.own, 'covers', rec.coverFile);
         let bytes; try { bytes = await fsp.readFile(file); } catch { return json(res, 404, { error: 'no cover' }); }
@@ -277,6 +307,20 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return json(res, 202, { ok: true });
       }
       if (state && mutating && p === '/api/saves/forget') { state.clearSave(url.searchParams.get('key') || ''); return json(res, 200, { ok: true }); }
+      /* A save asked for that could not even be opened (the episode's video
+         did not resolve): written down as a save that broke off before its
+         first byte, so that it is taken up again like any other. */
+      if (state && mutating && p === '/api/save/note') {
+        const q = url.searchParams;
+        const series = lapka.series(q.get('series') || '');
+        const episode = Number(q.get('episode'));
+        if (!series || !Number.isFinite(episode)) return json(res, 404, { error: 'unknown series or episode' });
+        const dubKey = q.get('dub') || null, key = `${series.id}/${episode}/${dubKey || ''}`;
+        const why = { key: q.get('why') || 'other' };
+        if (q.get('detail')) why.detail = q.get('detail').slice(0, 200);
+        state.setSave(key, { seriesUrl: series.sourceUrl, seriesId: series.id, episode, dubKey, dubName: q.get('dubName') || null, quality: q.get('quality') || 'auto', phase: 'fetch', done: 0, total: 0, unit: null, error: why, paused: false });
+        return json(res, 200, { key });
+      }
       if (state && mutating && p === '/api/state/setting') {
         const k = url.searchParams.get('k'); if (!/^[a-zA-Z]{1,40}$/.test(k || '')) return json(res, 400, { error: 'bad key' });
         state.setSetting(k, url.searchParams.has('v') ? url.searchParams.get('v') : undefined);
@@ -309,10 +353,12 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
         return json(res, 200, { ok: true });
       }
 
-      if (delivery && (m = /^\/api\/stream\/([a-f0-9]{16})(?:\.(m3u8|mp4|vtt)|\/(pl|seg|key))$/.exec(p))) {
+      if (delivery && (m = /^\/api\/stream\/([a-f0-9]{16})(?:\.(m3u8|mp4|vtt)|\/(pl|seg|key|cached))$/.exec(p))) {
         const entry = delivery.get(m[1]);
         if (!entry) return json(res, 404, { error: 'unknown stream' });
         try {
+          /* what of the stream is on the disk already, for the page's timeline */
+          if (m[3] === 'cached') return json(res, 200, await delivery.cached(entry, { level: Number(url.searchParams.get('level')) || null }));
           if (m[2] === 'vtt') {
             const body = await delivery.text(entry);
             res.writeHead(200, { 'content-type': 'text/vtt; charset=utf-8', 'content-length': Buffer.byteLength(body), 'cache-control': 'no-store' });
@@ -335,7 +381,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
           for (const k of ['content-length', 'content-range']) if (origin.headers.get(k)) h[k] = origin.headers.get(k);
           res.writeHead(origin.status, h);
           if (req.method === 'HEAD' || !origin.body) return res.end();
-          return Readable.fromWeb(origin.body).pipe(res);
+          /* an origin that drops the connection mid-file ends this answer, not the program */
+          return pipeline(Readable.fromWeb(origin.body), res).catch(() => { if (!res.writableEnded) res.destroy(); });
         } catch (e) {
           return json(res, e.code || 500, { error: e.message });
         }

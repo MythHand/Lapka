@@ -117,6 +117,22 @@ describe('seasons', () => {
     /* a page with a single season link is not a franchise */
     assert.deepEqual(seriesPage('links').franchise, []);
   });
+  test('a block the site heads as related, a plain list of links with no years and this page among them: the parts in the site\'s order', () => {
+    const page = (self) => `<html><head><title>${self} - Site</title></head><body><h1>${self}</h1>
+<section><h2>Связанные релизы</h2><p>Эта подборка помогает следить за «${self}»</p>
+<ul><li><a href="/releases/rai">Рай</a></li><li><a href="/releases/rai-2nd-season">Рай 2</a></li><li><a href="/releases/rai-movie">Рай: Фильм</a></li></ul></section>
+<section><h2>Похожие релизы</h2><ul><li><a href="/releases/other">Другое</a></li><li><a href="/releases/more">Ещё</a></li></ul></section>
+</body></html>`;
+    const two = discover({ html: page('Рай 2'), url: 'https://site.example/releases/rai-2nd-season' });
+    assert.deepEqual(two.franchise.map(f => [f.order, f.title, f.kind, f.self]), [[1, 'Рай', 'tv', false], [2, 'Рай 2', 'tv', true], [3, 'Рай: Фильм', 'movie', false]]);
+    assert.equal(two.franchise[0].url, 'https://site.example/releases/rai');
+    assert.equal(two.season, 2);
+    const one = discover({ html: page('Рай'), url: 'https://site.example/releases/rai' });
+    assert.equal(one.season, 1, 'the earliest series of the franchise, unnumbered, is the first season');
+    /* a list under such a heading that does not hold this page is a list of something else */
+    const stranger = discover({ html: page('Рай 2').replace('/releases/rai-2nd-season', '/releases/elsewhere'), url: 'https://site.example/releases/rai-2nd-season' });
+    assert.deepEqual(stranger.franchise, []);
+  });
 });
 
 describe('the page\'s own word', () => {
@@ -262,6 +278,112 @@ describe('players fetched after the page loads', () => {
     assert.equal(deferredAnswer('<iframe src="https://embed.example/serial/3"></iframe>'), 'https://embed.example/serial/3');
     assert.equal(deferredAnswer('https://embed.example/serial/4'), 'https://embed.example/serial/4');
     assert.equal(deferredAnswer('{"status":false}'), null);
+  });
+});
+
+/* A page drawn by a script: no links to episodes, the episodes in the
+   framework's payload as data, each with its video by quality and its
+   opening and ending marked; the window's title in the site's quotes
+   with a tail, the name itself in the structured data. */
+const PAYLOAD = JSON.stringify({ alias: 'okean-3', title_main: 'Океан 3', year: 2026, episodes: [
+  { id: 1, ordinal: 1, name: '', duration: 1441, hls: { 480: 'https://cdn.example/v/1/480/a.m3u8?x=1', 720: 'https://cdn.example/v/1/720/a.m3u8?x=1', 1080: 'https://cdn.example/v/1/1080/a.m3u8?x=1' }, opening: { start: 55, stop: 145 }, ending: { start: 1335, stop: 1425 } },
+  { id: 2, ordinal: 2, name: 'Второй', duration: 1440, hls: { 480: 'https://cdn.example/v/2/480/b.m3u8', 720: 'https://cdn.example/v/2/720/b.m3u8' }, opening: null, ending: null },
+  { id: 3, ordinal: 3, name: '', duration: 1439, hls: { 720: 'https://cdn.example/v/3/720/c.m3u8' } },
+], dubs: [{ id: 7, studio: 'Другие', episodes_count: 3 }] });
+const NEXT = `<html><head><title>Смотреть «Океан 3» онлайн во всех озвучках бесплатно | next.example</title>
+<meta property="og:title" content="Смотреть «Океан 3» онлайн во всех озвучках бесплатно"/><meta property="og:type" content="video.tv_show"/>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"TVSeries","name":"Океан 3"}</script></head>
+<body><h1>Океан 3</h1><div id="app"></div>
+<script>self.__next_f=self.__next_f||[];self.__next_f.push([0])</script>
+<script>self.__next_f.push([1,${JSON.stringify('3:I[1234,[],""]\n')}])</script>
+<script>self.__next_f.push([1,${JSON.stringify('c:["$","div",null,{"children":["$","$L5",null,{"anime":' + PAYLOAD + '}]}]\n')}])</script>
+</body></html>`;
+
+describe('episodes in the page\'s data', () => {
+  const r = discover({ html: NEXT, url: 'https://next.example/anime/okean-3' });
+  test('the framework\'s payload is read: the episodes with their videos by quality, their marks, their durations', () => {
+    assert.equal(r.kind, 'series');
+    assert.equal(r.episodes.by, 'data');
+    assert.deepEqual(r.episodes.items.map(e => e.number), [1, 2, 3]);
+    assert.deepEqual(r.episodes.items[0].streams.map(s => [s.kind, s.quality]), [['hls', '480p'], ['hls', '720p'], ['hls', '1080p']]);
+    assert.deepEqual(r.episodes.items[0].marks, { opening: { start: 55, stop: 145 }, ending: { start: 1335, stop: 1425 } });
+    assert.equal(r.episodes.items[1].marks, null);
+    assert.equal(r.episodes.items[1].title, 'Второй');
+    assert.equal(r.episodes.items[2].duration, 1439);
+    assert.equal(r.players.length, 0, 'the videos of the episodes are not players of the page');
+  });
+  test('the name is the site\'s own word: the quotes and the tail of the window\'s title go, the structured data agrees', () => {
+    assert.equal(r.title.value, 'Океан 3');
+    assert.equal(r.season, 3);
+    assert.equal(r.kind_, 'tv');
+  });
+  /* the players' own way: a playlist of objects whose file lists the qualities in
+     one string, the addresses relative to the page and signed for hours, the
+     number only in the title */
+  const PLAYERJS = `<html><head><title>Рай 2 - Site</title><meta property="og:title" content="Рай 2"/></head><body><h1>Рай 2</h1>
+<script>(() => { const player = new Playerjs({ id: 'p', file: [{"file":"[480p]\\/video\\/pl\\/a480.m3u8?expires=1791956901\\u0026signature=aa,[720p]\\/video\\/pl\\/a720.m3u8?expires=1791956901\\u0026signature=bb or \\/video\\/pl\\/a720b.m3u8,[1080p]\\/video\\/pl\\/a1080.m3u8?expires=1791956901\\u0026signature=cc","title":"\\u042d\\u043f\\u0438\\u0437\\u043e\\u0434 1"},{"file":"[480p]\\/video\\/pl\\/b480.m3u8?expires=1791956901\\u0026signature=dd,[720p]\\/video\\/pl\\/b720.m3u8?expires=1791956901\\u0026signature=ee","title":"\\u042d\\u043f\\u0438\\u0437\\u043e\\u0434 2"}] }); })();</script>
+</body></html>`;
+  test('a player\'s playlist in a script: the qualities out of one string, the addresses made absolute, the expiry read, the number out of the title', () => {
+    const p = discover({ html: PLAYERJS, url: 'https://pl.example/releases/rai-2' });
+    assert.equal(p.kind, 'series');
+    assert.deepEqual(p.episodes.items.map(e => e.number), [1, 2]);
+    assert.equal(p.episodes.items[0].title, '', 'a title that only numbers the episode is no title');
+    assert.deepEqual(p.episodes.items[0].streams.map(s => [s.quality, s.url]), [['480p', 'https://pl.example/video/pl/a480.m3u8?expires=1791956901&signature=aa'], ['720p', 'https://pl.example/video/pl/a720.m3u8?expires=1791956901&signature=bb'], ['1080p', 'https://pl.example/video/pl/a1080.m3u8?expires=1791956901&signature=cc']]);
+    assert.equal(p.episodes.items[0].streams[0].expiresAt, 1791956901000);
+    assert.equal(p.title.value, 'Рай 2');
+    assert.equal(p.season, 2);
+    assert.equal(toContribution(p).episodes[1].dubs[0].sources[0].streams[1].expiresAt, 1791956901000);
+  });
+  test('into the catalog: every episode with its page as the player and the videos as its streams', () => {
+    const c = toContribution(r);
+    assert.equal(c.episodes.length, 3);
+    const ep = c.episodes[0];
+    assert.equal(ep.duration, 1441);
+    assert.deepEqual(ep.marks.opening, { start: 55, stop: 145 });
+    assert.equal(ep.dubs.length, 1);
+    assert.equal(ep.dubs[0].name, UNNAMED_DUB);
+    assert.deepEqual(ep.dubs[0].sources[0].streams.map(s => s.quality), ['480p', '720p', '1080p']);
+    assert.equal(ep.dubs[0].sources[0].player, 'page');
+    const s = createSeries({ sourceUrl: 'https://next.example/anime/okean-3' }); merge(s, c);
+    assert.equal(s.episodes.length, 3);
+    assert.equal(s.episodes[0].dubs[0].sources[0].streams.length, 3);
+    assert.deepEqual(s.episodes[0].marks.ending, { start: 1335, stop: 1425 });
+  });
+});
+
+/* The facts a page states of its series: in structured data and in
+   labelled fields, in whatever tags; what it does not state stays empty. */
+const FACTS = `<html><head><title>Рай - Site</title>
+<script type="application/ld+json">{"@type":"TVSeries","name":"Рай","alternateName":["Rai","楽園"],"genre":["Комедия","Приключения"],"contentRating":"16+","numberOfEpisodes":24,"productionCompany":{"@type":"Organization","name":"Studio Zero"}}</script>
+</head><body><h1>Рай</h1>
+<ul class="info"><li><b>Жанр:</b> Комедия, Сёнен</li><li>Первоисточник: Манга</li><li>Рейтинг MPAA: PG-13</li><li>Серий: 12 из 24</li><li>Другие названия: Rai, Paradise</li><li>Год выхода: 2024</li></ul>
+<dl><dt>Студия</dt><dd>Studio Zero</dd><dt>Возраст</dt><dd>16+</dd></dl>
+<div class="eps"><a href="/rai/1">1 серия</a> <a href="/rai/2">2 серия</a> <a href="/rai/3">3 серия</a></div>
+</body></html>`;
+describe('the facts a page states', () => {
+  const r = discover({ html: FACTS, url: 'https://site.example/rai' });
+  test('genres as a union, the studio, the source, both ratings, the episodes out of the planned, the other names', () => {
+    assert.deepEqual(r.facts.genres, ['Комедия', 'Приключения', 'Сёнен']);
+    assert.equal(r.facts.studio, 'Studio Zero');
+    assert.equal(r.facts.origin, 'Манга');
+    assert.equal(r.facts.age, '16+');
+    assert.equal(r.facts.mpaa, 'PG-13');
+    assert.deepEqual([r.facts.episodes, r.facts.episodesTotal], [12, 24]);
+    assert.deepEqual(r.facts.altTitles, ['Rai', '楽園', 'Paradise']);
+  });
+  test('into the catalog: the facts stated, the other names apart from the name; a page that states nothing gives nothing', () => {
+    const c = toContribution(r);
+    assert.deepEqual(c.series.facts, { genres: ['Комедия', 'Приключения', 'Сёнен'], studio: 'Studio Zero', origin: 'Манга', age: '16+', mpaa: 'PG-13', episodes: 12, episodesTotal: 24 });
+    assert.deepEqual(c.series.altTitles, ['Rai', '楽園', 'Paradise']);
+    const s = createSeries({ sourceUrl: 'https://site.example/rai' }); merge(s, c);
+    assert.deepEqual(s.facts.genres, ['Комедия', 'Приключения', 'Сёнен']);
+    assert.equal(s.facts.mpaa, 'PG-13');
+    merge(s, { origin: 'test', series: { facts: { genres: ['Драма'], studio: 'Other' } }, episodes: [] });
+    assert.deepEqual(s.facts.genres, ['Комедия', 'Приключения', 'Сёнен', 'Драма'], 'genres add up');
+    assert.equal(s.facts.studio, 'Studio Zero', 'the first word stands');
+    const bare = toContribution(discover({ html: '<html><head><title>Х</title></head><body><h1>Х</h1><a href="/x/1">1 серия</a><a href="/x/2">2 серия</a></body></html>', url: 'https://site.example/x' }));
+    assert.equal(bare.series.facts, undefined);
+    assert.equal(bare.series.altTitles, undefined);
   });
 });
 

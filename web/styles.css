@@ -212,6 +212,72 @@ svg.ph{ fill:currentColor; stroke:none; }
 .stage.cursor-hidden{ cursor:none; }
 
 /* soft gradient at the top, mirrors the bottom one but lighter */
+/* ── what the page said of the series, while paused ──────────
+   The whole frame is the field: the veil covers it edge to edge, the
+   title chip and the deck stay above it. Lapka's dark over the frame in
+   one even run from the left, where it is deepest and blurred most, to
+   the right, where it is thinner but never gone. It fades in, and the
+   text rises into place a moment behind it; it fades out at once. */
+.pauseinfo{ position:absolute; inset:0; pointer-events:none; visibility:hidden; transition:visibility 0s .22s; }
+.pauseinfo.show{ visibility:visible; transition:visibility 0s; }
+/* Two veils over the whole frame and not one seam. The first is the
+   ground: a light blur everywhere, so the right side stays a picture, and
+   the dark as one gradient, deep at the left. The second is the strong
+   blur, and its own transparency is the gradient: whole at the left edge,
+   a quarter at the right, through a mask on the veil itself; so the blur
+   grades continuously from strong to faint, never to the ground alone. No opacity on an ancestor: that would
+   rob the blur of its backdrop. Each veil fades in by its own opacity. */
+.pauseinfo__veil{
+  position:absolute; inset:0; opacity:0;
+  transition:opacity .22s ease;
+}
+.pauseinfo__veil:nth-child(1){ background:linear-gradient(to right, rgba(16,17,20,.84), rgba(16,17,20,.5)); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px); }
+.pauseinfo__veil:nth-child(2){
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  -webkit-mask-image:linear-gradient(to right, #000 0%, rgba(0,0,0,.6) 45%, rgba(0,0,0,.175) 100%);
+  mask-image:linear-gradient(to right, #000 0%, rgba(0,0,0,.6) 45%, rgba(0,0,0,.175) 100%);
+}
+.pauseinfo.show .pauseinfo__veil{ opacity:1; transition:opacity .55s ease; }
+.pauseinfo__box{
+  position:absolute; left:36px; right:36px; top:125px;
+  max-width:1500px; max-height:calc(100% - 300px);
+  display:grid; grid-template-columns:auto auto; justify-content:start; gap:0 36px; align-items:start;
+  opacity:0; transform:translateY(10px);
+  transition:opacity .2s ease, transform .2s ease;
+}
+.pauseinfo.show .pauseinfo__box{ opacity:1; transform:none; transition:opacity .6s ease .12s, transform .6s cubic-bezier(.2,.8,.3,1) .12s; }
+.pauseinfo__cover{ width:clamp(154px, min(34vh, 15vw), 280px); aspect-ratio:2/3; object-fit:cover; border-radius:12px; background:rgba(255,255,255,.06); }
+.pauseinfo__cover:not([src]){ display:none; }
+/* The text part is as wide as its two columns. The columns follow the window,
+   not the frame, so the queue shown, hidden or resized never reflows them; and
+   their share of the window is laid out for the frame left beside the queue at
+   its widest (709px), with 36px on each side of the box, the cover and the gaps:
+   at 1920 that leaves 823px for the columns, 376 + 48 + 399; the floors meet a
+   1440 window with the queue at 504px. */
+.pauseinfo__text{ --pi-facts:clamp(280px, calc(46vw - 507px), 520px); --pi-dubs:clamp(280px, calc(54vw - 638px), 620px); --pi-gap:48px; width:calc(var(--pi-facts) + var(--pi-gap) + var(--pi-dubs)); }
+.pauseinfo__title{ font-size:calc(26px + var(--fs)); font-weight:600; line-height:1.2; color:var(--tx-1); }
+.pauseinfo__alt{ margin-top:4px; font-size:calc(14px + var(--fs)); line-height:1.4; color:var(--tx-2); }
+.pauseinfo__alt:empty{ display:none; }
+/* two columns: the facts of the part, then its dubs by name, the wider one,
+   since the names can run to dozens */
+.pauseinfo__cols{
+  margin-top:18px; display:grid; grid-template-columns:var(--pi-facts) var(--pi-dubs); gap:0 var(--pi-gap); align-items:start;
+  font-family:var(--mono); font-size:calc(12.5px + var(--fs)); line-height:1.5; letter-spacing:0; font-variant-ligatures:none;
+}
+/* the facts: label and value side by side, every label as wide as the widest */
+.pauseinfo__facts{ display:grid; grid-template-columns:max-content minmax(0,1fr); gap:7px 16px; align-content:start; }
+.pauseinfo__facts:empty{ display:none; }
+.pauseinfo__k{ color:var(--tx-3); white-space:nowrap; }
+.pauseinfo__v{ color:var(--tx-2); min-width:0; }   /* wraps at spaces only: a word is never cut */
+/* the dubs: the label on top, the names flowing under it, the one in play brighter; a name never breaks inside */
+.pauseinfo__dubs{ display:grid; grid-template-columns:minmax(0,1fr); gap:7px 0; align-content:start; }
+.pauseinfo__dubs:empty{ display:none; }
+.pauseinfo__names{ color:var(--tx-2); display:flex; flex-wrap:wrap; gap:4px 0; }
+.pauseinfo__names i{ font-style:normal; white-space:nowrap; }
+.pauseinfo__names i.is-dead{ color:var(--tx-3); }
+.pauseinfo__names i.is-on{ color:var(--tx-1); }
+.pauseinfo__names i:not(:last-child)::after{ content:' · '; color:var(--tx-3); white-space:pre; }
+
 .scrim{
   position:absolute; top:0; left:0; right:0; height:150px;
   background:linear-gradient(to bottom, rgba(0,0,0,.32), rgba(0,0,0,0));
@@ -442,6 +508,9 @@ svg.ph{ fill:currentColor; stroke:none; }
   background:rgba(255,255,255,.16); overflow:hidden;
   transition:height .15s;
 }
+/* what of the episode is on the disk: stretches, under the player's own buffer */
+.seek__disk{ position:absolute; inset:0; pointer-events:none; }
+.seek__disk i{ position:absolute; top:0; bottom:0; background:rgba(255,255,255,.2); }
 .seek__buf{ position:absolute; inset:0 auto 0 0; width:0; background:rgba(255,255,255,.14); }
 .seek__fill{ position:absolute; inset:0 auto 0 0; width:0; background:#fff; }
 .seek__knob{
@@ -998,7 +1067,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .queue__sum{ display:flex; flex-direction:column; justify-content:center; gap:0; line-height:1.35; }
 #queueTotal{ display:none; }
-.queue__add{ display:flex; gap:7px; flex-wrap:wrap; }
+.queue__add{ display:flex; gap:12px; flex-wrap:wrap; }   /* the footer's own gap, between the field and the bin as between the footer's parts */
 /* When the buttons do not fit on one line they stand two by two (fitFoot
    in the player code). Left to wrap freely, one of them ended up alone on a line:
    "Leeren" in German at 504px, and at 360px in every language. */
@@ -1011,7 +1080,6 @@ svg.ph{ fill:currentColor; stroke:none; }
 .queue__add .tag--sq svg{ width:17px; height:17px; }
 .queue__add--grid .tag--sq{ width:auto; }
 /* the history and the trash stand apart: one remembers, the other empties */
-.queue__add .tag--sq + .tag--sq{ margin-left:10px; }
 
 /* ── the links pasted: a list beside the history button ──────────
    Fixed and on the body, as tall as the window allows, the newest at
@@ -1019,8 +1087,8 @@ svg.ph{ fill:currentColor; stroke:none; }
    title and the link as pasted, whole, and when. */
 .histpop{
   position:fixed; z-index:60;
-  width:653px; max-width:calc(100vw - 24px); max-height:calc(100vh - 24px);
-  display:flex; flex-direction:column; overflow:hidden;
+  width:1000px; max-width:calc(100vw - 24px); height:min(calc(100vh - 24px), 880px);   /* one tall height: nothing moves as the rows or the column change */
+  display:flex; overflow:hidden;
   border-radius:var(--r-lg); border:1px solid var(--line-2); box-shadow:var(--shadow);
   /* the veil of the queue over the video: nearly opaque, the picture only a blur behind */
   background:rgba(16,17,20,.93);
@@ -1031,33 +1099,91 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .histpop:not([hidden]){ opacity:1; transform:none; transition:opacity 120ms cubic-bezier(.33,.8,.45,1), transform 200ms cubic-bezier(.2,.8,.3,1), display 0s allow-discrete; }
 @starting-style{ .histpop:not([hidden]){ opacity:0; transform:translateX(-10px); } }
-/* On top the title and the count, at the bottom the search; only the rows
-   between them scroll, so neither needs a fill of its own and the veil
-   stays one from edge to edge. */
+/* On the left the title and the count, under them the rows, which alone
+   scroll; the search is the footer's link field, which the list stands
+   beside. On the right the column of the row stood on. */
+.histpop__main{ flex:0 0 653px; min-width:0; display:flex; flex-direction:column; min-height:0; }
+.histpop__side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; min-height:0; border-left:1px solid var(--line-2); }
+.histpop__parts{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; position:relative; }
+/* a part: its two names close together as one block, the facts a step below
+   in a quieter voice, so a title that runs to two lines still reads as a name */
+.histpop__part{ display:flex; gap:12px; align-items:flex-start; padding:12px 12px; color:var(--tx-2); }
+.histpop__part .histpop__body{ gap:0; }
+.histpop__parttitle{ color:var(--tx-1); font-size:calc(13px + var(--fs)); line-height:1.3; overflow-wrap:anywhere; }
+.histpop__partalt{ font-size:calc(12px + var(--fs)); line-height:1.35; color:var(--tx-2); margin-top:1px; overflow-wrap:anywhere; }
+.histpop__partmeta{ font-size:calc(11.5px + var(--fs)); line-height:1.4; color:var(--tx-3); font-variant-numeric:tabular-nums; margin-top:7px; }
+.histpop__hit{ background:none; color:#e0a24a; }   /* the letters searched for, in the amber of a button armed to act */
+
+/* ── the overview: which dubs the parts have ──
+   A window in the history's manner, centred. On top the dubs by name,
+   the ones that run through the most episodes first; under them the
+   parts, each its episodes as a row of cells that wraps, the number in
+   the cell. A dub under the pointer lights the cells that have it; a
+   click keeps it lit while the pointer goes to read the map. */
+.over{
+  position:fixed; z-index:60; left:50%; top:12px; transform:translate(-50%, 0);   /* from the window's top edge, centred across */
+  width:min(1100px, calc(100vw - 24px)); max-height:calc(100vh - 24px);
+  display:flex; flex-direction:column; overflow:hidden;
+  border-radius:var(--r-lg); border:1px solid var(--line-2); box-shadow:var(--shadow);
+  background:rgba(16,17,20,.93);
+  backdrop-filter:blur(28px) saturate(1.3); -webkit-backdrop-filter:blur(28px) saturate(1.3);
+  font-size:calc(12.5px + var(--fs)); line-height:1.45; color:var(--tx-2);
+  /* the way in and out as the settings sheet has them: the window comes whole,
+     already filled, rising a little as it fades in; it fades on the spot going
+     out and stays drawn until that is over */
+  opacity:0; transform:translate(-50%, 14px);
+  transition:opacity 170ms cubic-bezier(.35,0,.65,1),
+             transform 260ms cubic-bezier(.25,.45,.55,.95),
+             display 260ms allow-discrete;
+}
+.over:not([hidden]){
+  opacity:1; transform:translate(-50%, 0);
+  transition:opacity 180ms cubic-bezier(.33,.8,.45,1),
+             transform 300ms cubic-bezier(.2,.8,.3,1),
+             display 0s allow-discrete;
+}
+@starting-style{ .over:not([hidden]){ opacity:0; transform:translate(-50%, 14px); } }
+.dubmap{ display:flex; flex-direction:column; min-height:0; }
+.over__dubs{ flex:none; display:flex; flex-wrap:wrap; gap:6px 16px; padding:2px 19px 14px; border-bottom:1px solid var(--line); }
+.menu .over__dubs{ padding:2px 12px 10px; }
+.menu .over__map{ padding:8px 12px 8px; }
+.over__dub{ font-family:var(--mono); font-size:calc(12.5px + var(--fs)); letter-spacing:0; color:var(--tx-2); cursor:pointer; transition:color .12s; }
+.over__dub:hover, .over__dub.is-on{ color:#e0a24a; }
+.over__map{ flex:0 1 auto; min-height:0; overflow:auto; padding:8px 19px 19px; }
+.over__part{ padding:10px 0 4px; }
+.over__partname{ display:flex; align-items:center; gap:10px; margin:0 0 8px; font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
+/* the queue's tab without its left block, in the name's grey: the number and the bar */
+.over__partname .queue__group-label, .over__partname .queue__group-label::after{ color:var(--tx-3); }
+.over__partname .queue__group-label::before{ content:none; }
+.over__parttitle{ min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.over__cells{ display:flex; flex-wrap:wrap; gap:4px; }
+.over__cell{
+  width:30px; height:30px; border-radius:6px; display:grid; place-items:center;
+  background:rgba(255,255,255,.06); color:rgba(255,255,255,.38);
+  font-family:var(--mono); font-size:calc(11px + var(--fs)); letter-spacing:0; font-variant-numeric:tabular-nums;
+  cursor:default; user-select:none;
+  transition:background .12s, color .12s;
+}
+.dubmap.is-keyed .over__cell.is-on{ background:rgba(224,162,74,.26); color:#e0a24a; }   /* the amber as a veil over the cell, not a fill; the other cells stay as they are */
+.dubmap.is-cell .over__cell:hover:not(.is-on){ background:rgba(255,255,255,.12); color:var(--tx-1); }
 .histpop__top{
-  flex:none; display:flex; justify-content:space-between; align-items:baseline; gap:12px;
-  padding:16px 18px 10px;
+  flex:none; display:flex; justify-content:flex-start; align-items:baseline; gap:10px;   /* the count right after the title, not lost at the far edge */
+  padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */
 }
 .histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
-.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 12px; position:relative; }
-.histpop__bottom{ flex:none; padding:10px 12px 12px; }
-.histpop__field{ position:relative; display:flex; }
-.histpop__search{ width:100%; padding:0 40px 0 12px; }
-/* the cross inside the field, as the project draws its buttons: a quiet square that lights up under the pointer */
-.histpop__clear{
-  position:absolute; right:5px; top:50%; transform:translateY(-50%);
-  display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:6px;
-  color:var(--tx-3); background:transparent; transition:background .15s, color .15s;
-}
-.histpop__clear:hover{ color:var(--tx-1); background:var(--glass-hi); }
-.histpop__clear svg{ width:14px; height:14px; }
+.histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; position:relative; margin-top:auto; }   /* the inset of a menu; at the frame's bottom when the frame is taller: a search in a frozen frame */
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
+/* a row as a menu's item: the plate inset by the frame's 7px, 10px 12px inside, 6px corners */
 .histpop__row{
   position:relative;
-  display:flex; gap:12px; align-items:flex-start; width:100%; padding:8px 6px; border-radius:8px;
+  display:flex; gap:12px; align-items:flex-start; width:100%; padding:10px 12px; border-radius:6px;
   text-align:left; color:var(--tx-2); cursor:pointer;
 }
-.histpop__row:hover{ background:var(--glass-hi); color:var(--tx-1); }
+/* two marks: a faint plate under the pointer, at once and meaning nothing
+   more; the full plate on the row stood on, which the keys move at once and
+   the pointer only after resting on a row a moment */
+.histpop:not(.is-keys) .histpop__row:hover{ background:rgba(255,255,255,.04); }
+.histpop__row.is-active, .histpop:not(.is-keys) .histpop__row.is-active:hover{ background:var(--glass-hi); color:var(--tx-1); }
 /* the cross that forgets the link: in the row's top right corner, over the
    row but not over its words (the title keeps the corner free), shown while
    the pointer is on the row or the cross has the focus */
@@ -1067,7 +1193,7 @@ svg.ph{ fill:currentColor; stroke:none; }
 }
 .histpop__x svg{ opacity:.55; }                                      /* quiet until the pointer is on it */
 .histpop__x:hover svg{ opacity:1; }
-.histpop__row:hover .histpop__x, .histpop__x:focus-visible{ opacity:1; }
+.histpop:not(.is-keys) .histpop__row:hover .histpop__x, .histpop__row.is-active .histpop__x, .histpop__x:focus-visible{ opacity:1; }
 .histpop__x:hover{ color:var(--tx-1); }
 .histpop__x svg{ width:14px; height:14px; }
 /* a row on its way out: a fading copy where it stood, while the others slide; nothing answers the pointer meanwhile */
@@ -1868,7 +1994,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 /* ── the footer's link: as wide as the footer lets it, Enter shown once something is typed ── */
 /* the field keeps the width a bare input has, plus forty pixels; the footer's row is as it was */
 .linkform__wrap{ position:relative; display:flex; flex:1; min-width:0; }
-.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 62px); }   /* the footer's field: a bare field's width and forty pixels */
+.linkform--foot .linkform__wrap .linkform__in{ width:calc(20ch + 64px + var(--ctl-h)); }   /* the footer's field: a bare field's width, forty pixels, and the room of the history's button it took over, less the wider gap */
 .linkform__enter{
   position:absolute; right:8px; top:50%; transform:translateY(-50%);
   font:inherit; font-size:calc(11px + var(--fs)); line-height:1; padding:3px 6px; border-radius:6px;
@@ -1876,8 +2002,16 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 }
 .linkform__in:not(:placeholder-shown) + .linkform__enter{ opacity:1; }
 
-/* ── the audio menu: room for the qualities each dub can play in ── */
+/* ── the audio menu: room for the qualities each dub can play in; and, past
+   the divider, the map of which dubs the parts have, the column of the
+   choice keeping its width. In the PiP window the map column is not drawn
+   and the menu is its narrow self. ── */
 #audioMenu{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); }
+#audioMenu.menu--split{ min-width:min(1100px, calc(100vw - 24px)); max-width:min(1500px, calc(100vw - 24px)); max-height:calc(100vh - 130px); }
+#audioMenu .menu__col--pick{ flex:0 0 auto; width:auto; min-width:480px; max-width:min(560px, calc(100vw - 24px)); }   /* the column of the choice as the menu was: its own width, 480 to 560 */
+#audioMenu .menu__col--map{ flex:1 1 0; display:flex; flex-direction:column; overflow:hidden; }
+.stage.pip-mode #audioMenu.menu--split{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); max-height:min(340px, calc(100vh - 130px)); }
+.stage.pip-mode #audioMenu .menu__col--pick{ flex:1 1 0; min-width:0; }
 .menu__item--dub{ align-items:center; }
 .menu__tags{ flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:210px; margin-left:8px; }
 /* .qtag, not .tag: .tag is the queue's round button and must stay so */

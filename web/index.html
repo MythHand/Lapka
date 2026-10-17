@@ -33,6 +33,24 @@
           </div>
         </div>
 
+        <!-- What the page said of the series, shown while paused: over the
+             frame between the title and the deck, a veil rising from the left
+             that thins to the right so the frame shows through. -->
+        <div class="pauseinfo hide-in-pip" id="pauseInfo" aria-hidden="true">
+          <div class="pauseinfo__veil"></div><div class="pauseinfo__veil"></div>
+          <div class="pauseinfo__box">
+            <img class="pauseinfo__cover" id="pauseCover" alt="">
+            <div class="pauseinfo__text">
+              <div class="pauseinfo__title" id="pauseTitle"></div>
+              <div class="pauseinfo__alt" id="pauseAlt"></div>
+              <div class="pauseinfo__cols">
+                <div class="pauseinfo__facts" id="pauseFacts"></div>
+                <div class="pauseinfo__dubs" id="pauseDubs"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- soft gradient at the top, mirrors the one at the bottom -->
         <div class="scrim" id="scrim" aria-hidden="true"></div>
 
@@ -122,6 +140,7 @@
             <div class="seek" id="seek" role="slider" tabindex="0"
                  data-i18n-aria="a11y.seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
               <div class="seek__rail">
+                <div class="seek__disk" id="seekDisk"></div>
                 <div class="seek__buf" id="seekBuffer"></div>
                 <div class="seek__fill" id="seekFill"></div>
               </div>
@@ -278,6 +297,13 @@
           </button>
           <div class="savepop" id="savePop" hidden></div>
         </div>
+        <div class="toolgrp">
+          <div class="segbar">
+          <button class="segbar__b" id="btnOverview" data-i18n-title="queue.overview" title="Dubs across the parts">
+            <svg class="ph" viewBox="6.9 6.9 242.2 242.2"><path d="M108,84a16,16,0,1,1,16,16A16,16,0,0,1,108,84Zm128,44A108,108,0,1,1,128,20,108.12,108.12,0,0,1,236,128Zm-24,0a84,84,0,1,0-84,84A84.09,84.09,0,0,0,212,128Zm-72,36.68V132a20,20,0,0,0-20-20,12,12,0,0,0-4,23.32V168a20,20,0,0,0,20,20,12,12,0,0,0,4-23.32Z"/></svg>
+          </button>
+          </div>
+        </div>
         <div class="spacer"></div>
         <!-- scrolls the list to the file playing, in a long season it is easy to lose -->
         <button class="rb rb--sm" id="btnLocate" data-i18n-title="queue.locate">
@@ -304,11 +330,8 @@
         </div>
         <div class="queue__add">
           <form class="linkform linkform--foot" id="queueLinkForm" autocomplete="off">
-            <span class="linkform__wrap"><input class="linkform__in" id="queueLinkInput" type="url" inputmode="url" spellcheck="false" data-i18n-placeholder="queue.link" placeholder="https://…"><kbd class="linkform__enter" aria-hidden="true">⏎</kbd></span>
+            <span class="linkform__wrap"><input class="linkform__in" id="queueLinkInput" type="text" spellcheck="false" autocomplete="off" data-i18n-placeholder="queue.link" placeholder="https://…"><kbd class="linkform__enter" aria-hidden="true">⏎</kbd></span>
           </form>
-          <button class="tag tag--sq" id="btnHistory" data-i18n-title="queue.history" title="History">
-            <svg class="ph" viewBox="0 0 256 256"><path d="M136,80v43.47l36.12,21.67a12,12,0,1,1-12.24,20.58l-42-25.2A12,12,0,0,1,112,130V80a12,12,0,0,1,24,0Zm-8-52A100.11,100.11,0,0,0,40.33,74.15V56a12,12,0,0,0-24,0v48a12,12,0,0,0,12,12h48a12,12,0,0,0,0-24H57.11A76,76,0,1,1,52,128a12,12,0,0,0-24,0A100,100,0,1,0,128,28Z"/></svg>
-          </button>
           <button class="tag tag--sq tag--quiet" id="btnClear" data-i18n-title="queue.clear" title="Clear">
             <svg class="ph" viewBox="0 0 256 256"><path d="M216,48H180V36A28,28,0,0,0,152,8H104A28,28,0,0,0,76,36V48H40a12,12,0,0,0,0,24h4V208a20,20,0,0,0,20,20H192a20,20,0,0,0,20-20V72h4a12,12,0,0,0,0-24ZM100,36a4,4,0,0,1,4-4h48a4,4,0,0,1,4,4V48H100Zm88,168H68V72H188ZM116,104v64a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Zm48,0v64a12,12,0,0,1-24,0V104a12,12,0,0,1,24,0Z"/></svg>
           </button>
@@ -324,6 +347,7 @@
 <div class="savecard" id="saveCard" hidden></div>
 <div class="menu menu--float" id="saveMenu" hidden></div>
 <div class="histpop" id="histPop" hidden></div>
+<div class="over" id="overview" hidden></div>
 
 
 <script src="i18n.js"></script>

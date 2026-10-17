@@ -10,11 +10,13 @@
    right.
    ═══════════════════════════════════════════════════════════ */
 import { parseHTML } from 'linkedom';
-import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, seasonFromUrl, tidyTitle, findFranchise, franchiseFromBlock, findSelf } from './series.mjs';
+import { findTitle, findCover, findSeriesUrl, findCurrentEpisode, titleFromText, seasonFromText, seasonFromUrl, tidyTitle, findFranchise, franchiseFromBlock, findSelf, findFacts } from './series.mjs';
 import { numberFromText, numberFromUrl, tailNumberOfUrl, stemOfUrl } from './numbers.mjs';
 import { findEpisodes } from './episodes.mjs';
 import { findPlayers, qualityOf } from './players.mjs';
 import { template } from './numbers.mjs';
+import { payloadsIn } from './objects.mjs';
+import { episodesInData } from './data.mjs';
 import { UNNAMED_DUB } from '../catalog/model.mjs';
 
 export { UNNAMED_DUB };
@@ -22,11 +24,26 @@ export { UNNAMED_DUB };
 export function discover({ html, url, profile = null }) {
   const { document: doc } = parseHTML(String(html));
   const steps = [];
+  /* the page's data as its framework packed it, unpacked into a script of its own: every reader below reads scripts */
+  for (const text of payloadsIn(doc)) { const s = doc.createElement('script'); s.setAttribute('data-lapka', 'payload'); s.textContent = text; doc.body.append(s); }
 
   const title = findTitle(doc, { profile });
   const cover = findCover(doc, url);
   let episodes = findEpisodes(doc, url, { profile });
-  const { players, switches } = findPlayers(doc, url, { profile });
+  let { players, switches } = findPlayers(doc, url, { profile });
+  /* no list of links, but the episodes are in the page's data, each with its video: the
+     streams a script scan found are those episodes', not players of this page */
+  if (!episodes.items.length) {
+    const texts = [...doc.querySelectorAll('script:not([src])')].map(s => s.textContent || '');
+    const data = episodesInData(texts, url);
+    if (data.length) {
+      episodes = { ...episodes, items: data.map(e => ({ ...e, url })), by: 'data', confidence: 0.8 };
+      /* by file name: a scan of the raw script may have cut an address at an escaped character, in its path or its query */
+      const name = u => { try { return new URL(u).pathname.split('/').pop(); } catch { return u; } };
+      const own = new Set(data.flatMap(e => e.streams.map(st => name(st.url))));
+      players = players.filter(p => !(p.kind === 'script' && own.has(name(p.url))));
+    }
+  }
   const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
   /* the series' own name, for a link that carries it: the heading without the episode and the tail */
   const probableSeries = tidyTitle(titleFromText(title[0]?.value || '') || title[0]?.value || '', host).title;
@@ -39,6 +56,7 @@ export function discover({ html, url, profile = null }) {
      least as many parts, else the season links. */
   const bySeasons = findFranchise(doc, url, ownSeason, title[0]?.value || '');
   const self = findSelf(doc);
+  const facts = findFacts(doc);
   const byBlock = franchiseFromBlock(doc, url, title[0]?.value || '', self);
   const franchise = byBlock.length && byBlock.length >= bySeasons.length ? byBlock : bySeasons;
 
@@ -125,6 +143,7 @@ export function discover({ html, url, profile = null }) {
        franchise is the first season, the one sites leave unnumbered */
     season: ownSeason ?? (franchise === bySeasons ? franchise.find(f => f.self)?.order ?? null : firstSeason(franchise)),
     year: self.year ?? tidy.year, kind_: self.kind,
+    facts,
     franchise,
     episodes,
     players, switches,
@@ -195,13 +214,27 @@ export function toContribution(report, { origin = 'discover:page' } = {}) {
   if (report.season !== null && report.season !== undefined) c.series.season = report.season;
   if (report.year) c.series.year = report.year;
   if (report.kind_) c.series.kind = report.kind_;
+  /* the facts the page states, those it does: the other names apart, the rest as one */
+  const f = report.facts || {};
+  const alt = (f.altTitles || []).filter(a => a.toLowerCase() !== String(report.title.value || '').toLowerCase());
+  if (alt.length) c.series.altTitles = alt;
+  const facts = {};
+  for (const k of ['genres', 'studio', 'origin', 'age', 'mpaa', 'episodes', 'episodesTotal']) if (f[k] !== null && f[k] !== undefined && !(Array.isArray(f[k]) && !f[k].length)) facts[k] = f[k];
+  if (Object.keys(facts).length) c.series.facts = facts;
   if (report.franchise && report.franchise.length) {
     c.series.franchise = report.franchise;
     const self = report.franchise.find(f => f.self);
     if (self && self.kind) c.series.kind = self.kind;   // a film among the parts is a film
   }
 
-  for (const e of report.episodes.items) c.episodes.push({ number: e.number, title: e.title || undefined, sourceUrl: e.url });
+  for (const e of report.episodes.items) {
+    const ep = { number: e.number, title: e.title || undefined, sourceUrl: e.url };
+    if (e.duration) ep.duration = e.duration;
+    if (e.marks) ep.marks = e.marks;
+    /* an episode the page's data names with its video: the page is its player, the dub what the profile calls it */
+    if (e.streams && e.streams.length) ep.dubs = [{ name: report.defaultDub || UNNAMED_DUB, sources: [{ player: 'page', embedUrl: e.url, streams: e.streams.map(st => ({ kind: st.kind, url: st.url, quality: st.quality || qualityOf(st.url), expiresAt: st.expiresAt || null })) }] }];
+    c.episodes.push(ep);
+  }
 
   if (report.kind === 'episode' && report.episode.value !== null) {
     const number = report.episode.value;

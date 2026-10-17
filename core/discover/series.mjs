@@ -10,6 +10,8 @@ import { textOf } from './text.mjs';
 
 const SEO_HEAD = /^\s*(?:watch|ver|смотреть)\s+(?:anime\s+|аниме\s+)?(?=\S)/i;
 const clean = s => String(s || '').replace(/\s+/g, ' ').trim();
+/* «Название» in a window's title: the quotes are the site's, not the name's */
+const unquote = s => String(s || '').replace(/^[«"“„‘']+|[»"”“’']+$/g, '').trim();
 
 /* "Название — Сайт", "Название | Сайт", "Название - смотреть онлайн" */
 const stripSite = t => clean(t).split(/\s+[|—–]\s+|\s+-\s+/)[0]
@@ -22,6 +24,15 @@ export function findTitle(doc, { profile } = {}) {
   add(doc.querySelector('meta[property="og:title"]')?.getAttribute('content'), 'og:title', 0.9, 'meta[property="og:title"]');
   const h1 = doc.querySelector('h1'); if (h1) add(textOf(h1), 'h1', 0.8, 'h1');
   add(stripSite(doc.querySelector('title')?.textContent), 'title', 0.5, 'title');
+  /* the name in the page's structured data: the site's own word, written for machines */
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    let d; try { d = JSON.parse(s.textContent); } catch { continue; }
+    for (const node of (Array.isArray(d) ? d : [d]).flatMap(x => x && x['@graph'] ? x['@graph'] : [x])) {
+      if (!node || typeof node !== 'object' || typeof node.name !== 'string') continue;
+      const type = String(Array.isArray(node['@type']) ? node['@type'][0] : node['@type'] || '');
+      if (/^(TVSeries|TVSeason|Movie|VideoObject|CreativeWorkSeries|Series)$/i.test(type)) add(node.name, 'ld+json', 0.85, 'script[type="application/ld+json"]');
+    }
+  }
   /* "Клинок, рассекающий демонов смотреть на джутсу" in og:title and
      "Клинок, рассекающий демонов" in the heading: the heading is the
      name, the rest is a tail for search engines */
@@ -31,10 +42,10 @@ export function findTitle(doc, { profile } = {}) {
      "Watch", is the name and the rest a tail for search engines. Not
      when the shorter one is the episode's own line ("Эпизод 8"). */
   const og = out.find(c => c.by === 'og:title');
-  const core = og ? og.value.replace(SEO_HEAD, '').toLowerCase() : '';
+  const core = og ? unquote(og.value.replace(SEO_HEAD, '')).toLowerCase() : '';
   for (const other of out) {
     if (!og || other === og || other.by === 'profile') continue;
-    const v = other.value.toLowerCase();
+    const v = unquote(other.value).toLowerCase();
     if (og.value.length > other.value.length && v.length >= 4 && core.startsWith(v) && numberFromText(other.value) === null) other.confidence = Math.max(other.confidence, 0.95);
   }
   out.sort((a, b) => b.confidence - a.confidence);
@@ -149,7 +160,7 @@ export function seasonFromUrl(url) {
    океан, Сезон 3 (2026) все серии онлайн". The name is what is left
    once the year in brackets and the tail of watch-words go; the year
    is kept. */
-const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+(?:хорошем|hd|высоком|отличном)\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
+const SEO_TAIL = /\s*(?:[-—–|:·,]\s*)?(?:во\s+всех\s+озвучках|в\s+озвучке\s+[^\s|]+|все\s+серии(?:\s+подряд)?|смотреть(?:\s+аниме)?(?:\s+онлайн)?|аниме\s+онлайн|онлайн|в\s+(?:хорошем|hd|высоком|отличном)\s+качестве|бесплатно|в\s+hd|hd|watch\s+online|online|free|english\s+(?:subbed|dubbed)|(?:eng\s+)?(?:subbed|dubbed)|anime\s+free|at\s+\w+|sub\s+espa[ñn]ol|en\s+espa[ñn]ol|online\s+gratis|gratis|с\s+(?:русскими\s+)?субтитрами|все\s+серии)\s*$/i;
 export function tidyTitle(text, host = '') {
   let t = String(text || '').replace(SEO_HEAD, '');
   let year = null;
@@ -162,6 +173,7 @@ export function tidyTitle(text, host = '') {
   t = t.replace(/\s*\((?=[^()]*(?:сериал|сезон|season|series))[^()]*\)\s*/gi, ' ');
   for (let i = 0; i < 6; i++) { const was = t; t = t.replace(SEO_TAIL, ''); if (t === was) break; }
   t = t.replace(/\s+/g, ' ').replace(/[\s,:·|—–-]+$/g, '').trim();
+  t = unquote(t);
   return { title: t || String(text || '').trim(), year };
 }
 const TRAILING = /(?:^|\s)(\d{1,2})(?:\s*\((?:OVA|ONA|TV|special)\))?\s*$/i;
@@ -286,7 +298,26 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
          under the name): the item is the nearest ancestor of the year
          that holds one link, or none. */
       const years = [...up.querySelectorAll('*')].filter(el => !el.children.length && yearOfLeaf(el) !== null);
-      if (!years.length) continue;
+      /* no years: a plain list of links, this page among them, is the
+         franchise in the site's order (a season a part, by its name) */
+      if (!years.length) {
+        for (const list of up.querySelectorAll('ul, ol')) {
+          if (head.contains(list)) continue;
+          const rows = [...list.children];
+          if (rows.length < 2 || !rows.every(li => li.querySelectorAll('a[href]').length === 1)) continue;
+          const items = rows.map(li => {
+            const a = li.querySelector('a[href]');
+            const name = clean(textOf(a) || a.getAttribute('title') || a.querySelector('img')?.getAttribute('alt'));
+            let abs; try { abs = new URL(a.getAttribute('href'), url).toString(); } catch { abs = null; }
+            return { title: name, url: abs, href: same(a.getAttribute('href')), year: null, kind: kindOfName(name) };
+          }).filter(it => it.title && it.href);
+          const self = items.find(it => it.href === page);
+          if (!self || items.length < 2) continue;      // a list without this page in it is a list of something else
+          if (own.kind) self.kind = own.kind;
+          return items.map((it, i) => ({ order: i + 1, title: it.title, url: it === self ? String(url).replace(/#.*$/, '') : it.url, year: it.year, kind: it.kind, self: it === self }));
+        }
+        continue;
+      }
       const items = [];
       const yearsIn = el => years.filter(y => el.contains(y)).length;
       for (const y of years) {
@@ -329,6 +360,73 @@ export function franchiseFromBlock(doc, url, title = '', own = {}) {
     }
   }
   return [];
+}
+
+/* ── the facts a page states about its series ─────────────────
+   Beyond the name, the cover and the year: the genres, the studio,
+   the source it was adapted from, the age rating (a general one, or
+   the MPAA letters), how many episodes there are, the other names
+   it goes by. Read from the structured data first, then from the
+   labelled fields sites write ("Жанр: …", "Studio: …"). A field the
+   page does not state stays empty: nothing is guessed. */
+const FACT_LABELS = {
+  genres: /^(?:жанры?|genres?|géneros?|generi|gatunki?|türler?)$/i,
+  studio: /^(?:студия|студии|studios?|animation studio)$/i,
+  origin: /^(?:первоисточник|original source|source material|adapted from|основа)$/i,
+  age: /^(?:возраст|возрастной рейтинг|возрастное ограничение|age rating|age|rating)$/i,
+  mpaa: /^(?:рейтинг mpaa|mpaa|mpaa rating)$/i,
+  episodes: /^(?:серий|серии|эпизодов|эпизоды|episodes?|episodios?|épisodes?)$/i,
+  altTitles: /^(?:оригинальное название|другие названия|другое название|альтернативные названия|original title|alternative titles?|also known as|other titles?|romaji|japanese)$/i,
+};
+const MPAA = /^(?:G|PG|PG-13|R|NC-17|R\+|Rx|TV-(?:Y|Y7|G|PG|14|MA))$/i;
+const AGE = /(\d{1,2})\s*\+/;
+const splitList = v => String(v || '').split(/\s*[,;·|/]\s*|\s{2,}/).map(x => x.trim()).filter(x => x && x.length < 60);
+export function findFacts(doc) {
+  const out = { genres: [], studio: null, origin: null, age: null, mpaa: null, episodes: null, episodesTotal: null, altTitles: [] };
+  const takeRating = v => { const t = String(v || '').trim(); if (MPAA.test(t)) out.mpaa = out.mpaa || t.toUpperCase(); else { const m = AGE.exec(t); if (m) out.age = out.age || `${m[1]}+`; } };
+  /* structured data: the site's word for machines */
+  for (const s of doc.querySelectorAll('script[type="application/ld+json"]')) {
+    let d; try { d = JSON.parse(s.textContent); } catch { continue; }
+    for (const node of (Array.isArray(d) ? d : [d]).flatMap(x => x && x['@graph'] ? x['@graph'] : [x])) {
+      if (!node || typeof node !== 'object') continue;
+      const type = String(Array.isArray(node['@type']) ? node['@type'][0] : node['@type'] || '');
+      if (!/^(TVSeries|TVSeason|Movie|VideoObject|CreativeWorkSeries|Series)$/i.test(type)) continue;
+      for (const g of [].concat(node.genre || [])) if (typeof g === 'string') out.genres.push(g.trim());
+      for (const a of [].concat(node.alternateName || [])) if (typeof a === 'string') out.altTitles.push(a.trim());
+      if (node.contentRating) takeRating(node.contentRating);
+      const n = Number(node.numberOfEpisodes); if (Number.isFinite(n) && n > 0) out.episodesTotal = n;
+      for (const c of [].concat(node.productionCompany || [])) { const name = typeof c === 'string' ? c : c && c.name; if (name && !out.studio) out.studio = String(name).trim(); }
+    }
+  }
+  /* labelled fields: the smallest element that reads "Label: value", or a label followed by its value */
+  const seen = new Set();
+  for (const el of doc.querySelectorAll('li, div, span, td, tr, dt, dd, p, b, strong')) {
+    const text = clean(el.textContent);
+    if (!text || text.length > 160 || seen.has(text)) continue;
+    const m = /^([^:：]{2,40})\s*[:：]\s*(.+)$/.exec(text);
+    let label, value;
+    if (m) { label = m[1].trim(); value = m[2].trim(); }
+    else if (/^(DT|B|STRONG)$/.test(el.tagName) && el.nextElementSibling) { label = text.replace(/\s*[:：]\s*$/, ''); value = clean(el.nextElementSibling.textContent); }
+    else continue;
+    if (!value) continue;
+    seen.add(text);
+    /* a list written as links has its items in the links; the text alone may run them together */
+    const links = [...(m ? el : el.nextElementSibling).querySelectorAll('a')].map(a => clean(a.textContent)).filter(x => x && x.length < 60);
+    const items = links.length >= 2 ? links : splitList(value);
+    if (FACT_LABELS.genres.test(label)) { for (const g of items) if (!out.genres.includes(g)) out.genres.push(g); }
+    else if (FACT_LABELS.studio.test(label)) out.studio = out.studio || items.join(', ');
+    else if (FACT_LABELS.origin.test(label)) out.origin = out.origin || value.slice(0, 60);
+    else if (FACT_LABELS.mpaa.test(label)) { const v = value.split(/\s/)[0]; if (MPAA.test(v)) out.mpaa = out.mpaa || v.toUpperCase(); }
+    else if (FACT_LABELS.age.test(label)) takeRating(value);
+    else if (FACT_LABELS.episodes.test(label)) {
+      const e = /(\d{1,4})(?:\s*(?:из|of|\/)\s*(\d{1,4}|\?+))?/.exec(value);
+      if (e) { if (e[2] && /^\d+$/.test(e[2])) { out.episodes = out.episodes ?? Number(e[1]); out.episodesTotal = out.episodesTotal ?? Number(e[2]); } else out.episodesTotal = out.episodesTotal ?? Number(e[1]); }
+    }
+    else if (FACT_LABELS.altTitles.test(label)) { for (const a of items) if (!out.altTitles.includes(a)) out.altTitles.push(a); }
+  }
+  out.genres = [...new Set(out.genres.filter(Boolean))].slice(0, 12);
+  out.altTitles = [...new Set(out.altTitles.filter(Boolean))].slice(0, 6);
+  return out;
 }
 
 /* What the page says of itself: in schema.org data (JSON-LD) the year

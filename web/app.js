@@ -131,7 +131,7 @@ const emptyEl = $('#empty'), modeHint = $('#modeHint');
 const prep = $('#prep'), prepName = $('#prepName'), prepTrack = $('#prepTrack'), prepHead = $('#prepHead');
 const prepSteps = $('#prepSteps'), prepCmd = $('#prepCmd');
 const deck = $('#deck'), seek = $('#seek'), seekFill = $('#seekFill');
-const seekBuffer = $('#seekBuffer'), seekKnob = $('#seekKnob'), seekTip = $('#seekTip');
+const seekBuffer = $('#seekBuffer'), seekDisk = $('#seekDisk'), seekKnob = $('#seekKnob'), seekTip = $('#seekTip');
 const tCur = $('#tCur'), tDur = $('#tDur');
 const btnPlay = $('#btnPlay'), playIcon = $('#playIcon');
 const btnMute = $('#btnMute'), volIcon = $('#volIcon'), volBar = $('#volBar'), volFill = $('#volFill');
@@ -156,7 +156,7 @@ const queueEl = $('#queue'), btnLocate = $('#btnLocate');
 const linkForm = $('#linkForm'), linkInput = $('#linkInput');
 const skipEl = $('#skip'), btnSkip = $('#btnSkip'), btnSkipHide = $('#btnSkipHide');
 const queueLinkForm = $('#queueLinkForm'), queueLinkInput = $('#queueLinkInput');
-const btnHistory = $('#btnHistory'), histPop = $('#histPop');
+const histPop = $('#histPop'), btnOverview = $('#btnOverview'), overview = $('#overview');
 const MENUS = [audioMenu, pipMenu, rateMenu, subsMenu, qualityMenu, gearMenu];
 
 /* ── fitting into narrow places ───────────────────────────────
@@ -318,6 +318,8 @@ const SETTINGS = [
   { key: 'hideUi', def: 'off', label: 'set.hideUi',
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'autoSkip', def: 'off', label: 'set.autoSkip',
+    opts: [['on', 'common.on'], ['off', 'common.off']] },
+  { key: 'pauseInfo', def: 'on', label: 'set.pauseInfo',
     opts: [['on', 'common.on'], ['off', 'common.off']] },
   { key: 'font', def: 'fixel', label: 'set.font',
     opts: [['fixel', 'set.font.fixel'], ['inter', 'set.font.inter']] },
@@ -495,7 +497,7 @@ const state = {
   seasons: [],       // every series of its franchise that was opened, in viewing order: [{ series, entry }]
   dubKey: null,      // the dub chosen, carried to every episode and every season
   quality: strFromStore('lapka.quality', 'auto'),   // '1080p', '720p', … or 'auto' for the best there is
-  saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, size, path }]
+  saved: new Map(),  // 'seriesId/number' → what the library holds of it: [{ dub, dubKey, quality, size, path }]
   positions: {},     // series/episode → { t: seconds, d: duration }, mirrored from the server
   watched: {},       // series/episode → true, mirrored from the server
   remote: {},        // the server's state as it was at boot
@@ -1002,14 +1004,20 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   /* the episode to start with: the one asked for, the one the link pointed at, or the first of the linked series */
   const wantedNumber = at && at.number != null ? at.number : at != null && typeof at !== 'object' ? at : got.start ? got.start.episode : null;
   const wantedSeries = at && at.seriesId ? at.seriesId : got.series.id;
+  /* a session restored and its episode not in the list: the episode last watched, by the server's memory of places */
+  const lastPlace = () => state.list.filter(i => state.positions[posKey(i)]).sort((a, b) => (state.positions[posKey(b)].at || 0) - (state.positions[posKey(a)].at || 0))[0] || null;
   const first = state.list.find(i => i.seriesId === wantedSeries && i.number === wantedNumber)
+    || (at && typeof at === 'object' ? lastPlace() : null)
     || state.list.find(i => i.seriesId === got.series.id) || state.list[0];
   if (autoplay) playItem(first);
   else {
-    /* the series is back but not started: the stage shows the episode it stopped on, not the start screen */
+    /* the series is back but not started: the stage shows the episode it stopped on, not the start screen,
+       and the queue stands at it, once the rows have their places */
     state.current = first;
     emptyEl.classList.add('hide'); stage.classList.remove('is-empty');
     paintTitle(); paintActive(); syncStatus();
+    requestAnimationFrame(() => requestAnimationFrame(revealCurrent));
+    restoredIdle = true; setTimeout(paintPauseInfo, 400);   // the same pause as any: the facts show until play is pressed
   }
   return true;
 }
@@ -1034,7 +1042,10 @@ function rememberLink(url, series) {
   if (series.year) q.set('year', String(series.year));
   if (series.season) q.set('season', String(series.season));
   /* the parts the link opened: where watching stops is looked for across them */
-  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null }))));
+  q.set('parts', JSON.stringify(state.seasons.map(s => ({ id: s.series.id, ordinal: s.ordinal || null, title: s.series.title || '', season: s.series.season || null, kind: s.series.kind || null, year: s.series.year || null, episodes: s.series.episodes.length, dubs: new Set(s.series.episodes.flatMap(e => (e.dubs || []).map(d => d.name || d.key))).size, alt: otherName(s.series), cover: s.series.cover || null }))));
+  /* the facts the page stated of the series and its other names, for a fuller row one day */
+  if (series.facts && Object.keys(series.facts).length) q.set('facts', JSON.stringify(series.facts));
+  if (series.altTitles && series.altTitles.length) q.set('altTitles', JSON.stringify(series.altTitles.slice(0, 6)));
   post('/api/history?' + q).then(() => { if (!histPop.hidden) loadHistory(); }).catch(() => {});
 }
 let histList = [];
@@ -1053,39 +1064,76 @@ function whenWords(at) {
   if (gone === 1) return t('hist.yesterday');
   try { return d.toLocaleDateString(document.documentElement.lang || undefined, { day: 'numeric', month: 'short', ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' } : {}) }); } catch (_) { return ''; }
 }
-/* The frame of the list, once per opening: on top the title and, at the
-   right edge, how many links the history holds, whatever is searched;
-   under it the rows; at the bottom the search, next to the button the
-   list came from. Top and bottom stay while the rows scroll between
-   them. A search narrows the rows as it is typed, by the title, the
-   link, the year or the name of any part the link opened, and the frame
-   takes the height of what is left, up to the window. */
+/* The frame, once per opening, of one tall height: on the left the title
+   with how many links the history holds, whatever is searched, and under
+   it the rows, the newest at the bottom, beside the footer's link field;
+   on the right the column that tells of the row stood on. The field is
+   the search: what is typed in it narrows the rows, by the title, the
+   other names, the link, the year or the name of any part the link opened. */
 function buildHistory() {
   histPop.replaceChildren();
+  const main = document.createElement('div'); main.className = 'histpop__main';
   const top = document.createElement('div'); top.className = 'histpop__top';
   const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.history');
   const count = document.createElement('span'); count.className = 'histpop__count';
   top.append(head, count);
   const list = document.createElement('div'); list.className = 'histpop__list';
-  const bottom = document.createElement('div'); bottom.className = 'histpop__bottom';
-  const wrap = document.createElement('span'); wrap.className = 'histpop__field';
-  const search = document.createElement('input');
-  search.className = 'linkform__in histpop__search';
-  search.type = 'text'; search.spellcheck = false; search.autocomplete = 'off';
-  search.placeholder = t('hist.search');
-  search.value = histQuery;
-  /* the project's own cross, not the browser's: it clears the search and gives the field back */
-  const clear = document.createElement('button');
-  clear.type = 'button'; clear.className = 'histpop__clear'; clear.title = t('queue.clear');
-  clear.innerHTML = phSvg(PH.x);
-  clear.hidden = !histQuery;
-  search.oninput = () => { histQuery = search.value; clear.hidden = !histQuery; paintHistoryList(); };
-  clear.onclick = ev => { ev.stopPropagation(); search.value = ''; histQuery = ''; clear.hidden = true; paintHistoryList(); search.focus({ preventScroll: true }); };
-  wrap.append(search, clear);
-  bottom.append(wrap);
-  histPop.append(top, list, bottom);
+  main.append(top, list);
+  const side = document.createElement('div'); side.className = 'histpop__side';
+  histPop.append(main, side);
   paintHistoryList();
-  search.focus({ preventScroll: true });
+}
+/* the letters searched for, lit where they stand in a text */
+function markHits(text, q) {
+  const frag = document.createDocumentFragment(), str = String(text || '');
+  if (!q) { frag.append(str); return frag; }
+  const low = str.toLowerCase();
+  let i = 0;
+  for (let at = low.indexOf(q); at >= 0; at = low.indexOf(q, i)) {
+    if (at > i) frag.append(str.slice(i, at));
+    const m = document.createElement('mark'); m.className = 'histpop__hit'; m.textContent = str.slice(at, at + q.length); frag.append(m);
+    i = at + q.length;
+  }
+  if (i < str.length) frag.append(str.slice(i));
+  return frag;
+}
+/* The column: the parts of the franchise the row stood on holds, in their
+   order, each with its cover, its title, one other name, its year, its kind
+   and how many episodes; what a part did not say is left out. The letters
+   searched for are lit here too, so a row found by a part's name says why. */
+function paintHistorySide(h) {
+  const side = histPop.querySelector('.histpop__side');
+  if (!side) return;
+  side.replaceChildren();
+  if (!h) return;
+  const q = histQuery.trim().toLowerCase();
+  const parts = [...(h.parts || [])].sort((a, b) => (a.ordinal ?? 1e9) - (b.ordinal ?? 1e9));
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('hist.parts');
+  const count = document.createElement('span'); count.className = 'histpop__count'; count.textContent = String(parts.length);
+  top.append(head, count);
+  const list = document.createElement('div'); list.className = 'histpop__parts';
+  for (const p of parts) {
+    const el = document.createElement('div'); el.className = 'histpop__part';
+    const coverUrl = p.coverFile ? `/api/history/cover/${encodeURIComponent(p.id)}` : null;
+    const cover = coverUrl ? document.createElement('img') : document.createElement('span');
+    cover.className = 'histpop__cover' + (coverUrl ? '' : ' histpop__cover--none');
+    if (coverUrl) { cover.src = coverUrl; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
+    const body = document.createElement('div'); body.className = 'histpop__body';
+    const title = document.createElement('div'); title.className = 'histpop__parttitle'; title.append(markHits(p.title || '', q));
+    body.append(title);
+    if (p.alt && /[\u0400-\u04ff]/.test(p.title || '') && !/[\u0400-\u04ff]/.test(p.alt)) { const alt = document.createElement('div'); alt.className = 'histpop__partalt'; alt.append(markHits(p.alt, q)); body.append(alt); }
+    const kind = kindLabel(p) || (p.kind === 'tv' ? t('info.tv') : '');
+    const meta = document.createElement('div'); meta.className = 'histpop__partmeta';
+    meta.textContent = [p.year, kind, p.episodes ? t('pop.episodes', { n: p.episodes }) : null, p.dubs ? t('queue.dubs', { n: p.dubs }) : null].filter(Boolean).join(' · ');
+    if (meta.textContent) body.append(meta);
+    el.append(cover, body);
+    list.append(el);
+  }
+  side.append(top, list);
+  /* the column opens on the first part the search found, so what was found is in sight */
+  const hit = list.querySelector('.histpop__hit');
+  if (hit) list.scrollTop = Math.max(0, hit.closest('.histpop__part').offsetTop - 6);
 }
 /* a title without its season: "2 сезон", "Season 2", "TV-2", "Part 2", a
    closing number equal to the season; what is left says whose season it is */
@@ -1105,7 +1153,8 @@ function historyRow(h) {
   cover.className = 'histpop__cover' + (h.cover ? '' : ' histpop__cover--none');
   if (h.cover) { cover.src = h.cover; cover.alt = ''; cover.loading = 'lazy'; } else cover.innerHTML = phSvg(PH.fileVideo);
   const body = document.createElement('div'); body.className = 'histpop__body';
-  const title = document.createElement('div'); title.className = 'histpop__title'; title.textContent = h.title || h.url;
+  row.__h = h;
+  const title = document.createElement('div'); title.className = 'histpop__title'; title.append(markHits(h.title || h.url, histQuery.trim().toLowerCase()));
   /* what the series is on the left, when it was pasted on the right */
   const meta = document.createElement('div'); meta.className = 'histpop__meta';
   const about = document.createElement('span'); about.textContent = [h.year, h.season ? t('queue.season', { n: h.season }) : null, h.episodes ? t('pop.episodes', { n: h.episodes }) : null].filter(Boolean).join(' · ');
@@ -1151,53 +1200,98 @@ function historyRow(h) {
   row.onclick = ev => { ev.stopPropagation(); closeHistory(); queueLinkInput.value = ''; openLink(h.url, last ? { at: { seriesId: last.seriesId, number: last.done ? last.episode + 1 : last.episode } } : {}); };
   return row;
 }
+/* The row stood on, lit as a row under the pointer is: there is always one
+   while rows are shown, the newest at first; the arrows in the footer's
+   field walk the rows up and down, the pointer takes the standing with it;
+   Enter opens the row stood on. The column follows the standing: at once
+   from the keys, and after the pointer has rested on a row a moment, so a
+   pointer crossing the list does not make the column flicker. */
+let histActive = null, histSideT = 0, histDwell = null;
+const HIST_DWELL = 700;
+function setHistActive(row) {
+  histPop.querySelector('.histpop__row.is-active')?.classList.remove('is-active');
+  histActive = row || null;
+  clearTimeout(histSideT); histDwell = null;
+  if (!row) { paintHistorySide(null); return; }
+  row.classList.add('is-active');
+  paintHistorySide(row.__h);
+  /* the list alone scrolls to show it: no ancestor is moved on the way */
+  const list = row.parentElement, top = row.offsetTop, bottom = top + row.offsetHeight;
+  if (top < list.scrollTop) list.scrollTop = top;
+  else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+}
+queueLinkInput.addEventListener('keydown', e => {
+  if (histPop.hidden || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const rows = [...histPop.querySelectorAll('.histpop__row')];
+  if (!rows.length) return;
+  e.preventDefault();
+  histPop.classList.add('is-keys');
+  const i = histActive ? rows.indexOf(histActive) : rows.length;
+  setHistActive(rows[Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowUp' ? -1 : 1)))]);
+});
+/* The pointer takes the standing when it has rested on a row a moment: a
+   pointer crossing the rows on its way to the column changes nothing. It
+   must move for that, too: the list scrolling under a pointer at rest brings
+   other rows under it, and the browser reports those as entered, which is
+   not a move of the hand. */
+let histPointer = null;
+histPop.addEventListener('mousemove', e => {
+  if (histPointer && histPointer.x === e.clientX && histPointer.y === e.clientY) return;
+  histPointer = { x: e.clientX, y: e.clientY };
+  histPop.classList.remove('is-keys');
+  const row = e.target.closest('.histpop__row');
+  if (!row || row === histActive) { clearTimeout(histSideT); histDwell = null; return; }
+  if (row === histDwell) return;
+  clearTimeout(histSideT); histDwell = row;
+  histSideT = setTimeout(() => { if (histDwell === row && row.isConnected) setHistActive(row); }, HIST_DWELL);
+});
+histPop.addEventListener('mouseleave', () => { clearTimeout(histSideT); histDwell = null; });
 /* A row leaves the list from the top down. It is taken out of the flow at
-   once, the scroll gives back its height where it can, and the frame takes
-   its new place at the button; then everything that moved (the rows, the
-   frame's top edge) slides from where it was to where it is, together and
-   at one pace. So the rows above come down into the gap and the rows below
-   stand still, whether or not the list scrolls. A fading copy of the row
-   stays where it was meanwhile. The list answers no pointer until settled. */
+   once, the scroll gives back its height where it can, and the rows stand
+   where they now stand; then everything that moved slides from where it
+   was on the screen to where it is, together and at one pace. A fading copy
+   of the row stays where it was meanwhile. The list answers no pointer until
+   settled, and the standing passes to the row that took the place. */
 const LEAVE_MS = 450, LEAVE_EASE = 'cubic-bezier(.2,.8,.3,1)';
 function leaveHistoryRow(row) {
   const list = row.parentElement;
   if (!list) return Promise.resolve();
   const rows = [...list.querySelectorAll('.histpop__row')].filter(r => r !== row);
-  const seen = r => r.offsetTop - list.scrollTop;                 // where a row stands in the list's window
-  const before = new Map(rows.map(r => [r, seen(r)]));
-  const popTop0 = histPop.getBoundingClientRect().top, st0 = list.scrollTop, h = row.offsetHeight, was = row.getBoundingClientRect();
+  const at = r => r.getBoundingClientRect().top;
+  const before = new Map(rows.map(r => [r, at(r)]));
+  const was = row.getBoundingClientRect(), st0 = list.scrollTop, h = row.offsetHeight, i = [...list.querySelectorAll('.histpop__row')].indexOf(row);
   const ghost = row.cloneNode(true);
   ghost.classList.add('histpop__ghost');
   list.classList.add('is-settling');
   row.remove();
+  if (histActive === row) histActive = null;
   const count = histPop.querySelector('.histpop__count');
   if (count) count.textContent = String(histList.length);
   if (!histList.length) { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = t('hist.empty'); list.append(e); }
   list.scrollTop = Math.max(0, st0 - h);
   placeHistory();
-  const pop1 = histPop.getBoundingClientRect(), popTop1 = pop1.top;
-  /* the fading copy: in the frame, where the row stood on the screen, moving with the frame's edge so it stays there */
-  ghost.style.left = (was.left - pop1.left) + 'px'; ghost.style.top = (was.top - pop1.top) + 'px'; ghost.style.width = was.width + 'px';
+  const pop = histPop.getBoundingClientRect();
+  ghost.style.left = (was.left - pop.left) + 'px'; ghost.style.top = (was.top - pop.top) + 'px'; ghost.style.width = was.width + 'px';
   histPop.append(ghost);
   /* first frame: everything held at its old place */
-  for (const r of rows) { r.style.transition = 'none'; r.style.transform = `translateY(${before.get(r) - seen(r)}px)`; }
-  ghost.style.transition = 'none'; ghost.style.transform = `translateY(${popTop1 - popTop0}px)`;
-  histPop.style.transition = 'none'; histPop.style.top = popTop0 + 'px';
+  for (const r of rows) { r.style.transition = 'none'; r.style.transform = `translateY(${before.get(r) - at(r)}px)`; }
+  ghost.style.transition = 'none';
   void histPop.offsetHeight;
   return new Promise(done => {
     requestAnimationFrame(() => {
       for (const r of rows) { r.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}`; r.style.transform = ''; }
-      histPop.style.transition = `top ${LEAVE_MS}ms ${LEAVE_EASE}`; histPop.style.top = popTop1 + 'px';
-      ghost.style.transition = `transform ${LEAVE_MS}ms ${LEAVE_EASE}, opacity 220ms ease`; ghost.style.transform = ''; ghost.style.opacity = '0';
+      ghost.style.transition = `opacity 220ms ease`; ghost.style.opacity = '0';
       setTimeout(() => {
         for (const r of rows) { r.style.transition = ''; r.style.transform = ''; }
-        histPop.style.transition = ''; ghost.remove(); list.classList.remove('is-settling');
-        placeHistory(); done();
+        ghost.remove(); list.classList.remove('is-settling');
+        placeHistory();
+        if (!histActive) setHistActive(rows[Math.min(i, rows.length - 1)] || null);
+        done();
       }, LEAVE_MS + 20);
     });
   });
 }
-const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.parts || []).map(p => p.title)].some(x => String(x || '').toLowerCase().includes(q));
+const histMatches = (h, q) => [h.title, h.url, h.year, ...(h.altTitles || []), ...(h.parts || []).flatMap(p => [p.title, p.alt])].some(x => String(x || '').toLowerCase().includes(q));
 function paintHistoryList() {
   const list = histPop.querySelector('.histpop__list');
   if (!list) return;
@@ -1205,39 +1299,165 @@ function paintHistoryList() {
   if (count) count.textContent = String(histList.length);
   const q = histQuery.trim().toLowerCase();
   const shown = q ? histList.filter(h => histMatches(h, q)) : histList;
-  list.replaceChildren();
+  list.replaceChildren(); histActive = null;
   const say = text => { const e = document.createElement('div'); e.className = 'histpop__empty'; e.textContent = text; list.append(e); };
   if (!histList.length) say(t('hist.empty'));
   else if (!shown.length) say(t('hist.nothing'));
   for (const h of shown) list.append(historyRow(h));
-  /* the height of what is shown, up to the window; the bottom stays at the button, the newest rows beside it */
   placeHistory();
   list.scrollTop = list.scrollHeight;
+  /* one row always stands out: the newest of those shown, until the arrows or the pointer choose another */
+  setHistActive(list.querySelector('.histpop__row:last-child'));
 }
-/* to the right of the footer's buttons, so neither is covered, its bottom at the button's; kept inside the window */
+/* To the right of the footer's buttons, so neither is covered, its bottom
+   at the button's. A window too narrow for that puts the frame above the
+   footer instead: to the left, and lower by what the footer takes. */
 function placeHistory() {
-  const r = btnHistory.getBoundingClientRect(), edge = queueAdd.getBoundingClientRect().right, w = histPop.offsetWidth, h = histPop.offsetHeight;
-  histPop.style.left = Math.max(12, Math.min(edge + 8, window.innerWidth - w - 12)) + 'px';
-  histPop.style.top = Math.max(12, Math.min(r.bottom - h, window.innerHeight - h - 12)) + 'px';
+  const add = queueAdd.getBoundingClientRect();
+  histPop.style.height = '';
+  const w = histPop.offsetWidth, h = histPop.offsetHeight;
+  if (add.right + 8 + w + 12 <= window.innerWidth) {
+    histPop.classList.remove('is-above');
+    histPop.style.left = (add.right + 8) + 'px';
+    histPop.style.top = Math.max(12, Math.min(add.bottom - h, window.innerHeight - h - 12)) + 'px';
+  } else {
+    histPop.classList.add('is-above');
+    const h2 = Math.max(240, Math.min(h, add.top - 8 - 12));
+    histPop.style.height = h2 + 'px';
+    histPop.style.left = Math.max(12, window.innerWidth - w - 12) + 'px';
+    histPop.style.top = Math.max(12, add.top - 8 - h2) + 'px';
+  }
 }
-function openHistory() { histQuery = ''; histPop.hidden = false; buildHistory(); loadHistory(); }
-function closeHistory() { histPop.hidden = true; }
-btnHistory.onclick = ev => { ev.stopPropagation(); if (histPop.hidden) openHistory(); else closeHistory(); };
+/* The list opens from the footer's link field as soon as it is focused,
+   since the field searches the list; only when there is something in the
+   history, so a first link is typed in peace. What the field holds is the
+   search from the start. */
+let histOpening = null;
+async function openHistory() {
+  const loading = histOpening || (histOpening = loadHistory().finally(() => { histOpening = null; }));
+  await loading;
+  if (!histList.length || document.activeElement !== queueLinkInput || !histPop.hidden) return;
+  histQuery = queueLinkInput.value;   // what was typed while the list loaded
+  histPop.hidden = false; buildHistory();
+}
+function closeHistory() { histPop.hidden = true; clearTimeout(histSideT); }
+queueLinkInput.addEventListener('focus', () => { if (histPop.hidden) openHistory(); });
+queueLinkInput.addEventListener('input', () => {
+  histQuery = queueLinkInput.value;
+  histPop.classList.add('is-keys');   // typing stands on the newest row left, whatever the pointer is over
+  if (histPop.hidden) { if (histList.length) openHistory(); return; }
+  paintHistoryList();
+});
 histPop.addEventListener('click', e => e.stopPropagation());
 document.addEventListener('click', e => {
-  /* the button toggles the list itself; any other click closes it and does nothing else */
-  if (histPop.hidden || e.target.closest('#histPop, #btnHistory')) return;
+  /* the field keeps the list; any other click closes it and does nothing else */
+  if (histPop.hidden || e.target.closest('#histPop, #queueLinkForm')) return;
   e.stopPropagation(); e.preventDefault();
   closeHistory();
 }, true);
 /* Esc in the history: a search typed is cleared first, then the list closes */
 function escapeHistory() {
   if (histPop.hidden) return false;
-  const search = histPop.querySelector('.histpop__search');
-  if (search && search.value) { search.value = ''; histQuery = ''; const x = histPop.querySelector('.histpop__clear'); if (x) x.hidden = true; paintHistoryList(); return true; }
+  if (queueLinkInput.value) { queueLinkInput.value = ''; histQuery = ''; paintHistoryList(); return true; }
   closeHistory(); return true;
 }
+
 addEventListener('resize', () => { if (!histPop.hidden) placeHistory(); });
+
+/* ── the map of dubs across the parts ─────────────────────────
+   Built from what the queue already holds: every row's dubs. The dubs
+   stand on top by name, those in the most episodes first; under them
+   each part is its episodes as cells. A dub under the pointer lights the
+   cells that have it, a click keeps it lit; a cell under the pointer
+   lights its own dubs in the list. Nothing is chosen here: the map is
+   for looking. The overview window and the audio menu draw the same map. */
+function buildDubMap(host) {
+  host.replaceChildren(); host.classList.remove('is-keyed', 'is-cell');
+  let pinned = null;
+  const dubs = new Map();
+  for (const it of state.list) for (const d of it.dubs || []) {
+    const k = d.key || d.name; if (!k) continue;
+    const o = dubs.get(k) || { key: k, name: d.name || k, n: 0 };
+    o.n++; dubs.set(k, o);
+  }
+  const names = [...dubs.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
+  const groups = state.seasons.length
+    ? state.seasons.map(s => ({ ordinal: s.ordinal || null, title: s.series.title || '', year: s.series.year, items: state.list.filter(it => it.seriesId === s.series.id) })).filter(g => g.items.length)
+    : [{ ordinal: null, title: '', year: null, items: state.list.slice() }];
+  const list = document.createElement('div'); list.className = 'over__dubs';
+  const cells = [];
+  /* Two lights. A dub under the pointer, or the one kept by a click, lights
+     the cells that have it. A cell under the pointer lights its own dubs in
+     the list, and only those; the map keeps showing the kept dub meanwhile. */
+  const key = k => {
+    host.classList.toggle('is-keyed', !!k);
+    for (const c of cells) c.classList.toggle('is-on', !!k && c.__dubs.has(k));
+    for (const b of list.children) b.classList.toggle('is-on', !!k && b.__key === k);
+  };
+  const byCell = c => {
+    host.classList.toggle('is-cell', !!c);
+    for (const b of list.children) b.classList.toggle('is-on', c ? c.__dubs.has(b.__key) : !!pinned && b.__key === pinned);
+  };
+  for (const d of names) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'over__dub'; b.textContent = d.name; b.__key = d.key;
+    b.onmouseenter = () => key(d.key);
+    b.onmouseleave = () => key(pinned);
+    b.onclick = ev => { ev.stopPropagation(); pinned = pinned === d.key ? null : d.key; key(pinned || d.key); };
+    list.append(b);
+  }
+  const map = document.createElement('div'); map.className = 'over__map';
+  /* a cell speaks after the pointer has rested on it a moment, so a pointer crossing
+     the map does not flicker the list; inside the part already spoken for, at once */
+  let cellT = 0, spokenRow = null;
+  for (const g of groups) {
+    const part = document.createElement('div'); part.className = 'over__part';
+    if (g.title) {
+      /* the part named as the queue names it, the number and the tab's bar, then the title and the year */
+      const name = document.createElement('div'); name.className = 'over__partname';
+      if (g.ordinal) { const tab = document.createElement('span'); tab.className = 'queue__group-label'; tab.append(Object.assign(document.createElement('span'), { className: 'n', textContent: String(g.ordinal) })); name.append(tab); }
+      name.append(Object.assign(document.createElement('span'), { className: 'over__parttitle', textContent: [g.title, g.year].filter(Boolean).join(' · ') }));
+      part.append(name);
+    }
+    const row = document.createElement('div'); row.className = 'over__cells';
+    for (const it of [...g.items].sort((a, b) => (a.number || 0) - (b.number || 0))) {
+      const c = document.createElement('span'); c.className = 'over__cell'; c.textContent = it.number ?? '';
+      c.__dubs = new Set((it.dubs || []).map(d => d.key || d.name));
+      c.onmouseenter = () => {
+        clearTimeout(cellT);
+        if (spokenRow === row) byCell(c); else cellT = setTimeout(() => { spokenRow = row; byCell(c); }, 200);
+      };
+      cells.push(c); row.append(c);
+    }
+    row.onmouseleave = () => { clearTimeout(cellT); spokenRow = null; byCell(null); };
+    part.append(row); map.append(part);
+  }
+  host.append(list, map);
+  /* the map can be lit from outside too, as a name under the pointer lights it: the audio menu's rows do this */
+  return { dubs: names.length, light: k => key(k || pinned) };
+}
+/* ── the overview window: the map on its own, from the queue's header ── */
+function buildOverview() {
+  overview.replaceChildren();
+  const top = document.createElement('div'); top.className = 'histpop__top';
+  const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
+  const count = document.createElement('span'); count.className = 'histpop__count';
+  top.append(head, count);
+  const host = document.createElement('div'); host.className = 'dubmap';
+  count.textContent = String(buildDubMap(host).dubs);
+  overview.append(top, host);
+}
+function openOverview() { if (!state.list.length) return; buildOverview(); overview.hidden = false; }
+function closeOverview() { overview.hidden = true; }
+btnOverview.onclick = ev => { ev.stopPropagation(); if (overview.hidden) openOverview(); else closeOverview(); };
+overview.addEventListener('click', e => e.stopPropagation());
+/* a click outside only closes the window: the press itself gives no focus
+   away (a field focused would open the history), the click does nothing else */
+document.addEventListener('mousedown', e => { if (!overview.hidden && !e.target.closest('#overview, #btnOverview')) e.preventDefault(); }, true);
+document.addEventListener('click', e => {
+  if (overview.hidden || e.target.closest('#overview, #btnOverview')) return;
+  e.stopPropagation(); e.preventDefault();
+  closeOverview();
+}, true);
 
 /* ── which dub and which stream play ─────────────────────────
    The server opens the episode's page if it has not, takes the dub
@@ -1371,8 +1591,34 @@ btnQuality.onclick = e => {
   qualityMenu.classList.toggle('open');
 };
 
+/* ── the library before the net ───────────────────────────────
+   An episode saved in the dub wanted plays from its file: no page is
+   read, no source is asked, nothing is pulled ahead. Another dub
+   chosen and no file of it, and the net is asked as before. A file
+   that fails to play is passed over for that start, and the net takes
+   it; the mark in the dub menu brings the file back. */
+function localFor(it) {
+  if (!it || it.noLocal) return null;
+  const files = state.saved.get(savedKey(it)) || [];
+  if (!files.length) return null;
+  return (state.dubKey ? files.find(x => x.dubKey === state.dubKey) : files[0]) || null;
+}
+
 async function sourceFor(it) {
   const avoid = it.avoid; it.avoid = null;
+  const loc = localFor(it);
+  if (loc) {
+    diary('local', `episode ${it.number} from the library, dub ${loc.dub}${loc.quality ? ' ' + loc.quality : ''}`);
+    it.err = false;
+    it.dub = { key: loc.dubKey, name: loc.dub };
+    if (loc.dubKey) state.dubKey = loc.dubKey;
+    it.source = { player: t('audio.disk'), local: true };
+    it.streams = []; it.subs = []; it.marks = null;
+    if (!it.subPicked) it.subIndex = preferredSub(it);
+    it.stream = { kind: 'mp4', quality: loc.quality, play: '/api/library/file?path=' + encodeURIComponent(loc.path), local: true, id: null, player: null };
+    paintMeta();
+    return it.stream;
+  }
   const slow = setTimeout(() => showProgress(it, 'prep.players'), 400);
   let r;
   try { r = await resolveItem(it, { avoid }); }
@@ -1406,7 +1652,89 @@ async function sourceFor(it) {
    its streams are ready when it is its turn. */
 function prefetchNext() {
   const nx = state.list[idxOf(cur()) + 1];
-  if (nx && !nx.stream && !nx.err && !nx.opening) resolveItem(nx).then(() => paintMeta()).catch(() => {});
+  if (nx && !nx.stream && !nx.err && !nx.opening && !localFor(nx)) resolveItem(nx).then(() => paintMeta()).catch(() => {});   // a saved one needs no opening
+}
+
+/* ── the episode ahead of the player ──────────────────────────
+   With loading ahead on, the episode playing is pulled into the cache
+   whole while it plays, and the next one once this one is there; the
+   player then reads from the disk, and a line that lags or an origin
+   that drops out is not seen. Off, the player asks for the half minute
+   it needs, as any player does. The server pulls one episode at a
+   time; the page asks for the one playing at the quality in play, and
+   reads how far it got now and then. */
+const prefetchOn = () => (state.remote.settings?.prefetch || 'on') !== 'off';   // on unless switched off
+let warmT = null, warmedFor = null;
+const warmLevel = () => (hls && hls.levels && hls.levels.length > 1 && hls.currentLevel >= 0 && hls.levels[hls.currentLevel].height) || null;
+function warmCurrent() {
+  const it = cur();
+  if (!prefetchOn() || !it || !it.stream || it.stream.kind !== 'hls') return;
+  warmedFor = it.stream.id;
+  askWarm(it, warmLevel());
+}
+async function askWarm(it, level) {
+  try {
+    const r = await post('/api/warm?stream=' + it.stream.id + (level ? '&level=' + level : ''));
+    diary('warm', `episode ${it.number}${level ? ' ' + level + 'p' : ''}: ${r.job ? r.job.state : '?'}`);
+    watchWarm();
+  } catch (e) { diary('warm', `episode ${it.number}: refused, ${String(e.message).slice(0, 60)}`); }
+}
+function watchWarm() {
+  clearTimeout(warmT);
+  warmT = setTimeout(async () => {
+    if (!prefetchOn()) return;
+    let d; try { d = await api('/api/warm'); } catch (_) { return; }
+    const job = d.job;
+    if (!job) return;
+    if (job.state === 'working') { watchDisk(); return watchWarm(); }
+    diary('warm', `${job.done}/${job.total} ${job.state}${job.error ? ' ' + (job.error.key || '') : ''}`);
+    const it = cur();
+    /* the episode playing is there whole: the next one follows, and no further */
+    if (job.state === 'done' && it && it.stream && job.streamId === it.stream.id) warmNext(it, job.level);
+    /* the origin dropped out while the episode was being pulled: asked again in half a minute, for as long as it plays; the pieces already there are passed over */
+    if (job.state === 'error' && it && it.stream && job.streamId === it.stream.id) warmT = setTimeout(() => { if (cur() === it) askWarm(it, job.level); }, 30000);
+  }, 2500);
+}
+/* ── what of the episode is on the disk, on the timeline ────────
+   The player's own buffer is a minute or two of memory, and the
+   timeline's lighter band shows that; the disk holds whatever passed
+   through, played or pulled ahead, and the band under it shows that,
+   in stretches, read from the server now and then while an HLS episode
+   plays. A gap in the band is a gap on the disk. */
+let diskT = null, lastDisk = null;   // the band as last read, told to the journal when a wait does not end
+function paintDisk(d) {
+  lastDisk = d;
+  const dur = duration() || (d && d.duration) || 0;
+  seekDisk.replaceChildren();
+  if (!d || !dur) return;
+  for (const [a, b] of d.ranges || []) {
+    const i = document.createElement('i');
+    i.style.left = Math.max(0, Math.min(100, a / dur * 100)) + '%';
+    i.style.width = Math.max(0, Math.min(100, (b - a) / dur * 100)) + '%';
+    seekDisk.append(i);
+  }
+}
+async function watchDisk() {
+  clearTimeout(diskT);
+  const it = cur();
+  if (!it || !it.stream || it.loadedSrc !== it.stream.play) { paintDisk(null); return; }
+  /* a file from the library is on the disk whole */
+  if (it.stream.local) { const dur = duration(); paintDisk(dur ? { ranges: [[0, dur]], duration: dur, tag: 'file' } : null); return; }
+  if (it.stream.kind !== 'hls') { paintDisk(null); return; }
+  const level = warmLevel();
+  let d = null;
+  try { d = await api(`/api/stream/${it.stream.id}/cached${level ? '?level=' + level : ''}`); } catch (_) { /* the server will answer next time */ }
+  if (cur() !== it) return;
+  paintDisk(d);
+  diskT = setTimeout(watchDisk, 4000);
+}
+
+async function warmNext(it, level) {
+  const nx = state.list[idxOf(it) + 1];
+  if (!nx || nx.err) return;
+  if (!nx.stream) { try { await resolveItem(nx); } catch (_) { return; } }
+  if (cur() !== it || !prefetchOn() || !nx.stream || nx.stream.kind !== 'hls') return;
+  askWarm(nx, level);
 }
 
 /* ── changing the picture ─────────────────────────────────────
@@ -1445,6 +1773,7 @@ async function playItem(it, autoplay = true, glide = true) {
   skipNow = null; skipEl.hidden = true;
   if (!it.switching) hideNotice();   // the notice of a source being switched stays until the picture is back
   endCard.classList.remove('show');
+  restoredIdle = false; hidePauseInfo();
   emptyEl.classList.add('hide');
   stage.classList.remove('is-empty');
 
@@ -1506,11 +1835,12 @@ function loadSource(it, src, token, onMeta, play) {
   it.loadedSrc = src.play;
   loaded = null;
   attachSource(src);
+  paintDisk(null); watchDisk();
   sayLoading(it);
   const reveal = fadeIn();
   video.addEventListener('loadeddata', reveal, { once: true });
   setTimeout(reveal, 4000);          // a fallback in case the frame never arrives
-  video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); } }, { once: true });
+  video.addEventListener('loadedmetadata', () => { if (token === playToken) { loaded = it; onMeta(); watchDisk(); } }, { once: true });   // the length is known: the band can be drawn
   if (play) video.play().catch(e => diary('play() refused', e && e.name));
 }
 
@@ -1551,11 +1881,43 @@ function attachSource(stream) {
        answer is given up on in seconds, not in a minute, and its
        trouble is said on the stage as soon as it starts */
     const policy = (firstByte, whole, retries) => ({ default: { maxTimeToFirstByteMs: firstByte, maxLoadTimeMs: whole, timeoutRetry: { maxNumRetry: retries, retryDelayMs: 0, maxRetryDelayMs: 0 }, errorRetry: { maxNumRetry: retries, retryDelayMs: 1000, maxRetryDelayMs: 8000 } } });
-    hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2) });
+    /* loading ahead: the player itself keeps a minute and a half instead of half a minute; the rest of the episode is the cache's */
+    const ahead = prefetchOn() ? { maxBufferLength: 90, maxBufferSize: 90 * 1000 * 1000 } : {};
+    hls = new Hls({ enableWorker: true, manifestLoadPolicy: policy(8000, 8000, 1), playlistLoadPolicy: policy(8000, 8000, 1), fragLoadPolicy: policy(12000, 60000, 2), ...ahead });
+    /* A fatal network error is the origin going quiet, not the stream
+       going bad: the same stream is asked to load again, three times,
+       four seconds apart, before another source is tried. The stream
+       stays: what is on the disk of it stays with it, and the quality
+       does not change under the viewer. A broken buffer gets one mend. */
+    const h = hls;
+    let again = 0, mended = false;
+    hls.on(Hls.Events.FRAG_LOADED, () => { again = 0; });
     hls.on(Hls.Events.ERROR, (_, d) => {
       diary('hls', `${d.type}/${d.details}${d.fatal ? ' fatal' : ''}${d.response && d.response.code ? ' code ' + d.response.code : ''}`);
-      if (d.fatal) { video.dispatchEvent(new Event('error')); return; }
       const it = cur();
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR) bufferErrAt = performance.now();
+      if (d.fatal) {
+        if (d.type === Hls.ErrorTypes.NETWORK_ERROR && again < 3) {
+          again++;
+          diary('hls', `load again in 4 s, ${again} of 3`);
+          if (it && !it.switching) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true });
+          setTimeout(() => { if (hls === h && cur() === it) h.startLoad(); }, 4000);
+          return;
+        }
+        /* a broken buffer is mended once: the buffers are built anew, which stops the video;
+           what played goes on by itself when it can, and the diary goes to the journal at once */
+        if (d.type === Hls.ErrorTypes.MEDIA_ERROR && !mended) {
+          mended = true;
+          const wasPlaying = !video.paused;
+          diary('hls', `media error: mending once, ${wasPlaying ? 'playing' : 'paused'} before`);
+          if (it && !it.switching) showNotice(t('notice.buffer'), { kind: 'busy', busy: true });
+          h.recoverMediaError();
+          if (wasPlaying) video.addEventListener('canplay', () => { if (hls === h && cur() === it) { diary('video', 'playing on after the mend'); video.play().catch(() => {}); } }, { once: true });
+          sendDiary('buffer mended');
+          return;
+        }
+        video.dispatchEvent(new Event('error')); return;
+      }
       /* a network error while the picture still moves is nothing to say; stalled, it is said at once */
       if (it && !it.switching && d.type === Hls.ErrorTypes.NETWORK_ERROR) { if (video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); else sayStalled(it); }
     });
@@ -1565,7 +1927,14 @@ function attachSource(stream) {
     hls.on(Hls.Events.LEVEL_LOADED, (_, d) => diary('hls', `level loaded, ${d.details ? d.details.fragments.length : '?'} fragments`));
     hls.on(Hls.Events.FRAG_LOADING, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loading`); });
     hls.on(Hls.Events.FRAG_LOADED, (_, d) => { if (d.frag && d.frag.sn <= 2) diary('hls', `fragment ${d.frag.sn} loaded`); });
-    hls.on(Hls.Events.LEVEL_SWITCHED, () => { syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu(); });
+    hls.on(Hls.Events.LEVEL_SWITCHED, (_, d) => diary('hls', `level switched to ${d && h.levels && h.levels[d.level] ? h.levels[d.level].height + 'p' : d && d.level}${h.autoLevelEnabled ? ' (auto)' : ''}`));
+    hls.on(Hls.Events.LEVEL_SWITCHED, () => {
+      syncQualityButton(); if (audioMenu.classList.contains('open')) buildAudioMenu();
+      /* the quality in play is known: the episode is pulled ahead at it; a level hls.js picks by itself later does not start it over */
+      const it = cur();
+      if (it && it.stream && (warmedFor !== it.stream.id || state.quality !== 'auto')) warmCurrent();
+      watchDisk();
+    });
     hls.loadSource(stream.play);
     hls.attachMedia(video);
     return;
@@ -1608,6 +1977,7 @@ function prev() {
 }
 function endOfQueue() {
   video.pause();
+  hidePauseInfo();
   paintEndMeta();
   endCard.classList.add('show');
   autoSwitch = false;        // there will be no more transitions
@@ -1815,20 +2185,32 @@ function syncAudioButton() {
 }
 
 let dubsInfo = null;          // what the server said each dub offers, for the episode the menu was built for
+/* The audio menu is two columns, as the subtitle menu is: on the left the
+   dubs to choose from, as they were; on the right, past the divider, the map
+   of which dubs the parts have, so the choice is made in sight of where it
+   holds. The map is not drawn in the PiP window, where the menu stays narrow. */
 function buildAudioMenu() {
   const opts = audioOptions();
   const it = cur();
   audioMenu.replaceChildren();
+  const pick = document.createElement('div'); pick.className = 'menu__col menu__col--pick';
   const head = document.createElement('div');
   head.className = 'menu__title';
   head.textContent = t('audio.title');
-  audioMenu.append(head);
+  pick.append(head);
+  const side = document.createElement('div'); side.className = 'menu__col menu__col--map hide-in-pip';
+  const sideHead = document.createElement('div'); sideHead.className = 'menu__title'; sideHead.textContent = t('queue.overview');
+  const host = document.createElement('div'); host.className = 'dubmap';
+  side.append(sideHead, host);
+  audioMenu.append(pick, side);
+  audioMenu.classList.toggle('menu--split', state.list.length > 0);
+  const dubMap = state.list.length ? buildDubMap(host) : null;
 
   if (!opts.length) {
     const e = document.createElement('div');
     e.className = 'menu__empty';
     e.textContent = t('audio.none');
-    audioMenu.append(e);
+    pick.append(e);
     return;
   }
 
@@ -1843,6 +2225,22 @@ function buildAudioMenu() {
     b.querySelector('.menu__main').textContent = o.main;
     if (o.sub) b.querySelector('.menu__sub').textContent = o.sub;
     const tags = b.querySelector('.menu__tags');
+    /* the dub saved on the disk is marked so; the mark plays the file */
+    const onDisk = (state.saved.get(savedKey(it)) || []).find(x => x.dubKey === o.id);
+    if (onDisk) {
+      const tg = document.createElement('span');
+      tg.className = 'qtag qtag--disk' + (o.sel && it.stream && it.stream.local ? ' sel' : '');
+      tg.textContent = t('audio.disk');
+      if (onDisk.quality) tg.title = onDisk.quality;
+      tg.onclick = ev => {
+        ev.stopPropagation();
+        it.noLocal = false;
+        if (it.dub && it.dub.key === o.id) { if (!(it.stream && it.stream.local)) switchTrack(it); }
+        else pickAudio(o);
+        markPicked(b);
+      };
+      tags.append(tg);
+    }
     if (info && info.qualities.length) {
       for (const q of info.qualities) {
         const tg = document.createElement('span');
@@ -1861,7 +2259,9 @@ function buildAudioMenu() {
       }
     } else if (info && info.unopened) { const w = document.createElement('span'); w.className = 'qtag qtag--wait'; w.textContent = '…'; tags.append(w); }
     b.onclick = () => { pickAudio(o); markPicked(b); };
-    audioMenu.append(b);
+    /* a row under the pointer lights the map on the right as its name there would: the name itself and the episodes that have it */
+    if (dubMap) { b.onmouseenter = () => dubMap.light(o.id); b.onmouseleave = () => dubMap.light(null); }
+    pick.append(b);
   }
   /* what each dub can play in is asked once per episode; the sources
      not yet opened are opened for it, and the menu is drawn again */
@@ -2182,6 +2582,7 @@ const narrowWindow = matchMedia('(max-width:820px)');
 function queueDocked() { return state.set.queueMode === 'docked' && !narrowWindow.matches; }
 narrowWindow.addEventListener('change', () => applySettings());
 function applySettings() {
+  paintPauseInfo();
   workspace.classList.toggle('queue-docked', queueDocked());
   queueList.classList.toggle('no-drag', state.set.drag === 'off');
   for (const li of queueList.children) li.draggable = state.set.drag === 'on';
@@ -2676,6 +3077,10 @@ function buildGearMenu() {
     state.remote.settings = { ...(state.remote.settings || {}), autoResume: on ? 'on' : 'off' };
     post('/api/state/setting?k=autoResume&v=' + (on ? 'on' : 'off')).then(() => { if (on) post('/api/saves/resume').catch(() => {}); }).catch(() => {});
   });
+  switchRow(player, t('set.prefetch'), prefetchOn(), on => {
+    state.remote.settings = { ...(state.remote.settings || {}), prefetch: on ? 'on' : 'off' };
+    post('/api/state/setting?k=prefetch&v=' + (on ? 'on' : 'off')).then(() => { if (on) warmCurrent(); else post('/api/warm/stop').catch(() => {}); }).catch(() => {});
+  });
 
   /* ─ right: the storage ─ */
   const place = document.createElement('div');
@@ -2753,6 +3158,17 @@ btnAudio.onclick = e => {
   closeMenus(audioMenu);
   audioMenu.classList.toggle('open');
 };
+/* With a menu of the deck open, a click anywhere outside it closes it and
+   does nothing else, as a click on the picture does: the button under the
+   pointer (the queue's, a control's) does not act on that click. Inside a
+   menu's wrap the click goes on: the menu's own button toggles it, another
+   menu's button switches. */
+document.addEventListener('click', e => {
+  if (!panelOpen() || e.target.closest('.menuwrap, #deckPack')) return;
+  e.stopPropagation(); e.preventDefault();
+  justClosed = Date.now();
+  closeMenus(); closePack(); closePipMenus();
+}, true);
 document.addEventListener('click', e => {
   if (!e.target.closest('.menuwrap')) closeMenus();
   if (!e.target.closest('#deckPack')) closePack();
@@ -2789,10 +3205,20 @@ function stallWatch(on) {
     stallWatchT = 0;
     if (!notice.classList.contains('show') || noticeKind !== 'busy' || stallSent) return;
     stallSent = true;
-    const it = cur();
     diary('stall', `${STALL_MS / 1000}s with the busy notice up; readyState ${video.readyState} paused ${video.paused} networkState ${video.networkState}`);
-    api('/api/log', { method: 'POST', body: JSON.stringify({ head: `playback stalled: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
+    sendDiary('playback stalled');
   }, STALL_MS);
+}
+/* The diary to the journal, headed by what happened and where: the moment itself first
+   (where the player stands, what it holds, which stream and quality, what the band said
+   was on the disk), then the lines kept. Sent at a wait that does not end and at a mend. */
+let bufferErrAt = -1e9;   // when hls.js last reported the buffer refusing a piece
+function sendDiary(what) {
+  const it = cur();
+  const buf = []; for (let i = 0; i < video.buffered.length; i++) buf.push(`${video.buffered.start(i).toFixed(1)}-${video.buffered.end(i).toFixed(1)}`);
+  diary('state', `at ${video.currentTime.toFixed(1)}s of ${(duration() || 0).toFixed(1)}s, buffered ${buf.join(' ') || 'nothing'}, stream ${it && it.stream ? `${it.stream.id} ${it.stream.kind} ${it.stream.quality || ''}` : 'none'}, loaded ${it && it.loadedSrc === (it.stream && it.stream.play) ? 'this' : 'other'}, hls level ${hls ? `${hls.currentLevel} of ${hls.levels ? hls.levels.length : '?'}${hls.autoLevelEnabled ? ' auto' : ''}` : 'none'}, wanted ${warmLevel() || 'auto'}p`);
+  diary('disk', lastDisk ? `${lastDisk.tag || '?'}: ${(lastDisk.ranges || []).map(([a, b]) => `${Math.round(a)}-${Math.round(b)}`).join(' ') || 'nothing'} of ${Math.round(lastDisk.duration || 0)}s` : 'not read');
+  api('/api/log', { method: 'POST', body: JSON.stringify({ head: `${what}: episode ${it ? it.number : '?'}, player ${(it && it.source && it.source.player) || '?'}, dub ${(it && it.dub && it.dub.name) || '?'}`, lines: diaryLines, stream: it && it.stream ? it.stream.id : null, level: warmLevel() || null }), headers: { 'x-lapka': '1', 'content-type': 'application/json' } }).catch(() => {});
 }
 function showNotice(text, { action = null, onAction = null, onClose = null, kind = null, busy = false, mid = false, more = null } = {}) {
   noticeText.textContent = text;
@@ -2843,11 +3269,14 @@ function hideNotice(kind = null) {
 let loadingT = 0, stallT = 0;
 function sayLoading(it) {
   clearTimeout(loadingT);
+  if (it.stream && it.stream.local) return;   // a file from the disk has no source to wait for
   loadingT = setTimeout(() => { if (it === cur() && !it.switching && video.paused === false && video.readyState < 3) showNotice(t('notice.loading', { name: it.name, player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 1500);
 }
 function sayStalled(it) {
   clearTimeout(stallT);
-  stallT = setTimeout(() => { if (it === cur() && !it.switching && video.readyState < 3) showNotice(t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 2500);
+  if (it.stream && it.stream.local) return;
+  /* a wait right after the buffer refused a piece is the buffer's, not the source's */
+  stallT = setTimeout(() => { if (it === cur() && !it.switching && video.readyState < 3) showNotice(performance.now() - bufferErrAt < 10000 ? t('notice.buffer') : t('notice.slow', { player: (it.source && it.source.player) || '' }), { kind: 'busy', busy: true }); }, 2500);
 }
 function busyOver() { clearTimeout(loadingT); clearTimeout(stallT); hideNotice('busy'); }
 $('#noticeClose').onclick = () => { const f = noticeUndo; hideNotice(); if (f) f(); };
@@ -3011,8 +3440,8 @@ if (btnQueueWidth) btnQueueWidth.onclick = () => {
    by importance to the goal: first what the whole thing was started
    for, then what it cannot work without, and only at the end the
    trimmings. */
-const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co', 'yummyanime.tv', 'ani-media.online', 'domanime.ru', 'lordserials.fan'];
-const SITES_PART = [{ site: 'animeflv.or.at', note: 'about.partOne' }];
+const SITES_OK = ['aniliberty.top', 'old.yummyani.me', 'jut-su.net', 'animego.me', 'anidubonline.ru', 'gogoanime.by', 'jkanime.net', 'newdeaf.co', 'yummyanime.tv', 'ani-media.online', 'domanime.ru', 'lordserials.fan', 'ailiberty.top'];
+const SITES_PART = [{ site: 'animeflv.or.at', note: 'about.partOne' }, { site: 'anitv.ru', note: 'about.partDub' }];
 const SITES_SHUT = ['aniwaves.ru', 'aniwatch.co.at'];
 /* The left side while nothing is open: the seal, the state as a
    terminal would say it, what Lapka is in two paragraphs, and the
@@ -3052,7 +3481,7 @@ function aboutBlock() {
     return box;
   };
   const how = section('about.how', [['', 'about.step1'], ['', 'about.step2'], ['', 'about.step3']], true);
-  const can = section('about.can', ['queue', 'dubs', 'quality', 'subs', 'skip', 'resume', 'watched', 'history', 'save', 'finish', 'folder', 'sources', 'log'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
+  const can = section('about.can', ['queue', 'dubs', 'dubmap', 'quality', 'subs', 'skip', 'resume', 'pause', 'watched', 'history', 'save', 'finish', 'folder', 'sources', 'log'].map(k => [`about.f.${k}.k`, `about.f.${k}`]));
   const rules = section('about.rules', ['local', 'fair', 'general', 'doors', 'open'].map(k => [`about.p.${k}.k`, `about.p.${k}`]));
 
   const doors = el('section', 'about__section about__doors');
@@ -3169,8 +3598,10 @@ function paintMeta() {
     /* one dub is named; several are counted */
     if (it.dubs && it.dubs.length === 1) rest.push(escapeHtml(it.dubs[0].name));
     else if (it.dubs && it.dubs.length) rest.push(t('queue.dubs', { n: it.dubs.length }));
-    if (it.stream) rest.push(`<span class="route">${it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
-    if (it.source) rest.push(`<span class="route route--off">${it.source.player}</span>`);
+    if (it.stream) rest.push(`<span class="route">${it.stream.local ? t('audio.disk') : it.stream.kind.toUpperCase()}${it.stream.quality ? ' ' + it.stream.quality : ''}</span>`);
+    /* the sources of the dub in play, counted as the dub menu counts them */
+    const dubOf = it.dubs && it.dub ? it.dubs.find(d => d.key === it.dub.key) : null;
+    if (dubOf) rest.push(`<span class="route route--off">${dubOf.alive ? t('audio.sources', { n: dubOf.alive }) : dubOf.sources ? t('audio.dead') : ''}</span>`);
     box.innerHTML = fixed + rest.map(b => `<span>${b}</span>`).join('');
   }
 }
@@ -3441,7 +3872,7 @@ async function loadLibrary() {
     for (const s of lib.series) for (const e of s.episodes) {
       const k = `${e.seriesId}/${e.episode}`;
       if (!state.saved.has(k)) state.saved.set(k, []);
-      state.saved.get(k).push({ dub: e.dub, size: e.size, path: e.path });
+      state.saved.get(k).push({ dub: e.dub, dubKey: e.dubKey || null, quality: e.quality || null, size: e.size, path: e.path });
     }
   } catch (_) { /* the server may be starting */ }
   paintSaved();
@@ -3464,7 +3895,8 @@ const isPaused = it => !!(it.save && it.save.st === 'paused');
 /* why a save broke off, in words: the server names it by a code; a
    sentence kept from before 1.2.0, or made by this page, stays as it is */
 const SAVE_WHY = { gone: 'save.err.gone', denied: 'save.err.denied', origin: 'save.err.origin', network: 'save.err.network', playlist: 'save.err.playlist', noStream: 'save.err.noStream', noFfmpeg: 'save.err.noFfmpeg', ffmpeg: 'save.err.ffmpeg', disk: 'save.err.disk', access: 'save.err.access', other: 'save.err.other' };
-const saveWhy = why => !why ? '' : typeof why === 'string' ? why : t(SAVE_WHY[why.key] || 'save.err.other', { status: why.status || '', detail: why.detail || why.key || '' });
+/* a save that broke off is worded by its own reasons; one that never opened carries the look's reason, worded as the look words it */
+const saveWhy = why => !why ? '' : typeof why === 'string' ? why : SAVE_WHY[why.key] ? t(SAVE_WHY[why.key], { status: why.status || '', detail: why.detail || '' }) : WHY[why.key] ? whyText(why) : t('save.err.other', { detail: why.detail || why.key || '' });
 const progressWords = sv => sv.unit === 'bytes' ? `${fmtSize(sv.done || 0)} / ${fmtSize(sv.total || 0)}` : `${sv.done || 0} / ${sv.total || 0}`;
 const progressPct = sv => sv.phase === 'assemble' ? 100 : sv.total ? Math.round(sv.done / sv.total * 100) : 0;
 const isFailed = it => !!(it.save && it.save.st === 'failed');
@@ -3639,6 +4071,9 @@ function ownScroll(el) {
   let hideT = 0, near = false, drag = null;
   const place = () => {
     if (!bar.isConnected) el.append(bar);            // a menu redrawn whole took the bar with it
+    /* the thumb is measured out of the way: standing where it stood for the
+       old content, it would stretch the scrollable area past the new one */
+    bar.style.transform = '';
     const sh = el.scrollHeight, ch = el.clientHeight;
     if (sh <= ch + 1) { bar.hidden = true; return false; }
     bar.hidden = false;
@@ -3950,6 +4385,10 @@ async function submitSave(it, stream = null) {
   } catch (e) {
     it.save = { st: 'failed', error: e.reason || e.message, phase: before.phase, done: before.done || 0, total: before.total || 0, unit: before.unit, quality, dubName: before.dubName || null, pick }; paintSaved();
     toast(t('toast.saveFail', { why: saveWhy(e.reason || e.message) }));
+    /* the server is told of the save that did not open, so it is taken up again like one that broke off */
+    const note = new URLSearchParams({ series: it.seriesId, episode: String(it.number), dub: (it.dub && it.dub.key) || state.dubKey || '', quality: quality || '', dubName: before.dubName || '', why: (e.reason && e.reason.key) || 'other' });
+    if (e.reason && e.reason.detail) note.set('detail', e.reason.detail); else if (!e.reason) note.set('detail', String(e.message || '').slice(0, 200));
+    await post('/api/save/note?' + note).catch(() => {});
   }
 }
 /* a server job as the row's state */
@@ -4531,6 +4970,7 @@ function paintPlay() {
 }
 
 video.addEventListener('play', () => {
+  hidePauseInfo();
   paintPlay(); pipPoke(); pipGhost.classList.add('playing');
   pulse(true); syncStatus(); markPlaying(true);
   deckShow(false);
@@ -4543,7 +4983,74 @@ video.addEventListener('pause', () => {
   if (video.ended) return;
   if (loaded) markPos(loaded, video.currentTime);
   deckShow(true);
+  setTimeout(paintPauseInfo, 400);   // a moment after: a pause that turns into a seek or a switch shows nothing
 });
+
+/* ── what the page said of the series, while paused ──────────
+   The facts of the part the paused episode belongs to, over the whole
+   frame: the name and one other name of the same part, then two
+   columns, the facts in a meaningful order on the left (what it is,
+   what it is about, who made it, for whom), the dubs by name on the
+   right. A row without a value is not drawn; a label stands as wide as
+   the widest. Shown for as long as the pause lasts, when the setting is
+   on; a play, a switch, the end card take it away. */
+const pauseInfo = $('#pauseInfo'), pauseCover = $('#pauseCover'), pauseTitle = $('#pauseTitle'), pauseAlt = $('#pauseAlt'), pauseFacts = $('#pauseFacts'), pauseDubs = $('#pauseDubs');
+/* One other name of this very part, not the franchise's roll of names:
+   the one that carries the same number as the title does (the second
+   season's own), in another script by preference, else the first that
+   is not the title itself. */
+/* the same name written another way is no other name: case, marks and
+   spaces aside, and the letters that differ between the Cyrillic alphabets
+   (і, ї, є, ґ, ё, the signs) brought to one */
+const nameKey = s => String(s || '').toLowerCase().replace(/[іїй]/g, 'и').replace(/[єё]/g, 'е').replace(/ґ/g, 'г').replace(/[ъьʼ'’]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');
+const sameName = (a, b) => nameKey(a) === nameKey(b);
+/* The other name of a series is its international one (in Latin letters)
+   or its original one (in its own script); a title already in either needs
+   none, and a name in Cyrillic is a translation, never the other name. Of
+   the names the page gave, the one of the same part (the same trailing
+   number) in Latin letters comes first, then the original. */
+function otherName(series) {
+  const title = String(series.title || '').trim();
+  const cyr = /[\u0400-\u04ff]/;
+  if (!cyr.test(title)) return '';
+  const all = (series.altTitles || []).map(a => String(a).trim()).filter(a => a && !cyr.test(a) && !sameName(a, title));
+  if (!all.length) return '';
+  const n = /(\d{1,2})\s*$/.exec(title)?.[1] || (series.season && series.season > 1 ? String(series.season) : null);
+  const same = n ? all.filter(a => new RegExp(`(?:^|[^\\d])${n}(?:[^\\d]|$)`).test(a)) : all;
+  const pool = same.length ? same : n ? [] : all;
+  if (!pool.length) return '';
+  return pool.find(a => /[A-Za-z]/.test(a)) || pool[0];
+}
+let restoredIdle = false;   // a session brought back and not started: the stage shows the episode, paused in effect
+function paintPauseInfo() {
+  const it = cur();
+  const due = state.set.pauseInfo !== 'off' && it && (it.loadedSrc || restoredIdle) && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
+  if (!due) { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); return; }
+  const season = seasonOf(it);
+  const s = season ? season.series : state.series;
+  if (!s) { pauseInfo.classList.remove('show'); return; }
+  const f = s.facts || {};
+  if (s.cover) pauseCover.src = s.cover; else pauseCover.removeAttribute('src');
+  pauseTitle.textContent = s.title || '';
+  pauseAlt.textContent = otherName(s);
+  const episodes = f.episodesTotal ? (f.episodes && f.episodes < f.episodesTotal ? `${f.episodes} / ${f.episodesTotal}` : String(f.episodesTotal)) : s.episodes && s.episodes.length ? String(s.episodes.length) : null;
+  const rows = [
+    ['kind', kindLabel(s) || (s.kind === 'tv' ? t('info.tv') : null)], ['year', s.year], ['episodes', episodes],
+    ['genres', (f.genres || []).map(g => g.replace(/ /g, '\u00a0')).join(', ')], ['origin', f.origin], ['studio', f.studio],   // a genre's name stays on one line, the list breaks after a comma
+    ['age', [f.age, f.mpaa].filter(Boolean).join(' · ').replace(/-/g, '\u2011')],   // PG‑13 stays on one line
+  ].filter(([, v]) => v);
+  pauseFacts.replaceChildren(...rows.flatMap(([k, v]) => { const a = document.createElement('span'); a.className = 'pauseinfo__k'; a.textContent = t('info.' + k); const b = document.createElement('span'); b.className = 'pauseinfo__v'; b.textContent = String(v); return [a, b]; }));
+  const dubs = it.dubs || [];
+  if (dubs.length) {
+    const k = document.createElement('span'); k.className = 'pauseinfo__k'; k.textContent = t('info.dubs');
+    const list = document.createElement('div'); list.className = 'pauseinfo__names';
+    for (const d of dubs) { const i = document.createElement('i'); i.textContent = d.name; if (it.dub && d.key === it.dub.key) i.classList.add('is-on'); if (d.sources && !d.alive) i.classList.add('is-dead'); list.append(i); }
+    pauseDubs.replaceChildren(k, list);
+  } else pauseDubs.replaceChildren();
+  pauseInfo.setAttribute('aria-hidden', 'false');
+  pauseInfo.classList.add('show');
+}
+const hidePauseInfo = () => { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); };
 let posT = 0;
 /* ── skipping the opening or the ending ─────────────────────────
    While the time is inside a mark the button is there; press it and
@@ -4674,6 +5181,8 @@ video.addEventListener('error', () => {
      broken. Seen, not guessed at: the stage says the source failed and
      which one is being tried, so a pause here never reads as a dead
      player. */
+  /* the file from the library did not play: this start goes to the net, the file is left where it is */
+  if (it.stream && it.stream.local) { it.noLocal = true; busyOver(); toast(t('toast.localFailed')); playItem(it, !video.paused, false); return; }
   const failed = it.stream && it.stream.id;
   it.retries = (it.retries || 0) + 1;
   if (failed && it.retries <= 3) {
@@ -4682,7 +5191,7 @@ video.addEventListener('error', () => {
     it.switching = { from, n: it.retries };
     busyOver();
     showNotice(t('notice.switching', { from: from || '?', n: it.retries, total: 3 }), { kind: 'switching', busy: true });
-    playItem(it, true, false);
+    playItem(it, !video.paused, false);   // a pause set by hand stays a pause through the switch
     return;
   }
   it.switching = null;
@@ -4807,10 +5316,14 @@ linkForm.addEventListener('submit', e => {
   const u = linkInput.value.trim();
   if (u) openLink(u);
 });
+/* Enter in the footer's field: a link opens; other words are a search in
+   the history, and open the row stood on */
+const looksLikeLink = u => /^(?:https?:)?\/\//i.test(u) || /^[\w.-]+\.[a-z]{2,}(?:[/?#:]|$)/i.test(u);
 queueLinkForm.addEventListener('submit', e => {
   e.preventDefault();
   const u = queueLinkInput.value.trim();
-  if (u) { queueLinkInput.value = ''; openLink(u); }
+  if (u && looksLikeLink(u)) { queueLinkInput.value = ''; closeHistory(); openLink(u); return; }
+  if (!histPop.hidden && histActive) histActive.click();   // the field empty or a search: the row stood on
 });
 
 const linkIn = dt => {
@@ -4887,6 +5400,7 @@ function onKey(e) {
 function onEscape(e) {
   if (e.key !== 'Escape' || e.metaKey || e.ctrlKey || e.altKey) return;
   if (!saveMenu.hidden) closeSaveMenu();
+  else if (!overview.hidden) closeOverview();
   else if (escapeHistory()) { /* cleared or closed */ }
   else if (popPinned) unpinSavePop();
   else if (anyMenuOpen()) closeMenus();
@@ -4916,7 +5430,7 @@ document.addEventListener('keyup', e => {
   try {
     const st = await api('/api/state');
     state.remote = st;
-    for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = { t: v.t, d: v.d || 0 };
+    for (const [k, v] of Object.entries(st.positions || {})) state.positions[k] = { t: v.t, d: v.d || 0, at: v.at || 0 };   // the moment too: the place last watched is the newest
     for (const k of Object.keys(st.watched || {})) state.watched[k] = true;
     /* the settings sheet is drawn from these the moment it first opens */
     askHome().catch(() => {}); askCache().catch(() => {}); checkServer();

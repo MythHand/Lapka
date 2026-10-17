@@ -121,6 +121,7 @@ describe('closed doors', () => {
   test('a player behind a door known to be closed is refused without a request, with the reason', () => {
     assert.equal(closedDoor('https://www.youtube.com/embed/abc?autoplay=1'), 'closed door');
     assert.equal(closedDoor('https://youtu.be/abc'), 'closed door');
+    assert.equal(closedDoor('https://rutube.ru/play/embed/c6beb695e7dbfaed1861048a05940821'), 'closed door');
     assert.equal(closedDoor('https://player.example/serial/1/abc/720p'), null);
     assert.equal(closedDoor('not a url'), null);
   });

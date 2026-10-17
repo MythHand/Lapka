@@ -118,6 +118,8 @@ export function findPlayers(doc, url, { profile } = {}) {
   const seen = new Map();
   const add = (embed, kind, where, extra = {}) => {
     if (!embed) return null;
+    /* a bare site address, no path and no query ("https://site.example/"), names a site, not a player */
+    if (/^https?:\/\/[^/?#]+\/?$/i.test(embed)) return null;
     let p = seen.get(embed);
     if (!p) {
       p = { id: playerId(embed, url), kind, url: embed, dubLabel: null, playerLabel: null, stream: streamKind(embed), where };

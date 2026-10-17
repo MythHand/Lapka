@@ -266,7 +266,7 @@ describe('choosing a dub', { skip }, () => {
     ok(r, 'dub'); assert.deepEqual(r.errors, []);
     assert.notEqual(r.before, 'JAM');
     assert.equal(r.after, 'JAM');
-    assert.match(r.meta, /embed\/beta/);
+    assert.match(r.meta, /\d+ sources?/, 'the row counts the sources of the dub in play, not the player');
     assert.deepEqual(Object.values(r.dubs), ['jam']);
   });
 });

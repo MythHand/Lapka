@@ -8,6 +8,15 @@
    driven browser, or plainly. Providers are added here, behind the
    same call. This is the plain one: an ordinary request with an
    ordinary browser's User-Agent.
+
+   Seam (2026-10-17, not built): the user's proxy. The browser and
+   curl on a machine with a system proxy reach a site through it,
+   Lapka reaches it directly, and a site that answers by region shows
+   the two a different catalog (aniliberty hides some releases from a
+   direct connection). A proxy would be a provider here, a dispatcher
+   read from the system or from HTTPS_PROXY, for every request alike;
+   nothing above this line would change. Its own decision: all traffic,
+   the video included, would go through it.
    ═══════════════════════════════════════════════════════════ */
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';

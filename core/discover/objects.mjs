@@ -39,6 +39,51 @@ export function unpacked(text) {
   return out;
 }
 
+/* The page's data as a framework packs it. Next.js writes what the
+   page's components get as strings pushed into self.__next_f (the
+   app router) or as one JSON in a script named __NEXT_DATA__ (the
+   pages router). Decoded and joined, it is a text like any script's,
+   with the objects the page is drawn from inside it. */
+const NEXT_PUSH = /self\.__next_f\.push\(\[\s*1\s*,\s*("(?:[^"\\]|\\.)*")\s*\]\)/g;
+export function payloadsIn(doc) {
+  const out = [];
+  const pushed = [];
+  for (const s of doc.querySelectorAll('script:not([src])')) {
+    for (const m of (s.textContent || '').matchAll(NEXT_PUSH)) { try { pushed.push(JSON.parse(m[1])); } catch { /* not a string we can read */ } }
+  }
+  if (pushed.length) out.push(pushed.join(''));
+  const data = doc.querySelector('script#__NEXT_DATA__');
+  if (data && data.textContent) out.push(data.textContent);
+  return out;
+}
+
+/* Arrays of objects in a text, each found by matching its brackets
+   (strings skipped), read as JSON. Only arrays that open on an object
+   count, and only up to a size: a page's data, not a bundle. */
+const ARRAY_MAX = 2 * 1024 * 1024;
+export function arraysIn(text) {
+  const t = String(text || '');
+  const out = [];
+  let from = 0;
+  while (from < t.length) {
+    const at = t.indexOf('[{', from);
+    if (at < 0) break;
+    let depth = 0, inStr = false, end = -1;
+    for (let i = at; i < t.length && i - at < ARRAY_MAX; i++) {
+      const c = t[i];
+      if (inStr) { if (c === '\\') i++; else if (c === '"') inStr = false; continue; }
+      if (c === '"') { inStr = true; continue; }
+      if (c === '[' || c === '{') depth++;
+      else if (c === ']' || c === '}') { depth--; if (depth === 0) { end = i; break; } }
+    }
+    if (end < 0) { from = at + 2; continue; }
+    try { const a = JSON.parse(t.slice(at, end + 1)); if (Array.isArray(a) && a.length && a.every(x => x && typeof x === 'object' && !Array.isArray(x))) out.push(a); }
+    catch { /* not JSON: an array of JavaScript, skipped */ }
+    from = at + 2;   // arrays inside this one are found on their own
+  }
+  return out;
+}
+
 /* an address hidden in base64 (plain or URL-safe), or null */
 export function urlFromBase64(v) {
   const s = String(v || '').trim();

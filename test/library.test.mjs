@@ -85,6 +85,7 @@ describe('saving', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.equal(side.dubKey, 'anilibria');
     assert.equal(side.player, 'embed/beta');
     assert.equal(side.file, '01 [AniLibria].mp4');
+    assert.ok('quality' in side, 'the sidecar says what quality the file holds, for the player to show when it plays it');
     const snap = JSON.parse(await fsp.readFile(path.join(path.dirname(job.file), 'series.json'), 'utf8'));
     assert.equal(snap.id, seriesId);
     assert.equal(snap.episodes.length, 4);
@@ -216,6 +217,11 @@ describe('the links pasted', () => {
     assert.equal(img.status, 200);
     assert.match(img.headers.get('content-type'), /image\/jpeg/);
     assert.ok((await img.arrayBuffer()).byteLength > 100);
+    /* the facts the page stated and its other names ride along, for a fuller row one day */
+    await post('/api/history?' + new URLSearchParams({ url: link, series: 'abc123', title: 'Сериал Селект', episodes: '4', facts: JSON.stringify({ genres: ['Комедия'], mpaa: 'PG-13', episodesTotal: 12 }), altTitles: JSON.stringify(['Select', 'セレクト']) }));
+    const told = (await (await get('/api/history')).json()).history.at(-1);
+    assert.deepEqual(told.facts, { genres: ['Комедия'], mpaa: 'PG-13', episodesTotal: 12 });
+    assert.deepEqual(told.altTitles, ['Select', 'セレクト']);
     /* pasted again: one entry, moved to the end */
     await post('/api/history?' + new URLSearchParams({ url: site.base + '/s/links/ep-1', series: 'def456', title: 'Сериал Ссылки', episodes: '3' }));
     await post('/api/history?' + q);
@@ -231,11 +237,19 @@ describe('the links pasted', () => {
     await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv' }, { id: 'abc126', ordinal: 3, title: 'Фильм', kind: 'movie' }, { id: 'abc125', ordinal: 5 }]) }));
     const kept = (await (await get('/api/history')).json()).history.at(-1).parts;
     assert.deepEqual(kept.slice(0, 2).map(p => [p.season, p.kind]), [[2, 'tv'], [null, 'movie']]);
+    /* a part tells of itself for the column: its year, its episodes, one other name, its cover kept as a file like the row's */
+    await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2, title: 'Сериал Селект 2', season: 2, kind: 'tv', year: 2025, episodes: 12, dubs: 3, alt: 'Select 2', cover: site.base + '/media/cover-b.jpg' }, { id: 'abc125', ordinal: 5 }]) }));
+    const told2 = (await (await get('/api/history')).json()).history.at(-1).parts.find(p => p.id === 'abc124');
+    assert.deepEqual([told2.year, told2.episodes, told2.dubs, told2.alt], [2025, 12, 3, 'Select 2']);
+    assert.equal((await get('/api/history/cover/abc124')).status, 200, 'a part\'s cover is served by its id');
+    const silent = (await (await post('/api/history?' + new URLSearchParams({ url: s5, series: 'abc125', title: 'Сериал Селект 5', episodes: '12', parts: JSON.stringify([{ id: 'abc124', ordinal: 2 }, { id: 'abc125', ordinal: 5 }]) }))).json()).parts.find(p => p.id === 'abc124');
+    assert.deepEqual([silent.year, silent.alt, !!silent.coverFile], [2025, 'Select 2', true], 'a part that says nothing now keeps what it said');
     /* one link forgotten: its row and cover go, the other row stays, and what was watched stays with the series */
     await post('/api/state/position?series=abc125&episode=7&t=300&d=1400');
     assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 200);
     assert.deepEqual((await (await get('/api/history')).json()).history.map(h => h.url), [site.base + '/s/links/ep-1']);
     assert.equal((await post('/api/history/forget?url=' + encodeURIComponent(s5))).status, 404);
+    assert.equal((await get('/api/history/cover/abc124')).status, 404, 'the parts\' covers go with the row');
     assert.equal(lapka.state.position('abc125', 7), 300, 'the place kept in the series stays');
     await post('/api/state/forget');
     assert.deepEqual((await (await get('/api/history')).json()).history, []);
@@ -442,6 +456,42 @@ describe('moving the folder', { skip: !ffmpeg && 'ffmpeg not installed' }, () =>
   });
 });
 
+/* ── the episode pulled into the cache ahead of the player ── */
+describe('warming the cache', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
+  test('an episode is pulled in whole when asked, one at a time, only with the setting on; MP4 is left to the browser', async () => {
+    const r = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/select/ep-2')}`)).json();
+    const al = r.series.episodes.find(e => e.number === 2).dubs.find(d => d.key === 'anilibria');
+    const hls = al.sources.find(s => s.player === 'embed/beta').streams[0];
+    const mp4 = al.sources.find(s => s.player === 'embed/alpha').streams[0];
+    await post('/api/state/setting?k=prefetch&v=off');
+    assert.equal((await post(`/api/warm?stream=${hls.id}`)).status, 403, 'refused when switched off');
+    await post('/api/state/setting?k=prefetch&v=on');
+    assert.equal((await post('/api/warm?stream=nope')).status, 404);
+    assert.equal((await (await post(`/api/warm?stream=${mp4.id}`)).json()).job.state, 'skipped', 'mp4 is read by ranges, not warmed');
+    let d = await (await post(`/api/warm?stream=${hls.id}`)).json();
+    assert.equal(d.job.state, 'working');
+    for (let i = 0; i < 100 && d.job.state === 'working'; i++) { await new Promise(r => setTimeout(r, 100)); d = await (await get('/api/warm')).json(); }
+    assert.equal(d.job.state, 'done', JSON.stringify(d.job.error));
+    assert.ok(d.job.total > 0 && d.job.done === d.job.total, 'every piece');
+    /* every piece now comes from the disk */
+    const pl = await (await get(hls.play)).text();
+    const segs = pl.split('\n').filter(l => l && !l.startsWith('#'));
+    assert.ok(segs.length && d.job.total >= segs.length);
+    for (const s of segs) assert.equal((await get(s)).headers.get('x-lapka-cache'), 'hit');
+    /* a wait that does not end names its stream: the journal gets the server's account of it, who was given what from where, what is on the disk, what the warming is at */
+    assert.equal((await fetch(lapka.base + '/api/log', { method: 'POST', headers: { 'x-lapka': '1', 'content-type': 'application/json' }, body: JSON.stringify({ head: 'playback stalled: episode 2', lines: ['1.0s play episode 2'], stream: hls.id, level: null }) })).status, 200);
+    const told = await fsp.readFile(JOURNAL_FILE, 'utf8');
+    const entry = told.slice(told.lastIndexOf('playback stalled: episode 2'));
+    assert.ok(entry.includes(`-- server, stream ${hls.id}`), entry);
+    assert.ok(/ warm main-\d+\.ts origin \d+ms/.test(entry) && / play main-\d+\.ts disk \d+ms/.test(entry), 'the warming pulled from the origin, the player was served from the disk');
+    assert.ok(/on disk main: \d+s of \d+s in 1 stretches/.test(entry) && entry.includes('warming: {'), entry);
+    /* asked for the same again: the job stands as it is; stopped: nothing to stop */
+    assert.equal((await (await post(`/api/warm?stream=${hls.id}`)).json()).job.state, 'done');
+    assert.equal((await (await post('/api/warm/stop')).json()).job.state, 'done');
+    await post('/api/state/setting?k=prefetch&v=off');
+  });
+});
+
 /* ── saves that were cut short are taken up again ── */
 describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
   test('a pending record becomes a file, and goes; the routes list and forget', async () => {
@@ -470,5 +520,27 @@ describe('resuming saves', { skip: !ffmpeg && 'ffmpeg not installed' }, () => {
     assert.equal((await post('/api/state/setting?k=autoResume&v=off')).status, 200);
     assert.equal((await (await get('/api/state')).json()).settings.autoResume, 'off');
     assert.equal((await post('/api/state/setting?k=bad%20key&v=1')).status, 400);
+    await post('/api/state/setting?k=autoResume&v=on');
+  });
+
+  test('a save that did not open is noted by the page, taken up again by the round, and the round is in the journal', async () => {
+    const r = await (await get(`/api/look?url=${encodeURIComponent(site.base + '/s/links/ep-2')}`)).json();
+    /* the page could not resolve the episode: it says so, with the look's reason */
+    const noted = await (await post(`/api/save/note?series=${r.series.id}&episode=2&quality=auto&why=network`)).json();
+    assert.equal(noted.key, `${r.series.id}/2/`, 'named without a dub, since none was known');
+    const rec = (await (await get('/api/saves')).json()).pending[noted.key];
+    assert.equal(rec.error.key, 'network');
+    assert.equal(rec.paused, false, 'not a pause by hand: the round may take it');
+    assert.equal(rec.seriesUrl, r.series.sourceUrl);
+    assert.equal((await post('/api/save/note?series=nobody&episode=1')).status, 404);
+    /* the round resolves it, names it by its dub and saves it; the nameless record goes */
+    const out = await lapka.ctx.resumeSaves();
+    assert.deepEqual(out.map(x => x.state), ['done']);
+    const pending = (await (await get('/api/saves')).json()).pending;
+    assert.equal(Object.keys(pending).length, 0, 'neither the nameless record nor the job’s stays');
+    const lib = await (await get('/api/library')).json();
+    assert.ok(lib.series.some(s => s.episodes.some(e => e.episode === 2)), 'the file is there');
+    const journal = await fsp.readFile(JOURNAL_FILE, 'utf8');
+    assert.match(journal, /saves taken up again\n  \S+\/2\/\S*: done/, 'the round is written down with each save and how it ended');
   });
 });

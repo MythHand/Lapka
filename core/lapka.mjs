@@ -16,6 +16,7 @@ import { loadSites, siteFor } from './sites/index.mjs';
 import { loadProfiles, profileFor as profileOf } from './knowledge/index.mjs';
 import { createSeries, merge, allDubs, findEpisode, markHealth, pickDub, pickSource, bestStream, RETRY_MS, dubKey } from './catalog/index.mjs';
 import { refuse, reasonOf } from './reasons.mjs';
+import { streamTag } from './catalog/model.mjs';
 
 export async function bootLapka(opts = {}) {
   return createLapka({ extractors: await loadExtractors(), sites: await loadSites(), profiles: await loadProfiles(), ...opts });
@@ -120,15 +121,18 @@ export function createLapka({ session = createSession(), profiles = [], extracto
   function registerStreams(series) {
     if (!delivery) return;
     for (const e of series.episodes) for (const d of e.dubs) for (const s of d.sources) {
+      /* two streams of one source alike in kind and quality are told apart by their order */
+      const alike = new Map();
       for (const st of s.streams) {
         if (st.id) continue;
-        st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+        const tag = streamTag(st), nth = alike.get(tag) || 0; alike.set(tag, nth + 1);
+        st.id = delivery.register(st, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key, nth });
         st.play = `/api/stream/${st.id}.${st.kind === 'mp4' ? 'mp4' : 'm3u8'}`;
       }
       /* a subtitle track gets an address of ours the same way: the browser takes a text track from its own origin only */
       for (const sb of s.subs || []) {
         if (sb.id) continue;
-        sb.id = delivery.register({ kind: 'sub', url: sb.url, headers: sb.headers, format: sb.format }, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
+        sb.id = delivery.register({ kind: 'sub', url: sb.url, headers: sb.headers, format: sb.format, lang: sb.lang, label: sb.label }, { sourceId: s.id, seriesId: series.id, episode: e.number, dub: d.key });
         sb.play = `/api/stream/${sb.id}.vtt`;
       }
     }
@@ -197,7 +201,13 @@ export function createLapka({ session = createSession(), profiles = [], extracto
     if (ep.opened) return ep;
     /* an episode without a page of its own has nothing to read */
     if (!ep.sourceUrl || ep.sourceUrl === s.sourceUrl) { ep.opened = true; return ep; }
-    const report = await readPage(ep.sourceUrl, s.sourceUrl);
+    let report;
+    try { report = await readPage(ep.sourceUrl, s.sourceUrl); }
+    catch (e) {
+      /* the page refused, but an adapter already named the episode's sources: they are what there is to play */
+      if (!ep.dubs.some(d => d.sources.length)) throw e;
+      ep.opened = true; registerStreams(s); return ep;
+    }
     if (report.kind === 'episode' && report.episode.value === null) report.episode.value = number;
     merge(s, toContribution(report));
     if (report.kind === 'episode') await openPlayers(s, report);
@@ -218,10 +228,13 @@ export function createLapka({ session = createSession(), profiles = [], extracto
        refreshed by reading that page again: the generic extractor on a
        page that carries every episode's streams would bring them all */
     if (source.player === 'page' || String(source.extractor || '').startsWith('site:')) {
-      if (!ep.sourceUrl || ep.sourceUrl === s.sourceUrl) { markHealth(source, false, 'nothing to re-read'); return false; }
+      /* the episode's own page, or the series page that carries every episode's
+         streams in its data: read again, the signed addresses come back fresh */
+      const pageUrl = ep.sourceUrl || (source.player === 'page' ? s.sourceUrl : null);
+      if (!pageUrl) { markHealth(source, false, 'nothing to re-read'); return false; }
       try {
         const before = source.streams.map(st => st.url).join('\n');
-        const report = await readPage(ep.sourceUrl, s.sourceUrl);
+        const report = await readPage(pageUrl, s.sourceUrl);
         if (report.episode.value === null) report.episode.value = ep.number;
         merge(s, toContribution(report));
         const fresh = source.streams.length && source.streams.map(st => st.url).join('\n') !== before;
@@ -230,6 +243,9 @@ export function createLapka({ session = createSession(), profiles = [], extracto
         return fresh;
       } catch (e) { markHealth(source, false, reasonOf(e)); return false; }
     }
+    /* a source an adapter named behind a closed door is refused as a page's player would be: no request, the reason said */
+    const shut = closedDoor(source.embedUrl);
+    if (shut) { markHealth(source, false, shut); return false; }
     const x = (source.extractor && extractors.find(e => e.name === source.extractor)) || extractorFor(extractors, source.embedUrl);
     if (!x) { markHealth(source, false, 'no extractor'); return false; }
     try {

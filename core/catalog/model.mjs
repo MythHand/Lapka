@@ -50,7 +50,7 @@ export const UNNAMED_DUB = 'Основной';
 
 const now = () => Date.now();
 
-export function createSeries({ sourceUrl, title = '', altTitles = [], cover = null, year = null, season = null, kind = null } = {}) {
+export function createSeries({ sourceUrl, title = '', altTitles = [], cover = null, year = null, season = null, kind = null, facts = {} } = {}) {
   if (!sourceUrl) throw new Error('a series needs a sourceUrl');
   /* the id is the canonical address; the address kept is the one that
      actually answered, because a site may want its trailing slash */
@@ -60,6 +60,8 @@ export function createSeries({ sourceUrl, title = '', altTitles = [], cover = nu
     title, altTitles: [...altTitles], cover, year,
     season,            // which season this series is, when it is one of several
     kind,              // tv | movie | ova | special | spinoff, when known
+    /* what the page states of it, when it does: { genres: [], studio, origin, age, mpaa, episodes, episodesTotal } */
+    facts: { ...facts },
     /* the whole franchise in viewing order, this series included:
        [{ order, title, url, kind, year, relation, self }] */
     franchise: [],
@@ -108,6 +110,14 @@ export function createSub({ url, lang = null, label = '', format = null, headers
 
 /* audio: for an HLS that carries several audio renditions (one per
    dub), which one this dub is: its index among them and its name */
+/* What a stream is, apart from where it is: its kind, its quality, its
+   sound; a subtitle track its language and name. Some players sign their
+   addresses for hours, so the address of one and the same stream changes
+   from one reading to the next; this is what stays. */
+export const streamTag = stream => stream.kind === 'sub'
+  ? `sub|${stream.lang || ''}|${stream.label || ''}|${stream.format || ''}`
+  : `${stream.kind}|${stream.quality || 'adaptive'}|${stream.audio ? stream.audio.index : ''}`;
+
 export function createStream({ kind, url, quality = null, headers = {}, expiresAt = null, audio = null }) {
   if (!kind || !url) throw new Error('a stream needs a kind and a url');
   return { kind, url, quality, headers: { ...headers }, expiresAt, audio: audio ? { index: Number(audio.index) || 0, name: audio.name || '' } : null };
