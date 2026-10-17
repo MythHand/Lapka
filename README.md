@@ -37,19 +37,28 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
   out, even when the site keeps every season in one player.
 - **Dubs.** Switched on the fly, without a reload; the choice is kept for the whole franchise,
   and another season starts in it.
+- **Dubs by part.** A map of parts × episodes, at a button in the queue's header and in the dub
+  menu: which episodes have which dubs; hovering lights them up.
 - **Quality.** Any variant a source offers, the levels inside one stream included.
 - **Subtitles.** As a track of their own, when the source offers them; their look is adjustable.
 - **Openings.** A skip button when the site knows the timings; by itself too, with six seconds to
   say Watch.
 - **Resume.** From where you stopped, for every episode, whatever the dub; an episode watched to
-  the end is marked, and the frame shows where you stopped.
-- **History.** The links you pasted, at hand in the queue's footer: searched by title or link, each
-  saying where you stopped and opening from there; a link you no longer want is removed from the list.
+  the end is marked, the frame shows where you stopped, and the timeline shows what is already
+  on the disk.
+- **Pause.** On pause the frame shows the series: cover, year, kind, episode count, genres, studio,
+  source material, age rating and the dubs of this part. Switched off in the settings.
+- **History.** The links you pasted, at hand: the link field in the queue's footer opens the history
+  on focus and searches it, by title or address; on the right, the parts of the franchise with their
+  cover, year and episode count. Each link says where you stopped and opens from there; a link you
+  no longer want is removed from the list.
 - **Saving.** An episode as one file in your folder, with the chosen dub and the subtitles inside.
   Saves go in a queue, one after another: a pause holds an episode where it got to and continues
   from there, a waiting one can be made the current one, any can be cancelled, and saved files can
   be deleted from the library right in the player. A save that was cut short is finished on its own.
-  The quality a group is saved in: the best, as played, or the nearest to a named one.
+  The quality a group is saved in: the best, as played, or the nearest to a named one. A saved
+  episode plays from the disk, Lapka does not go to the net for it; in the dub menu its dub is
+  marked "on disk".
 - **Sources.** Several players per episode; a dead source gives way to a live one by itself.
 - **Log.** While a page is read, the reading is shown step by step: what was found, which players
   opened, which parts of the franchise gathered.
@@ -60,11 +69,11 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
 - **A window of its own.** Picture-in-picture, the extended one included, with the controls right in the window.
 - **Ten interface languages.**
 
-![The player and the queue: a franchise by parts, the dub menu with qualities](docs/media/audio_select.png)
+![The dub menu over the pause window: the choice on the left, the map of dubs by part on the right](docs/media/audio_select.gif)
 
-| Subtitles and their look | The loading window of the queue |
+| Subtitles and their look | The saving window of the queue |
 |---|---|
-| ![The subtitle menu: track, size, backing, position](docs/media/sub.png) | ![The loading window: saved, now, queued, and the buttons to download, pause, cancel, delete](docs/media/save.png) |
+| ![The subtitle menu: track, size, backing, position](docs/media/sub.png) | ![The saving window: saved, now, queued, and the buttons to save, pause, cancel, delete](docs/media/save.png) |
 
 The page reading is one general mechanism, not code written for particular
 sites: Lapka looks for players, episode lists and dubs by the way a page is
@@ -73,6 +82,21 @@ anidubonline.ru, gogoanime.by, jkanime.net, newdeaf.co, yummyanime.tv,
 ani-media.online, domanime.ru, lordserials.fan, ailiberty.top. Other sites built the same way
 mostly open too. Sites with DRM, and sites that deliberately lock
 their players, Lapka does not break into.
+
+## Resources
+
+The browser decodes the video; Lapka passes the pieces through, one or two
+megabytes each, and writes them to the disk, so the process stays light. The
+disk is taken by the saved episodes and the cache, both in your hands.
+
+| | Memory | CPU | Disk |
+|---|---|---|---|
+| The Node process, at start | 75 MB | ~0% | — |
+| The Node process, after hours of watching | 80 MB | ~0% | — |
+| ffmpeg while an episode is saved | up to 60 MB | one core for 2–3 s per 24-minute episode | the episode's file; the size is the source's, not the resolution's: a 24-minute episode is usually about 200 MB |
+| Lapka's notes: 30 links in the history with the covers of their parts, 100 stopping places, 400 watched marks | — | — | 22 MB, of which 108 KB is the notes file itself, the rest the covers |
+| The cache | — | — | up to the limit set in the settings; the old goes by itself |
+| Saved episodes | — | — | as many as you saved |
 
 ## Running it
 
@@ -99,8 +123,9 @@ npm start
 ```
 
 Open http://127.0.0.1:8800 in your browser. Chrome or Edge are recommended:
-the extended picture-in-picture window exists only there. To stop the server:
-Ctrl+C in the terminal.
+the extended picture-in-picture window exists only there; in Firefox and Safari
+everything else works, and picture-in-picture is the ordinary one. To stop the
+server: Ctrl+C in the terminal.
 
 Or without the terminal: `start.command` on macOS and `start.bat` on Windows
 open by a double click, `./start.sh` on Linux. Each checks Node.js, installs
@@ -111,6 +136,7 @@ the settings (the paw in the top right corner). To update: in the settings, the
 "Version" row → "Check for an update" → "Update to v…", and Lapka fetches,
 installs and starts itself again; or `update.command`, `update.bat`, `./update.sh`
 (not a second `git clone`: git refuses to write into a folder that exists).
+What changed from release to release: [CHANGELOG.md](CHANGELOG.md).
 
 ![Settings: the state and the version, the interface, the player, the storage with the folder, the saved videos, the notes and the cache, the shortcuts](docs/media/setting.png)
 
@@ -150,7 +176,7 @@ it is the tooling for working on Lapka's code, not needed for watching.
   of their pages.
 - The map of the core and the contracts of its blocks: [core/README.md](core/README.md).
 
-![npm test: 95 tests pass](docs/media/tests.png)
+![npm test: 124 tests pass](docs/media/tests.png)
 
 ## Boundaries
 
