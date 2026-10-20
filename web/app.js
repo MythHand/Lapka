@@ -4674,6 +4674,7 @@ async function toggleFull() {
     else await workspace.requestFullscreen({ navigationUI: 'hide' });
   } catch (_) { toast(t('full.fail')); }
 }
+  hidePauseInfo();                   // the ghost takes the stage; the pause window would cover its button
 btnFull.onclick = toggleFull;
 document.addEventListener('fullscreenchange', () => {
   btnFull.classList.toggle('on', isFull());
@@ -4681,6 +4682,7 @@ document.addEventListener('fullscreenchange', () => {
   poke();
 });
 
+  paintPauseInfo();                  // back in the tab: a pause that is still on shows the window again
 /* ═══════════════ picture-in-picture ═══════════════ */
 const hasDocPip = 'documentPictureInPicture' in window;
 
@@ -5026,7 +5028,8 @@ function otherName(series) {
 let restoredIdle = false;   // a session brought back and not started: the stage shows the episode, paused in effect
 function paintPauseInfo() {
   const it = cur();
-  const due = state.set.pauseInfo !== 'off' && it && (it.loadedSrc || restoredIdle) && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
+  /* not in picture-in-picture: the frame is in the other window, and here the ghost with its button stands in the stage */
+  const due = state.set.pauseInfo !== 'off' && it && (it.loadedSrc || restoredIdle) && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty') && !stage.classList.contains('is-pip');
   if (!due) { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); return; }
   const season = seasonOf(it);
   const s = season ? season.series : state.series;
