@@ -643,11 +643,14 @@ async function api(path, opts) {
   return d;
 }
 /* the look of a page told as it goes: every step to onStep, the answer at the end */
-function lookLive(url, onStep) {
+function lookLive(url, onStep, { signal = null } = {}) {
   return new Promise((resolve, reject) => {
     const es = new EventSource('/api/look/live?url=' + encodeURIComponent(url));
-    const close = () => es.close();
-    es.addEventListener('step', e => { try { onStep(JSON.parse(e.data)); } catch (_) {} });
+    /* abandoned for a newer link: the stream is closed and no step of it is heard again */
+    const onAbort = () => { es.close(); reject(Object.assign(new Error('abandoned'), { abandoned: true })); };
+    const close = () => { es.close(); if (signal) signal.removeEventListener('abort', onAbort); };
+    if (signal) { if (signal.aborted) return onAbort(); signal.addEventListener('abort', onAbort, { once: true }); }
+    es.addEventListener('step', e => { if (signal && signal.aborted) return; try { onStep(JSON.parse(e.data)); } catch (_) {} });
     es.addEventListener('done', e => { close(); resolve(JSON.parse(e.data)); });
     es.addEventListener('fail', e => { close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} reject(new Error(d.error || 'look failed')); });
     es.onerror = () => { close(); reject(new Error(t('set.cacheFail'))); };
@@ -933,7 +936,7 @@ const seasonOf = it => state.seasons.find(s => s.series.id === it.seriesId) || n
    its page, so what each opened part names is gathered too, round
    after round, until nothing new comes. One that fails is left out
    and said so. */
-async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {}) {
+async function openSeasons(main, { onStart = () => {}, onPart = () => {}, signal = null } = {}) {
   /* an address, and the season it names when a page holds every season in one player: "…/show.html?season=3" */
   const norm = u => { try { const x = new URL(u); const s = x.searchParams.get('season'); return x.origin + x.pathname.replace(/\/+$/, '') + (s ? '?season=' + s : ''); } catch { return String(u || '').replace(/[#?].*$/, '').replace(/\/+$/, ''); } };
   const me = norm(main.sourceUrl);
@@ -949,13 +952,14 @@ async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {})
     const todo = [...known.values()].filter(x => !x.series && !x.failed);
     if (!todo.length) break;
     /* each part is told as it comes, not when the round is over */
-    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url)).then(r => {
+    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url), { signal }).then(r => {
       const ok = r && r.series.episodes.length > 0;
       if (ok) { x.series = r.series; for (const e of r.series.franchise || []) add(e); }
       else x.failed = true;
       onPart({ title: x.entry.title || (ok ? r.series.title : x.entry.url), episodes: ok ? r.series.episodes.length : 0, ok, done: ++done, total: known.size });
       return r;
     }, e => { x.failed = true; onPart({ title: x.entry.title || x.entry.url, episodes: 0, ok: false, done: ++done, total: known.size }); throw e; })));
+    if (signal && signal.aborted) return [];   // abandoned for a newer link: no word about the parts not gathered
     todo.forEach((x, i) => { if (got[i].status !== 'fulfilled' || x.failed) toast(t('toast.seasonFail', { title: x.entry.title || x.entry.url })); });
   }
   /* one part per series: an episode's address and its series' address name the same series */
@@ -963,15 +967,25 @@ async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {})
   return orderSeasons([...known.values()].filter(x => x.series && !seen.has(x.series.id) && seen.add(x.series.id)).map(x => ({ series: x.series, entry: x.entry })));
 }
 
+/* One link at a time. A link opened while another is still being read
+   is the newer intent: the older open is abandoned at its next step and
+   touches nothing — not the queue, not the overlay, not the player. The
+   server finishes its reading on its own; the answer is simply not taken. */
+let linkOpen = null;   // the AbortController of the open under way
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
   url = String(url || '').trim();
   if (!/^https?:\/\//i.test(url)) { toast(t('toast.badLink')); return false; }
+  if (linkOpen) linkOpen.abort();
+  const ac = linkOpen = new AbortController();
+  const { signal } = ac;
+  const abandoned = () => signal.aborted;
   video.pause();                       // a new link is a new intent: what plays stops at once, the wait is shown over it
   showLinkWait(url);
   let got;
   let players = 0;
-  try { got = await lookLive(url, step => { if (step && step.phase === 'players') players = step.n; prepStep(step); }); }
-  catch (e) { hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
+  try { got = await lookLive(url, step => { if (step && step.phase === 'players') players = step.n; prepStep(step); }, { signal }); }
+  catch (e) { if (abandoned()) return false; hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
+  if (abandoned()) return false;
   if (!got.series.episodes.length) { hideProgress(); toast(t('toast.noEpisodes')); return false; }
   prepPhase('page', 'done');
   prepPhase('players', players ? 'done' : 'skip', players ? String(players) : '');
@@ -980,10 +994,14 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   state.series = got.series;
   state.current = null;
   let parts = 0;
-  state.seasons = await openSeasons(got.series, {
+  const seasons = await openSeasons(got.series, {
     onStart: n => { parts = n; prepPhase('parts', 'active', `0 / ${n}`); },
-    onPart: p => { prepPhase('parts', 'active', `${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
+    onPart: p => { if (abandoned()) return; prepPhase('parts', 'active', `${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
+    signal,
   });
+  if (abandoned()) return false;
+  if (linkOpen === ac) linkOpen = null;
+  state.seasons = seasons;
   prepPhase('parts', parts ? 'done' : 'skip', parts ? String(parts) : '');
   hideProgress();
   state.list = [];
@@ -2597,6 +2615,7 @@ function applySettings() {
    keyboard anyway, and "Leertaste" instead of Space would have to be
    hunted for. */
 /* three columns by meaning: moving through the episode, sound and the next one, the window */
+const MOD_KEY = /Mac|iPhone|iPad/i.test(navigator.platform) ? 'Cmd' : 'Ctrl';   // the system's own modifier, named as its keyboard names it
 const KEYS_UI = [
   [
     [['Space', 'K'],   'keys.play'],
@@ -2616,7 +2635,6 @@ const KEYS_UI = [
     [['Q'],            'keys.queue'],
     [['Esc'],          'keys.esc'],
   ],
-const MOD_KEY = /Mac|iPhone|iPad/i.test(navigator.platform) ? 'Cmd' : 'Ctrl';   // the system's own modifier, named as its keyboard names it
 ];
 
 /* ── the cache row ───────────────────────────────────────────
@@ -4656,6 +4674,7 @@ narrowWindow.addEventListener('change', syncQueueClose);
    opened it and it is still open. */
 let pipOpenedQueue = false;
 function pipStarted() {
+  hidePauseInfo();                   // the ghost takes the stage; the pause window would cover its button
   if (state.queueOpen) return;
   toggleQueue(true);
   pipOpenedQueue = true;
@@ -4663,6 +4682,7 @@ function pipStarted() {
 function pipEnded() {
   if (pipOpenedQueue && state.queueOpen) toggleQueue(false);
   pipOpenedQueue = false;
+  paintPauseInfo();                  // back in the tab: a pause that is still on shows the window again
 }
 
 /* ═══════════════ fullscreen ═══════════════ */
@@ -4674,7 +4694,6 @@ async function toggleFull() {
     else await workspace.requestFullscreen({ navigationUI: 'hide' });
   } catch (_) { toast(t('full.fail')); }
 }
-  hidePauseInfo();                   // the ghost takes the stage; the pause window would cover its button
 btnFull.onclick = toggleFull;
 document.addEventListener('fullscreenchange', () => {
   btnFull.classList.toggle('on', isFull());
@@ -4682,7 +4701,6 @@ document.addEventListener('fullscreenchange', () => {
   poke();
 });
 
-  paintPauseInfo();                  // back in the tab: a pause that is still on shows the window again
 /* ═══════════════ picture-in-picture ═══════════════ */
 const hasDocPip = 'documentPictureInPicture' in window;
 
@@ -5363,6 +5381,13 @@ function onKey(e) {
   const el = e.target;
   if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
   if (el === seek || el === volBar) return;
+  /* the episode before or after: Ctrl (Windows, Linux) or Cmd (macOS) with an arrow, as the B and N keys do;
+     prevented, so the browser does not take Cmd+arrow for its history */
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+    e.preventDefault();
+    if (e.code === 'ArrowLeft') prev(); else next();
+    return poke();
+  }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   /* We read e.code, the physical key, rather than the character typed.
      The letters used to be listed in Latin/Cyrillic pairs, and on any
@@ -5384,13 +5409,6 @@ function onKey(e) {
     case 'ArrowLeft':  e.preventDefault(); nudge(e.shiftKey ? -1 : -5); break;
     case 'ArrowRight': e.preventDefault(); nudge(e.shiftKey ? 1 : 5); break;
     case 'KeyJ': e.preventDefault(); nudge(-10); break;
-  /* the episode before or after: Ctrl (Windows, Linux) or Cmd (macOS) with an arrow, as the B and N keys do;
-     prevented, so the browser does not take Cmd+arrow for its history */
-  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
-    e.preventDefault();
-    if (e.code === 'ArrowLeft') prev(); else next();
-    return poke();
-  }
     case 'KeyL': e.preventDefault(); nudge(10); break;
     case 'ArrowUp':   e.preventDefault(); video.muted = false; video.volume = Math.min(1, video.volume + .05); flash(Math.round(video.volume * 100) + '%'); break;
     case 'ArrowDown': e.preventDefault(); video.volume = Math.max(0, video.volume - .05); flash(Math.round(video.volume * 100) + '%'); break;
