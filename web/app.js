@@ -2608,13 +2608,15 @@ const KEYS_UI = [
   ], [
     [['↑', '↓'],       'keys.volume'],
     [['M'],            'keys.mute'],
-    [['B', 'N'],       'keys.nextPrev'],
+    [['B', `${MOD_KEY} ←`], 'keys.prev'],
+    [['N', `${MOD_KEY} →`], 'keys.next'],
   ], [
     [['P'],            'keys.pip'],
     [['F'],            'keys.full'],
     [['Q'],            'keys.queue'],
     [['Esc'],          'keys.esc'],
   ],
+const MOD_KEY = /Mac|iPhone|iPad/i.test(navigator.platform) ? 'Cmd' : 'Ctrl';   // the system's own modifier, named as its keyboard names it
 ];
 
 /* ── the cache row ───────────────────────────────────────────
@@ -5379,6 +5381,13 @@ function onKey(e) {
     case 'ArrowLeft':  e.preventDefault(); nudge(e.shiftKey ? -1 : -5); break;
     case 'ArrowRight': e.preventDefault(); nudge(e.shiftKey ? 1 : 5); break;
     case 'KeyJ': e.preventDefault(); nudge(-10); break;
+  /* the episode before or after: Ctrl (Windows, Linux) or Cmd (macOS) with an arrow, as the B and N keys do;
+     prevented, so the browser does not take Cmd+arrow for its history */
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+    e.preventDefault();
+    if (e.code === 'ArrowLeft') prev(); else next();
+    return poke();
+  }
     case 'KeyL': e.preventDefault(); nudge(10); break;
     case 'ArrowUp':   e.preventDefault(); video.muted = false; video.volume = Math.min(1, video.volume + .05); flash(Math.round(video.volume * 100) + '%'); break;
     case 'ArrowDown': e.preventDefault(); video.volume = Math.max(0, video.volume - .05); flash(Math.round(video.volume * 100) + '%'); break;
