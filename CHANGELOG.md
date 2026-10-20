@@ -5,6 +5,17 @@
 The releases of Lapka, newest first. The "Check for an update" button in the
 settings looks at the same releases on GitHub.
 
+## 1.3.1 — 21 October 2026
+
+- **Shortcuts.** Ctrl with an arrow (Windows, Linux) or Cmd with an arrow (macOS) — the
+  previous or the next episode, as the B and N keys.
+- **Picture-in-picture.** The series information on pause is not shown in this mode and does
+  not cover the "Bring it back" button.
+- **Opening a link.** A link opened while another is still being read abandons the older open;
+  the answer to the older link no longer replaces what you chose.
+- **ffmpeg.** At start Lapka checks whether ffmpeg is there; without it saving is marked
+  unavailable where it is offered.
+
 ## 1.3.0 — 17 October 2026
 
 - **The pause window.** On pause the frame shows the series: cover, year, kind, episode count,
