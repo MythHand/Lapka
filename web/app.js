@@ -2914,9 +2914,10 @@ function homeRow(col) {
 let serverState = 'checking';         // up | down | off | checking
 let serverPlatform = '';              // darwin | win32 | linux: which launcher the stop notice names
 let serverVersion = '';               // "1.1.0", as the package says; shown as v1.1
+let serverFfmpeg = null;              // whether the server found ffmpeg at its start: a save that must be assembled needs it; null until the first ping
 async function checkServer() {
   if (serverState === 'off' || serverState === 'updating') return paintStatus();
-  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; if (p.platform) serverPlatform = p.platform; } catch (_) { serverState = 'down'; }
+  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; if (p.platform) serverPlatform = p.platform; if (typeof p.ffmpeg === 'boolean') serverFfmpeg = p.ffmpeg; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
 /* "v1.1.0", as the tag on GitHub reads */
@@ -3692,8 +3693,9 @@ function loadDubs(it, redraw) {
 const dubsKnown = it => saveInfo && saveInfo.key === `${it.seriesId}/${it.number}` ? saveInfo.dubs : null;
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
-  /* one dub, one stream of a known quality: nothing to choose */
-  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], { ...it.streams[0], dubName: it.dub ? it.dub.name : null });
+  /* one dub, one stream of a known quality: nothing to choose; a stream that needs ffmpeg when there is none opens the window, which says so */
+  const needsFfmpeg = st => serverFfmpeg === false && st.kind !== 'mp4';
+  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls') && !needsFfmpeg(it.streams[0])) return enqueueSaves([it], { ...it.streams[0], dubName: it.dub ? it.dub.name : null });
   saveMenuFor = it;
   saveMenu.anchor = btn.getBoundingClientRect();
   saveMenu.hidden = false;
@@ -3724,12 +3726,16 @@ function saveMenuRow(name, sub, qs, onTag, { waiting = true } = {}) {
   qs.forEach((q, i) => {
     if (i % TAGS_PER_LINE === 0) { line = document.createElement('span'); line.className = 'menu__tagline'; tags.append(line); }
     const tg = document.createElement('span');
-    tg.className = 'qtag';
+    /* a tag that cannot be saved in (its stream needs ffmpeg and there is none) stands dimmed, with the reason, and takes no click */
+    tg.className = 'qtag' + (q.off ? ' qtag--off' : '');
     tg.textContent = q.label || tagLabel(q);
-    if (q.player) tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
-    tg.onclick = ev => { ev.stopPropagation(); onTag(q); };
+    if (q.off) tg.title = q.off;
+    else if (q.player) tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
+    if (!q.off) tg.onclick = ev => { ev.stopPropagation(); onTag(q); };
     line.append(tg);
   });
+  /* every way to save this dub needs ffmpeg: the row says so under the name */
+  if (qs.length && qs.every(q => q.off) && !sub) { const s = row.querySelector('.menu__sub'); s.textContent = t('pop.noFfmpeg'); s.hidden = false; }
   if (!qs.length) {
     const w = document.createElement('span');
     w.className = 'qtag qtag--wait';
@@ -3754,7 +3760,8 @@ function buildSaveMenu(it) {
   const dubs = known || (it.dubs || []).map(d => ({ key: d.key, name: d.name, qualities: [], unopened: d.alive, alive: d.alive }));
   const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
   for (const d of rows) {
-    const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
+    const qs = (d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [])
+      .map(q => serverFfmpeg === false && q.kind !== 'mp4' ? { ...q, off: t('pop.noFfmpeg') } : q);   // a stream to be assembled, with no ffmpeg to assemble it
     saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player, dubName: d.name }); }, { waiting: !!(d.unopened || !known) }));
   }
   placeSaveMenu();
@@ -4183,6 +4190,8 @@ function buildSavePop() {
   const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill); q.append(bar);
   const g = el('div', 'savepop__grid');
   const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); g.append(k, v); return { k, v }; };
+  /* first, when it is so: saving stands unavailable for want of ffmpeg; direct mp4 files still go through */
+  const ffm = row('pop.saving'); ffm.v.className = 'savepop__v savepop__off';
   const saved = row('pop.saved'), now = row('pop.now'), queued = row('pop.queued'), paused = row('pop.paused'), failed = row('pop.failed'), rest = row('pop.rest'), dur = row('pop.duration');
   /* what the Download button saves in: the line opens the window that chooses it */
   const pickRow = row('pop.pick'); pickRow.v.className = 'savepop__v savepop__pick';
@@ -4221,7 +4230,7 @@ function buildSavePop() {
   const lib = popScope === null ? popSection(t('pop.library')) : null;
   if (lib) { lib.hidden = true; frag.append(lib); }
   savePop.replaceChildren(frag);
-  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, pickRow, without, go, pause, cancel, del, parts, lib } };
+  pop = { refs: { head: q.querySelector('.savepop__head'), fill, ffm, saved, now, queued, paused, failed, rest, dur, pickRow, without, go, pause, cancel, del, parts, lib } };
 }
 
 /* the words and the buttons, from the queue as it is now */
@@ -4245,6 +4254,20 @@ function paintSavePop() {
     if (note) { const sm = document.createElement('small'); sm.textContent = note; row.v.append(' ', sm); }
   };
   r.fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%';
+  /* saving unavailable for want of ffmpeg: the block is that one line, no counts, no pick, no buttons */
+  put(r.ffm, t('pop.noFfmpeg'), '', serverFfmpeg === false);
+  if (serverFfmpeg === false) {
+    r.head.hidden = popScope === null;   // «Queue» says nothing here; a part's heading names the part and stays
+    r.fill.parentElement.hidden = true;
+    for (const row of [r.saved, r.now, r.queued, r.paused, r.failed, r.rest, r.dur, r.pickRow, r.without]) put(row, '', '', false);
+    for (const b of [r.go, r.pause, r.cancel, r.del]) b.hidden = true;
+    if (r.parts.length) r.parts[0].c.closest('.savepop__sec').hidden = true;   // the counts by part are counts of saving too
+    placeSavePop();
+    return;
+  }
+  r.head.hidden = false;
+  r.fill.parentElement.hidden = false;
+  if (r.parts.length) r.parts[0].c.closest('.savepop__sec').hidden = false;
   put(r.saved, `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
   const cur1 = loading[0];
   put(r.now, cur1 ? cur1.name : '', cur1 && cur1.save.st === 'saving' ? (cur1.save.total ? `${progressWords(cur1.save)} · ${progressPct(cur1.save)}%` : t('queue.assembling')) : (cur1 ? t('queue.opening') : ''), loading.length > 0);
@@ -4399,6 +4422,9 @@ async function submitSave(it, stream = null) {
     if (!st && before.groupPick) { st = await streamForPick(it, before.groupPick); if (!st) throw new Error(t('pop.noDub', { dub: before.groupPick.dubName })); }
     st = st || streamOfQuality(it, quality) || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
+    /* a stream that has to be assembled needs ffmpeg: without it the save is not asked for, and the row stands as unavailable with the reason */
+    const kind = st.kind || ((it.streams || []).find(x => x.id === st.id) || {}).kind || null;
+    if (serverFfmpeg === false && kind !== 'mp4') { it.save = { st: 'failed', error: { key: 'noFfmpeg' }, phase: 'fetch', done: 0, total: 0, unit: null, quality, dubName: before.dubName || null, pick }; paintSaved(); return; }
     let job = await post('/api/save?stream=' + st.id + (st.level ? '&level=' + st.level : '') + (first ? '&first=1' : ''));
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     it.save = jobState(job, quality); paintSaved();

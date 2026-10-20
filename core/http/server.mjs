@@ -77,7 +77,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
 
   const server = http.createServer(async (req, res) => {
     /* taken per request: the folder, and everything in it, can be switched while running */
-    const { lapka, delivery = null, store = null, state = null, library = null, saver = null, warmer = null } = ctx;
+    const { lapka, delivery = null, store = null, state = null, library = null, saver = null, warmer = null, ffmpeg = null } = ctx;
     const url = new URL(req.url, `http://${host}`);
     const p = url.pathname;
     let m;
@@ -85,7 +85,7 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
     try {
       if (req.method === 'GET' && p === '/') return serveStatic(res, 'index.html');
       if (req.method === 'GET' && /^\/(?:assets\/[\w./-]+|[\w.-]+)\.(?:html|js|mjs|css|svg|png|woff2|ttf|txt)$/.test(p) && !p.includes('..')) return serveStatic(res, p.slice(1));
-      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', version: VERSION, home: store?.home || null, platform: process.platform });
+      if (req.method === 'GET' && p === '/api/ping') return json(res, 200, { ok: true, name: 'lapka', version: VERSION, home: store?.home || null, platform: process.platform, ffmpeg });
       if (req.method === 'GET' && p === '/api/home' && library) {
         const series = await library.list();
         return json(res, 200, { home: store.home, series: series.length, files: series.reduce((n, s) => n + s.episodes.length, 0), filesBytes: series.reduce((n, s) => n + s.episodes.reduce((m, e) => m + (e.size || 0), 0), 0), bytes: await store.weigh(), notes: state ? state.notes() : 0, notesBytes: await store.weigh(store.own), cache: await store.cache.stat(), canPick: canPick(), canOpen: canOpen() });
@@ -203,6 +203,8 @@ export function startServer({ port, host = '127.0.0.1', webDir, ctx }) {
       if (saver && mutating && p === '/api/save') {
         const ctx = lapka.context(url.searchParams.get('stream') || '');
         if (!ctx) return json(res, 404, { error: 'unknown stream; look at its page first', reason: { key: 'noStream' } });
+        /* a stream that has to be assembled needs ffmpeg: without it the save is refused here, before a byte is fetched */
+        if (ffmpeg === false && ctx.stream.kind !== 'mp4') return json(res, 409, { error: 'ffmpeg is needed to assemble this stream', reason: { key: 'noFfmpeg' } });
         return json(res, 202, saver.start(ctx.stream.id, ctx, { first: url.searchParams.get('first') === '1', level: Number(url.searchParams.get('level')) || null }));
       }
       /* the episode playing, pulled into the cache ahead of the player: asked by the page, read by it as it goes */

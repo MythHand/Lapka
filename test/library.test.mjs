@@ -182,6 +182,35 @@ describe('the state', () => {
 });
 
 /* ── the update route is Lapka's own to set off ── */
+describe('the ping', () => {
+  test('says whether ffmpeg was found at the start, so the page knows before a save is asked', async () => {
+    const p = await (await get('/api/ping')).json();
+    assert.equal(typeof p.ffmpeg, 'boolean');
+  });
+});
+
+/* ── a Lapka without ffmpeg ── */
+describe('saving without ffmpeg', () => {
+  let bare, bareHome;
+  before(async () => { if (!ffmpeg) return; bareHome = await fsp.mkdtemp(path.join(os.tmpdir(), 'lapka-bare-')); bare = await start({ port: 0, home: bareHome, ffmpeg: false }); });
+  after(async () => { if (bare) await bare.close(); if (bareHome) await fsp.rm(bareHome, { recursive: true, force: true }); });
+  const streamOf = async url => { const look = await (await fetch(bare.base + '/api/look?url=' + encodeURIComponent(url))).json(); const r = await (await fetch(bare.base + `/api/resolve?series=${look.series.id}&episode=1`)).json(); return r.stream; };
+  test('a stream that has to be assembled is refused before a byte is fetched; a direct mp4 goes through', async () => {
+    assert.equal((await (await fetch(bare.base + '/api/ping')).json()).ffmpeg, false);
+    const hls = await streamOf(site.base + '/s/subs/ep-1');
+    assert.equal(hls.kind, 'hls');
+    const refused = await fetch(bare.base + '/api/save?stream=' + hls.id, { method: 'POST', headers: { 'x-lapka': '1' } });
+    assert.equal(refused.status, 409);
+    assert.deepEqual((await refused.json()).reason, { key: 'noFfmpeg' });
+    const mp4 = await streamOf(site.base + '/s/links/ep-1');
+    assert.equal(mp4.kind, 'mp4');
+    const taken = await fetch(bare.base + '/api/save?stream=' + mp4.id, { method: 'POST', headers: { 'x-lapka': '1' } });
+    assert.equal(taken.status, 202);
+    const job = await taken.json();
+    await fetch(bare.base + '/api/save/cancel?id=' + encodeURIComponent(job.id), { method: 'POST', headers: { 'x-lapka': '1' } });
+  });
+});
+
 describe('the update route', () => {
   test('the stream opens only with a token from a POST of Lapka\'s own', async () => {
     assert.equal((await get('/api/update/live?token=nope')).status, 403);
