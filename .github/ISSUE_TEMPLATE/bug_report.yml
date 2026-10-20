@@ -17,6 +17,23 @@ body:
     attributes:
       label: The link
       description: The page you pasted into Lapka, if the trouble is about a series or an episode.
+  - type: input
+    id: version
+    attributes:
+      label: Lapka version
+      description: The "Version v…" row in the settings (the paw in the top right corner).
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How Lapka is started
+      options:
+        - npx -y lapka
+        - a downloaded ZIP with start.command / start.bat
+        - a cloned folder with npm start
+    validations:
+      required: true
   - type: dropdown
     id: os
     attributes:
