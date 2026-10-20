@@ -52,7 +52,8 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
   on focus and searches it, by title or address; on the right, the parts of the franchise with their
   cover, year and episode count. Each link says where you stopped and opens from there; a link you
   no longer want is removed from the list.
-- **Saving.** An episode as one file in your folder, with the chosen dub and the subtitles inside.
+- **Saving.** Saving needs ffmpeg; without it saving is unavailable, and watching works. An
+  episode as one file in your folder, with the chosen dub and the subtitles inside.
   Saves go in a queue, one after another: a pause holds an episode where it got to and continues
   from there, a waiting one can be made the current one, any can be cancelled, and saved files can
   be deleted from the library right in the player. A save that was cut short is finished on its own.
@@ -97,6 +98,9 @@ disk is taken by the saved episodes and the cache, both in your hands.
 | Lapka's notes: 30 links in the history with the covers of their parts, 100 stopping places, 400 watched marks | — | — | 22 MB, of which 108 KB is the notes file itself, the rest the covers |
 | The cache | — | — | up to the limit set in the settings; the old goes by itself |
 | Saved episodes | — | — | as many as you saved |
+
+The figures were taken on a MacBook Pro with an Apple M2 Pro chip and 16 GB of
+memory, macOS 14.8, Node.js 24, ffmpeg 9.0, in Chrome.
 
 ## Running it
 
@@ -152,7 +156,8 @@ the port.
 In short: install Node.js from [nodejs.org](https://nodejs.org/) (the LTS
 button), download this project (the green **Code** button → **Download ZIP**),
 unpack it and double-click `start.command` (macOS) or `start.bat` (Windows).
-The browser opens Lapka by itself.
+The browser opens Lapka by itself. Saving episodes needs ffmpeg as well; how to
+install it is in the guide below.
 
 Step by step for macOS, Windows and Linux, ffmpeg and the usual troubles
 included: [docs/INSTALL.md](docs/INSTALL.md). If you are

@@ -2022,6 +2022,9 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .qtag:hover{ color:var(--tx-1); border-color:var(--line-3); background:var(--glass-hi); }
 .qtag.sel{ color:var(--s-0); background:var(--tx-1); border-color:var(--tx-1); }
 .qtag--wait{ cursor:default; color:var(--tx-3); border-style:dashed; }
+/* a quality that cannot be saved in here: dimmed, no hover, the reason in its title */
+.qtag--off, .qtag--off:hover{ cursor:default; color:var(--tx-3); border-color:var(--line); border-style:dashed; background:var(--glass-soft); }
+.savepop__off{ color:var(--warn, #e0a24a); }
 
 /* ── the folder's two buttons side by side ── */
 .home__acts{ display:grid; grid-template-columns:1fr 1fr; gap:6px; }

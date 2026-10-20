@@ -643,11 +643,14 @@ async function api(path, opts) {
   return d;
 }
 /* the look of a page told as it goes: every step to onStep, the answer at the end */
-function lookLive(url, onStep) {
+function lookLive(url, onStep, { signal = null } = {}) {
   return new Promise((resolve, reject) => {
     const es = new EventSource('/api/look/live?url=' + encodeURIComponent(url));
-    const close = () => es.close();
-    es.addEventListener('step', e => { try { onStep(JSON.parse(e.data)); } catch (_) {} });
+    /* abandoned for a newer link: the stream is closed and no step of it is heard again */
+    const onAbort = () => { es.close(); reject(Object.assign(new Error('abandoned'), { abandoned: true })); };
+    const close = () => { es.close(); if (signal) signal.removeEventListener('abort', onAbort); };
+    if (signal) { if (signal.aborted) return onAbort(); signal.addEventListener('abort', onAbort, { once: true }); }
+    es.addEventListener('step', e => { if (signal && signal.aborted) return; try { onStep(JSON.parse(e.data)); } catch (_) {} });
     es.addEventListener('done', e => { close(); resolve(JSON.parse(e.data)); });
     es.addEventListener('fail', e => { close(); let d = {}; try { d = JSON.parse(e.data); } catch (_) {} reject(new Error(d.error || 'look failed')); });
     es.onerror = () => { close(); reject(new Error(t('set.cacheFail'))); };
@@ -933,7 +936,7 @@ const seasonOf = it => state.seasons.find(s => s.series.id === it.seriesId) || n
    its page, so what each opened part names is gathered too, round
    after round, until nothing new comes. One that fails is left out
    and said so. */
-async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {}) {
+async function openSeasons(main, { onStart = () => {}, onPart = () => {}, signal = null } = {}) {
   /* an address, and the season it names when a page holds every season in one player: "…/show.html?season=3" */
   const norm = u => { try { const x = new URL(u); const s = x.searchParams.get('season'); return x.origin + x.pathname.replace(/\/+$/, '') + (s ? '?season=' + s : ''); } catch { return String(u || '').replace(/[#?].*$/, '').replace(/\/+$/, ''); } };
   const me = norm(main.sourceUrl);
@@ -949,13 +952,14 @@ async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {})
     const todo = [...known.values()].filter(x => !x.series && !x.failed);
     if (!todo.length) break;
     /* each part is told as it comes, not when the round is over */
-    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url)).then(r => {
+    const got = await Promise.allSettled(todo.map(x => api('/api/look?url=' + encodeURIComponent(x.entry.url), { signal }).then(r => {
       const ok = r && r.series.episodes.length > 0;
       if (ok) { x.series = r.series; for (const e of r.series.franchise || []) add(e); }
       else x.failed = true;
       onPart({ title: x.entry.title || (ok ? r.series.title : x.entry.url), episodes: ok ? r.series.episodes.length : 0, ok, done: ++done, total: known.size });
       return r;
     }, e => { x.failed = true; onPart({ title: x.entry.title || x.entry.url, episodes: 0, ok: false, done: ++done, total: known.size }); throw e; })));
+    if (signal && signal.aborted) return [];   // abandoned for a newer link: no word about the parts not gathered
     todo.forEach((x, i) => { if (got[i].status !== 'fulfilled' || x.failed) toast(t('toast.seasonFail', { title: x.entry.title || x.entry.url })); });
   }
   /* one part per series: an episode's address and its series' address name the same series */
@@ -963,15 +967,25 @@ async function openSeasons(main, { onStart = () => {}, onPart = () => {} } = {})
   return orderSeasons([...known.values()].filter(x => x.series && !seen.has(x.series.id) && seen.add(x.series.id)).map(x => ({ series: x.series, entry: x.entry })));
 }
 
+/* One link at a time. A link opened while another is still being read
+   is the newer intent: the older open is abandoned at its next step and
+   touches nothing — not the queue, not the overlay, not the player. The
+   server finishes its reading on its own; the answer is simply not taken. */
+let linkOpen = null;   // the AbortController of the open under way
 async function openLink(url, { autoplay = true, at = null, quiet = false } = {}) {
   url = String(url || '').trim();
   if (!/^https?:\/\//i.test(url)) { toast(t('toast.badLink')); return false; }
+  if (linkOpen) linkOpen.abort();
+  const ac = linkOpen = new AbortController();
+  const { signal } = ac;
+  const abandoned = () => signal.aborted;
   video.pause();                       // a new link is a new intent: what plays stops at once, the wait is shown over it
   showLinkWait(url);
   let got;
   let players = 0;
-  try { got = await lookLive(url, step => { if (step && step.phase === 'players') players = step.n; prepStep(step); }); }
-  catch (e) { hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
+  try { got = await lookLive(url, step => { if (step && step.phase === 'players') players = step.n; prepStep(step); }, { signal }); }
+  catch (e) { if (abandoned()) return false; hideProgress(); toast(t('toast.lookFail', { why: e.message })); return false; }
+  if (abandoned()) return false;
   if (!got.series.episodes.length) { hideProgress(); toast(t('toast.noEpisodes')); return false; }
   prepPhase('page', 'done');
   prepPhase('players', players ? 'done' : 'skip', players ? String(players) : '');
@@ -980,10 +994,14 @@ async function openLink(url, { autoplay = true, at = null, quiet = false } = {})
   state.series = got.series;
   state.current = null;
   let parts = 0;
-  state.seasons = await openSeasons(got.series, {
+  const seasons = await openSeasons(got.series, {
     onStart: n => { parts = n; prepPhase('parts', 'active', `0 / ${n}`); },
-    onPart: p => { prepPhase('parts', 'active', `${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
+    onPart: p => { if (abandoned()) return; prepPhase('parts', 'active', `${p.done} / ${p.total}`); prepLog(p.ok ? t('prep.part', { title: p.title, n: p.episodes }) : t('prep.partFail', { title: p.title })); },
+    signal,
   });
+  if (abandoned()) return false;
+  if (linkOpen === ac) linkOpen = null;
+  state.seasons = seasons;
   prepPhase('parts', parts ? 'done' : 'skip', parts ? String(parts) : '');
   hideProgress();
   state.list = [];
@@ -2597,6 +2615,7 @@ function applySettings() {
    keyboard anyway, and "Leertaste" instead of Space would have to be
    hunted for. */
 /* three columns by meaning: moving through the episode, sound and the next one, the window */
+const MOD_KEY = /Mac|iPhone|iPad/i.test(navigator.platform) ? 'Cmd' : 'Ctrl';   // the system's own modifier, named as its keyboard names it
 const KEYS_UI = [
   [
     [['Space', 'K'],   'keys.play'],
@@ -2608,7 +2627,8 @@ const KEYS_UI = [
   ], [
     [['↑', '↓'],       'keys.volume'],
     [['M'],            'keys.mute'],
-    [['B', 'N'],       'keys.nextPrev'],
+    [['B', `${MOD_KEY} ←`], 'keys.prev'],
+    [['N', `${MOD_KEY} →`], 'keys.next'],
   ], [
     [['P'],            'keys.pip'],
     [['F'],            'keys.full'],
@@ -2894,9 +2914,10 @@ function homeRow(col) {
 let serverState = 'checking';         // up | down | off | checking
 let serverPlatform = '';              // darwin | win32 | linux: which launcher the stop notice names
 let serverVersion = '';               // "1.1.0", as the package says; shown as v1.1
+let serverFfmpeg = null;              // whether the server found ffmpeg at its start: a save that must be assembled needs it; null until the first ping
 async function checkServer() {
   if (serverState === 'off' || serverState === 'updating') return paintStatus();
-  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; if (p.platform) serverPlatform = p.platform; } catch (_) { serverState = 'down'; }
+  try { const p = await api('/api/ping'); serverState = 'up'; if (p.version) serverVersion = p.version; if (p.platform) serverPlatform = p.platform; if (typeof p.ffmpeg === 'boolean') serverFfmpeg = p.ffmpeg; } catch (_) { serverState = 'down'; }
   paintStatus();
 }
 /* "v1.1.0", as the tag on GitHub reads */
@@ -3672,8 +3693,9 @@ function loadDubs(it, redraw) {
 const dubsKnown = it => saveInfo && saveInfo.key === `${it.seriesId}/${it.number}` ? saveInfo.dubs : null;
 async function offerSave(it, btn) {
   if (!it.streams) { try { await resolveItem(it); } catch (e) { toast(t('toast.openFail', { name: it.name, why: e.message })); return; } }
-  /* one dub, one stream of a known quality: nothing to choose */
-  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls')) return enqueueSaves([it], { ...it.streams[0], dubName: it.dub ? it.dub.name : null });
+  /* one dub, one stream of a known quality: nothing to choose; a stream that needs ffmpeg when there is none opens the window, which says so */
+  const needsFfmpeg = st => serverFfmpeg === false && st.kind !== 'mp4';
+  if ((it.dubs || []).length < 2 && it.streams.length === 1 && (it.streams[0].quality || it.streams[0].kind !== 'hls') && !needsFfmpeg(it.streams[0])) return enqueueSaves([it], { ...it.streams[0], dubName: it.dub ? it.dub.name : null });
   saveMenuFor = it;
   saveMenu.anchor = btn.getBoundingClientRect();
   saveMenu.hidden = false;
@@ -3704,12 +3726,16 @@ function saveMenuRow(name, sub, qs, onTag, { waiting = true } = {}) {
   qs.forEach((q, i) => {
     if (i % TAGS_PER_LINE === 0) { line = document.createElement('span'); line.className = 'menu__tagline'; tags.append(line); }
     const tg = document.createElement('span');
-    tg.className = 'qtag';
+    /* a tag that cannot be saved in (its stream needs ffmpeg and there is none) stands dimmed, with the reason, and takes no click */
+    tg.className = 'qtag' + (q.off ? ' qtag--off' : '');
     tg.textContent = q.label || tagLabel(q);
-    if (q.player) tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
-    tg.onclick = ev => { ev.stopPropagation(); onTag(q); };
+    if (q.off) tg.title = q.off;
+    else if (q.player) tg.title = [q.player, q.kind.toUpperCase()].filter(Boolean).join(' · ');
+    if (!q.off) tg.onclick = ev => { ev.stopPropagation(); onTag(q); };
     line.append(tg);
   });
+  /* every way to save this dub needs ffmpeg: the row says so under the name */
+  if (qs.length && qs.every(q => q.off) && !sub) { const s = row.querySelector('.menu__sub'); s.textContent = t('pop.noFfmpeg'); s.hidden = false; }
   if (!qs.length) {
     const w = document.createElement('span');
     w.className = 'qtag qtag--wait';
@@ -3734,7 +3760,8 @@ function buildSaveMenu(it) {
   const dubs = known || (it.dubs || []).map(d => ({ key: d.key, name: d.name, qualities: [], unopened: d.alive, alive: d.alive }));
   const rows = [...dubs].sort((a, b) => (b.key === nowKey) - (a.key === nowKey));
   for (const d of rows) {
-    const qs = d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [];
+    const qs = (d.qualities && d.qualities.length ? d.qualities : d.key === nowKey ? tagsFromStreams(it.streams) : [])
+      .map(q => serverFfmpeg === false && q.kind !== 'mp4' ? { ...q, off: t('pop.noFfmpeg') } : q);   // a stream to be assembled, with no ffmpeg to assemble it
     saveMenu.append(saveMenuRow(d.name, '', qs, q => { closeSaveMenu(); enqueueSaves([it], { id: q.id, quality: q.quality || null, level: q.level ? qualityNum(q.quality) : null, kind: q.kind, player: q.player, dubName: d.name }); }, { waiting: !!(d.unopened || !known) }));
   }
   placeSaveMenu();
@@ -4163,6 +4190,8 @@ function buildSavePop() {
   const bar = el('div', 'savepop__bar'), fill = el('i'); bar.append(fill); q.append(bar);
   const g = el('div', 'savepop__grid');
   const row = key => { const k = el('span', 'savepop__k', t(key)), v = el('span', 'savepop__v'); g.append(k, v); return { k, v }; };
+  /* first, when it is so: saving stands unavailable for want of ffmpeg; direct mp4 files still go through */
+  const ffm = row('pop.saving'); ffm.v.className = 'savepop__v savepop__off';
   const saved = row('pop.saved'), now = row('pop.now'), queued = row('pop.queued'), paused = row('pop.paused'), failed = row('pop.failed'), rest = row('pop.rest'), dur = row('pop.duration');
   /* what the Download button saves in: the line opens the window that chooses it */
   const pickRow = row('pop.pick'); pickRow.v.className = 'savepop__v savepop__pick';
@@ -4201,7 +4230,7 @@ function buildSavePop() {
   const lib = popScope === null ? popSection(t('pop.library')) : null;
   if (lib) { lib.hidden = true; frag.append(lib); }
   savePop.replaceChildren(frag);
-  pop = { refs: { fill, saved, now, queued, paused, failed, rest, dur, pickRow, without, go, pause, cancel, del, parts, lib } };
+  pop = { refs: { head: q.querySelector('.savepop__head'), fill, ffm, saved, now, queued, paused, failed, rest, dur, pickRow, without, go, pause, cancel, del, parts, lib } };
 }
 
 /* the words and the buttons, from the queue as it is now */
@@ -4225,6 +4254,20 @@ function paintSavePop() {
     if (note) { const sm = document.createElement('small'); sm.textContent = note; row.v.append(' ', sm); }
   };
   r.fill.style.width = (items.length ? saved.length / items.length * 100 : 0).toFixed(1) + '%';
+  /* saving unavailable for want of ffmpeg: the block is that one line, no counts, no pick, no buttons */
+  put(r.ffm, t('pop.noFfmpeg'), '', serverFfmpeg === false);
+  if (serverFfmpeg === false) {
+    r.head.hidden = popScope === null;   // «Queue» says nothing here; a part's heading names the part and stays
+    r.fill.parentElement.hidden = true;
+    for (const row of [r.saved, r.now, r.queued, r.paused, r.failed, r.rest, r.dur, r.pickRow, r.without]) put(row, '', '', false);
+    for (const b of [r.go, r.pause, r.cancel, r.del]) b.hidden = true;
+    if (r.parts.length) r.parts[0].c.closest('.savepop__sec').hidden = true;   // the counts by part are counts of saving too
+    placeSavePop();
+    return;
+  }
+  r.head.hidden = false;
+  r.fill.parentElement.hidden = false;
+  if (r.parts.length) r.parts[0].c.closest('.savepop__sec').hidden = false;
   put(r.saved, `${saved.length} / ${items.length}`, savedBytes ? fmtSize(savedBytes) : '');
   const cur1 = loading[0];
   put(r.now, cur1 ? cur1.name : '', cur1 && cur1.save.st === 'saving' ? (cur1.save.total ? `${progressWords(cur1.save)} · ${progressPct(cur1.save)}%` : t('queue.assembling')) : (cur1 ? t('queue.opening') : ''), loading.length > 0);
@@ -4379,6 +4422,9 @@ async function submitSave(it, stream = null) {
     if (!st && before.groupPick) { st = await streamForPick(it, before.groupPick); if (!st) throw new Error(t('pop.noDub', { dub: before.groupPick.dubName })); }
     st = st || streamOfQuality(it, quality) || streamToSave(it);
     if (!st) throw new Error(t('toast.noStream', { name: it.name }));
+    /* a stream that has to be assembled needs ffmpeg: without it the save is not asked for, and the row stands as unavailable with the reason */
+    const kind = st.kind || ((it.streams || []).find(x => x.id === st.id) || {}).kind || null;
+    if (serverFfmpeg === false && kind !== 'mp4') { it.save = { st: 'failed', error: { key: 'noFfmpeg' }, phase: 'fetch', done: 0, total: 0, unit: null, quality, dubName: before.dubName || null, pick }; paintSaved(); return; }
     let job = await post('/api/save?stream=' + st.id + (st.level ? '&level=' + st.level : '') + (first ? '&first=1' : ''));
     if (it.pauseWanted) job = await post('/api/save/pause?id=' + encodeURIComponent(job.id));
     it.save = jobState(job, quality); paintSaved();
@@ -4654,6 +4700,7 @@ narrowWindow.addEventListener('change', syncQueueClose);
    opened it and it is still open. */
 let pipOpenedQueue = false;
 function pipStarted() {
+  hidePauseInfo();                   // the ghost takes the stage; the pause window would cover its button
   if (state.queueOpen) return;
   toggleQueue(true);
   pipOpenedQueue = true;
@@ -4661,6 +4708,7 @@ function pipStarted() {
 function pipEnded() {
   if (pipOpenedQueue && state.queueOpen) toggleQueue(false);
   pipOpenedQueue = false;
+  paintPauseInfo();                  // back in the tab: a pause that is still on shows the window again
 }
 
 /* ═══════════════ fullscreen ═══════════════ */
@@ -5024,7 +5072,8 @@ function otherName(series) {
 let restoredIdle = false;   // a session brought back and not started: the stage shows the episode, paused in effect
 function paintPauseInfo() {
   const it = cur();
-  const due = state.set.pauseInfo !== 'off' && it && (it.loadedSrc || restoredIdle) && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty');
+  /* not in picture-in-picture: the frame is in the other window, and here the ghost with its button stands in the stage */
+  const due = state.set.pauseInfo !== 'off' && it && (it.loadedSrc || restoredIdle) && video.paused && !video.ended && !endCard.classList.contains('show') && !stage.classList.contains('is-empty') && !stage.classList.contains('is-pip');
   if (!due) { pauseInfo.classList.remove('show'); pauseInfo.setAttribute('aria-hidden', 'true'); return; }
   const season = seasonOf(it);
   const s = season ? season.series : state.series;
@@ -5358,6 +5407,13 @@ function onKey(e) {
   const el = e.target;
   if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
   if (el === seek || el === volBar) return;
+  /* the episode before or after: Ctrl (Windows, Linux) or Cmd (macOS) with an arrow, as the B and N keys do;
+     prevented, so the browser does not take Cmd+arrow for its history */
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) {
+    e.preventDefault();
+    if (e.code === 'ArrowLeft') prev(); else next();
+    return poke();
+  }
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   /* We read e.code, the physical key, rather than the character typed.
      The letters used to be listed in Latin/Cyrillic pairs, and on any

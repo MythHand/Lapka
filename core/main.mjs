@@ -9,7 +9,7 @@ import { openStore } from './store/index.mjs';
 import { openState } from './store/state.mjs';
 import { openLibrary } from './store/library.mjs';
 import { createDelivery } from './deliver/index.mjs';
-import { createSaver } from './deliver/save.mjs';
+import { createSaver, haveFfmpeg } from './deliver/save.mjs';
 import { createWarmer } from './deliver/warm.mjs';
 import { createSession } from './session/index.mjs';
 import fs from 'node:fs';
@@ -50,14 +50,16 @@ async function openHome(home, delivery) {
   return { home: store.home, store, state, library, saver };
 }
 
-export async function start({ port = PORT, home, webDir = WEB_DIR } = {}) {
+export async function start({ port = PORT, home, webDir = WEB_DIR, ffmpeg = null } = {}) {
   /* a folder given here (by a test, by a script) is this run's alone
      and is never written into the config; the config is for the
      folder the user chose in the settings */
   const explicit = !!home;
   home = home || (process.env.LAPKA_HOME ? undefined : (await readConfig()).home) || undefined;
   const session = createSession();
-  const ctx = { session };
+  /* ffmpeg is looked for once, at the start: a save that has to be assembled needs it, and the page is told so it can
+     say it before anything is fetched; a test names the answer itself to see Lapka without it */
+  const ctx = { session, ffmpeg: typeof ffmpeg === 'boolean' ? ffmpeg : await haveFfmpeg() };
   const delivery = createDelivery({ session, cache: () => ctx.store.cache });
   Object.assign(ctx, await openHome(home, delivery));
   ctx.delivery = delivery;

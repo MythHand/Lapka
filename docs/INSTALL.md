@@ -230,7 +230,8 @@ In Windows PowerShell: `$env:PORT=8801; npm start`. With npx: `PORT=8801 npx -y 
 and shows no red errors; the address is exactly `http://127.0.0.1:8800`, not
 `https`.
 
-**Saving does not work, playing does.** No ffmpeg, or it is not in PATH. Check
+**Saving is unavailable, playing works.** In the save window Lapka says
+"unavailable: no ffmpeg": ffmpeg is not installed, or it is not in PATH. Check
 `ffmpeg -version` in a new terminal window.
 
 **`Error: spawn ffmpeg ENOENT`.** The same: ffmpeg was not found. Watching works
