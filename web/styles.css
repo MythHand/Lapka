@@ -1552,9 +1552,11 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 .menu--gear{
   top:var(--gear-pad-y); bottom:auto;
   right:calc(100% - var(--gear-pad-x) + 24px);
-  /* four columns and the band of keys under them */
-  min-width:min(1317px, calc(100vw - 60px));
-  max-width:min(1317px, calc(100vw - 60px));
+  /* four columns and the band of keys under them. The width is the sheet's
+     own and does not follow the window: when the window runs short, the
+     sheet takes another arrangement (the narrow-window rules at the end of
+     the file), it does not get squeezed */
+  width:1317px; min-width:0; max-width:none;
   /* the height is the sheet's own; the window alone caps it, and then the
      whole sheet scrolls, not a column of it */
   max-height:calc(100vh - 44px);
@@ -1627,29 +1629,29 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .menu--gear.open{ opacity:0; transform:translateX(60px); }
 }
 
-/* the list of keyboard shortcuts: three columns by meaning from the left
-   edge, each as wide as its words, a soft line between them; in a column
-   the words stand in a row of their own, close to their keys */
+/* The list of keyboard shortcuts: three groups by meaning, keys and their
+   words in a row, the rows of a group a grid of two tracks, so the words
+   stand in a column of their own. In the full sheet the groups stand side
+   by side from the left edge, each as wide as its words, a soft line
+   between them, the last giving way; their rows are their own: a word
+   that wraps in one group makes no hole in another. Where the sheet is
+   narrower the groups stack, and there the band becomes one grid, at the
+   end of the file. The room between keys and words is the keys' own
+   padding, not a gap of the grid, the same in every arrangement. */
 .keys__grid{ display:flex; align-items:flex-start; }
-.keys__col{ display:grid; grid-template-columns:auto auto; column-gap:14px; align-items:baseline; flex:0 0 auto; }
-/* only the last column, with the longest phrases, gives way when the band runs short */
+.keys__col{ display:grid; grid-template-columns:auto auto; align-items:baseline; flex:0 0 auto; }
 .keys__col:last-child{ flex:0 1 auto; min-width:0; }
 .keys__col + .keys__col{ border-left:1px solid rgba(255,255,255,.07); margin-left:20px; padding-left:20px; }
-.keys__col .keys__row{ display:contents; }
-.keys__col .keys__caps, .keys__col .keys__what{ padding:2px 0; }
+.keys__row{ display:contents; font-size:calc(12.5px + var(--fs)); color:var(--tx-2); }
+.keys__caps{ display:flex; gap:4px; white-space:nowrap; padding:2px 14px 2px 0; }
 .keys__col:first-child .keys__caps{ padding-left:12px; }
-.keys__row{
-  display:flex; align-items:baseline; gap:10px;
-  padding:2px 12px; font-size:calc(12.5px + var(--fs)); color:var(--tx-2);
-}
-.keys__caps{ display:flex; gap:4px; white-space:nowrap; }
 .keys__caps kbd{
   min-width:20px; padding:2px 6px; border-radius:6px;
   border:1px solid var(--line-2); background:var(--glass-hi);
   font-family:var(--mono); font-size:calc(11px + var(--fs)); line-height:1.5;
   color:var(--tx-1); text-align:center;
 }
-.keys__what{ flex:1; min-width:0; color:var(--tx-3); line-height:1.45; }
+.keys__what{ min-width:0; padding:2px 0; color:var(--tx-3); line-height:1.45; }
 
 /* There is no room for columns in the PiP window, so they stack and the
    menu itself scrolls.
@@ -1715,14 +1717,64 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .menu--split .menu__col + .menu__col{
     margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line);
   }
-  /* the settings sheet in one column: the state and the interface, the player, the storage, the keys */
-  .stage:not(.pip-mode) .menu--gear{ min-width:0; width:min(420px, calc(100vw - 24px)); max-width:none; }
-  .menu--gear{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'ui' 'player' 'place' 'keys'; }
-  .menu--gear .menu__col--ui, .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line); }
-  .keys__grid{ flex-direction:column; gap:6px; }
-  .keys__col + .keys__col{ border-left:0; padding:6px 0 0; margin:0; border-top:1px solid rgba(255,255,255,.07); }
   .browser{ grid-template-columns:1fr; }
   .browser__places{ display:none; }
+}
+
+/* ───────────── the settings sheet in a narrower window ─────────────
+   The sheet keeps its width and its arrangement until its left edge comes
+   within 40px of the window's left edge; then it takes the next
+   arrangement: the five blocks in two columns, and then in one. The right
+   edge of the sheet stands 100px from the window's right (the paw 40, its
+   padding 36, the gap 24), so a sheet W wide has its 40px while the window
+   is W + 140 or wider: the full sheet of 1317 down to 1457, the two
+   columns of 710 down to 850.
+   A block keeps the width it has in the full sheet. There the three wide
+   columns are 354 each, 340 of content past the divider, so the two
+   columns here are 340 + 354 and the frame of 16: 710. */
+@media (max-width:1456px) and (min-width:850px){
+  .stage:not(.pip-mode) .menu--gear{ width:710px; }
+  .menu--gear{ grid-template-columns:minmax(0,340fr) minmax(0,354fr); grid-template-areas:'left ui' 'player place' 'keys keys'; }
+  /* the line between the columns stays on the right one; the second row
+     gets a line on its top, as the band of keys has */
+  .menu--gear .menu__col--player{ margin-left:0; padding-left:0; border-left:0; }
+  .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin-top:6px; padding-top:4px; border-top:1px solid var(--line); }
+  /* The keys in two columns too: seeking on the left, the sound and the
+     episodes with the window under them on the right, one list on the
+     same pair of tracks. The third track holds the line, 26 wide from 340
+     (160 + 180) to 366, the line 7 in, so that it falls on the sheet's
+     own (the right column's cell begins at 340, its line 7 past that) and
+     the keys past it begin where the words of the column above begin
+     (the line, 7, and the 12 of a row). The key tracks are as wide as
+     their keys, the word tracks take the rest, in the proportion of the
+     sheet. */
+  .keys__grid{ grid-template-columns:minmax(max-content,160fr) minmax(0,180fr) 26px minmax(max-content,90fr) minmax(0,238fr); }
+  .keys__col:nth-child(n+2) .keys__caps{ grid-column:4; }
+  .keys__col:nth-child(n+2) .keys__what{ grid-column:5; }
+  .keys__grid::before{ content:''; position:absolute; grid-column:3; top:0; bottom:0; left:7px; width:1px; background:rgba(255,255,255,.07); }
+}
+/* one column: the state and the interface, the player, the storage, the keys */
+@media (max-width:849px){
+  .stage:not(.pip-mode) .menu--gear{ width:min(420px, calc(100vw - 24px)); }
+  .menu--gear{ grid-template-columns:minmax(0,1fr); grid-template-areas:'left' 'ui' 'player' 'place' 'keys'; }
+  .menu--gear .menu__col--ui, .menu--gear .menu__col--player, .menu--gear .menu__col--place{ margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line); }
+  /* the keys one list: every group on the same pair of tracks, no lines */
+  .keys__grid{ grid-template-columns:max-content minmax(0,1fr); }
+  .keys__col:nth-child(n+2) .keys__caps{ grid-column:1; padding-left:12px; }
+  .keys__col:nth-child(n+2) .keys__what{ grid-column:2; }
+}
+/* Where the groups of keys stack, the band is one grid and the groups and
+   rows are dissolved into it (display:contents): every key cell and word
+   cell names its tracks, so keys that stand one under the other share a
+   track and their words begin at one place, across groups too. Dense
+   flow: a group's rows start from the first row of its tracks, not after
+   the rows placed before them. The first group is placed here, the others
+   by the arrangement. */
+@media (max-width:1456px){
+  .keys__grid{ display:grid; position:relative; grid-auto-flow:row dense; align-items:baseline; }
+  .keys__col{ display:contents; }
+  .keys__col:nth-child(1) .keys__caps{ grid-column:1; }
+  .keys__col:nth-child(1) .keys__what{ grid-column:2; }
 }
 
 
