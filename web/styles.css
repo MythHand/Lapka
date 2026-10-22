@@ -1171,6 +1171,12 @@ svg.ph{ fill:currentColor; stroke:none; }
   padding:16px 19px 10px;                                                                 /* the title's words on the rows' vertical */
 }
 .histpop__head, .histpop__count{ font-family:var(--mono); font-size:calc(12px + var(--fs)); letter-spacing:0; color:var(--tx-3); font-variant-numeric:tabular-nums; }
+/* the overview's way out: the queue's cross in the top right corner, for a
+   window that covers its own button or leaves nothing outside to click; the
+   title keeps its place, the row's padding gives way to the button */
+.over .histpop__top{ align-items:center; padding:8px 10px 6px 19px; }
+.over__x{ margin-left:auto; color:var(--tx-3); }
+.over__x:hover{ color:var(--tx-1); }
 .histpop__list{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; position:relative; margin-top:auto; }   /* the inset of a menu; at the frame's bottom when the frame is taller: a search in a frozen frame */
 .histpop__empty{ padding:10px 6px 6px; color:var(--tx-3); line-height:1.6; }
 /* a row as a menu's item: the plate inset by the frame's 7px, 10px 12px inside, 6px corners */
@@ -1717,6 +1723,12 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .menu--split .menu__col + .menu__col{
     margin:8px 0 0; padding:8px 0 0; border-left:0; border-top:1px solid var(--line);
   }
+  /* the audio menu without its map: the narrow self, as in the PiP window;
+     stacked under the choice the map was cut off, and the menu kept the
+     width of two columns */
+  .stage:not(.pip-mode) #audioMenu.menu--split{ width:auto; min-width:480px; max-width:min(560px, calc(100vw - 24px)); max-height:min(340px, calc(100vh - 130px)); }
+  .stage:not(.pip-mode) #audioMenu .menu__col--pick{ flex:none; min-width:0; }   /* flex:none as every column here: a basis of 0 is a height of 0 in a column */
+  .stage:not(.pip-mode) #audioMenu .menu__col--map{ display:none; }
   .browser{ grid-template-columns:1fr; }
   .browser__places{ display:none; }
 }
@@ -2056,8 +2068,10 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 
 /* ── the audio menu: room for the qualities each dub can play in; and, past
    the divider, the map of which dubs the parts have, the column of the
-   choice keeping its width. In the PiP window the map column is not drawn
-   and the menu is its narrow self. ── */
+   choice keeping its width. Without the map the menu is its narrow self:
+   in the PiP window, where the map column is not drawn, and in a window
+   too narrow for two columns (the narrow-window rules at the end of the
+   file), where the overview window from the queue's header serves. ── */
 #audioMenu{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); }
 #audioMenu.menu--split{ min-width:min(1100px, calc(100vw - 24px)); max-width:min(1500px, calc(100vw - 24px)); max-height:calc(100vh - 130px); }
 #audioMenu .menu__col--pick{ flex:0 0 auto; width:auto; min-width:480px; max-width:min(560px, calc(100vw - 24px)); }   /* the column of the choice as the menu was: its own width, 480 to 560 */

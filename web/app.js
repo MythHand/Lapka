@@ -1459,7 +1459,10 @@ function buildOverview() {
   const top = document.createElement('div'); top.className = 'histpop__top';
   const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
   const count = document.createElement('span'); count.className = 'histpop__count';
-  top.append(head, count);
+  /* the cross, for a window that covers its own button or fills the screen */
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'rb rb--sm over__x'; x.title = t('common.close'); x.innerHTML = phSvg(PH.x);
+  x.onclick = ev => { ev.stopPropagation(); closeOverview(); };
+  top.append(head, count, x);
   const host = document.createElement('div'); host.className = 'dubmap';
   count.textContent = String(buildDubMap(host).dubs);
   overview.append(top, host);
