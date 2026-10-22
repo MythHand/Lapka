@@ -2092,7 +2092,7 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
 #audioMenu .menu__col--pick{ flex:0 0 auto; width:auto; min-width:480px; max-width:min(560px, calc(100vw - 24px)); }   /* the column of the choice as the menu was: its own width, 480 to 560 */
 #audioMenu .menu__col--map{ flex:1 1 0; display:flex; flex-direction:column; overflow:hidden; }
 .stage.pip-mode #audioMenu.menu--split{ min-width:480px; max-width:min(560px, calc(100vw - 24px)); max-height:min(340px, calc(100vh - 130px)); }
-.stage.pip-mode #audioMenu .menu__col--pick{ flex:1 1 0; min-width:0; }
+.stage.pip-mode #audioMenu .menu__col--pick{ flex:none; min-width:0; }   /* flex:none as every column in the PiP window: the menu is a column there, and a basis of 0 is a height of 0 */
 .menu__item--dub{ align-items:center; }
 .menu__tags{ flex:none; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:4px; max-width:210px; margin-left:8px; }
 /* .qtag, not .tag: .tag is the queue's round button and must stay so */

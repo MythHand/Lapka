@@ -5,6 +5,23 @@
 The releases of Lapka, newest first. The "Check for an update" button in the
 settings looks at the same releases on GitHub.
 
+## 1.3.2 — 22 October 2026
+
+- **Settings.** The settings sheet rearranges itself in a narrow window: into two columns,
+  then into one, once the left edge of the window is 40 pixels away. The shortcuts gather
+  into one column with it.
+- **Narrow window.** In a window up to 1080 pixels wide the queue panel takes the whole width
+  and closes with a cross. On the start screen it is hidden, and the button in the top left
+  corner opens it.
+- **Audio menu.** In a narrow window the menu comes without the "Dubs across the parts" map,
+  at its former width; the map stays in the window from the queue's header.
+- **Dubs across the parts.** The window has a cross now: it closes where it used to cover its
+  own button or fill the screen.
+- **History.** The history window narrows with the browser window, staying inside its edges,
+  and closes with the queue panel.
+- **Picture-in-picture.** In the extended window the audio menu shows the dubs again.
+- **Bug report on GitHub.** The form asks for the Lapka version and how it is started.
+
 ## 1.3.1 — 21 October 2026
 
 - **Shortcuts.** Ctrl with an arrow (Windows, Linux) or Cmd with an arrow (macOS) — the
