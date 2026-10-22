@@ -1101,8 +1101,13 @@ svg.ph{ fill:currentColor; stroke:none; }
 @starting-style{ .histpop:not([hidden]){ opacity:0; transform:translateX(-10px); } }
 /* On the left the title and the count, under them the rows, which alone
    scroll; the search is the footer's link field, which the list stands
-   beside. On the right the column of the row stood on. */
-.histpop__main{ flex:0 0 653px; min-width:0; display:flex; flex-direction:column; min-height:0; }
+   beside. On the right the column of the row stood on.
+   The frame is 1000 wide, the rows 653 of it, and it never grows past
+   that; a window that cannot hold it with 12px to spare narrows it, and
+   the columns share what is lost: 85% comes off the rows, 15% off the
+   column. 85% of the frame less 197 is 653 at 1000 and keeps that share
+   of every pixel lost below it. */
+.histpop__main{ flex:0 0 calc(85% - 197px); min-width:0; display:flex; flex-direction:column; min-height:0; }
 .histpop__side{ flex:1 1 auto; min-width:0; display:flex; flex-direction:column; min-height:0; border-left:1px solid var(--line-2); }
 .histpop__parts{ flex:0 1 auto; min-height:0; overflow:auto; padding:0 7px 7px; position:relative; }
 /* a part: its two names close together as one block, the facts a step below
@@ -1707,12 +1712,22 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    button has nothing to do */
 .workspace.queue-narrow{ --queue-w:var(--queue-w-narrow); }
 @media (max-width:1500px){ :root{ --queue-w-wide:504px; } #btnQueueWidth{ display:none; } }
-@media (max-width:820px){
+/* a narrow window: the panel takes the whole width (the player starts
+   with it shut there, see app.js) */
+@media (max-width:1080px){
   :root{ --queue-w-wide:100vw; --queue-w-narrow:100vw; }
   /* The shift centres captions in what the queue leaves visible. Here it
      leaves nothing, and shifted by the whole width the start screen was
      squeezed to a sliver as the panel slid in. */
   .workspace.queue-open{ --shift:0px; }
+  /* With nothing loaded the panel has no header, and here it covers the
+     whole window, the info button included: the header's cross comes
+     back alone, in the panel's top right corner, as the overview window
+     has its own. The other buttons of the header are hidden by then. */
+  .queue.queue--empty .queue__tools{ display:flex; position:absolute; top:12px; right:12px; z-index:2; padding:0; min-height:0; border:0; }   /* two classes: the rule that hides the header stands further down the file */
+  .queue.queue--empty .queue__title{ display:none; }
+}
+@media (max-width:820px){
   /* In a narrow window a menu in columns has no room for them: they go
      one under another, as in the PiP window. Settings come first and the
      shortcuts last, and the divider moves with them, since it is drawn by
