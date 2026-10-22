@@ -1712,14 +1712,15 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
    button has nothing to do */
 .workspace.queue-narrow{ --queue-w:var(--queue-w-narrow); }
 @media (max-width:1500px){ :root{ --queue-w-wide:504px; } #btnQueueWidth{ display:none; } }
-/* a narrow window: the panel takes the whole width (the player starts
-   with it shut there, see app.js) */
+/* The start screen in a narrow window, up to 1080: the panel, which is
+   the about page then, takes the whole width (the player starts with it
+   shut there, see app.js). A panel with a queue keeps its width down to
+   820, the rules below. */
 @media (max-width:1080px){
-  :root{ --queue-w-wide:100vw; --queue-w-narrow:100vw; }
-  /* The shift centres captions in what the queue leaves visible. Here it
-     leaves nothing, and shifted by the whole width the start screen was
-     squeezed to a sliver as the panel slid in. */
-  .workspace.queue-open{ --shift:0px; }
+  .queue.queue--empty{ width:100vw; }
+  /* the start screen is centred in what the panel leaves visible, and
+     here it leaves nothing */
+  .workspace.queue-open:has(.queue--empty){ --shift:0px; }
   /* With nothing loaded the panel has no header, and here it covers the
      whole window, the info button included: the header's cross comes
      back alone, in the panel's top right corner, as the overview window
@@ -1728,6 +1729,11 @@ video.cue-size-s::cue{ font-size:80%; }  video.cue-size-l::cue{ font-size:128%; 
   .queue.queue--empty .queue__title{ display:none; }
 }
 @media (max-width:820px){
+  :root{ --queue-w-wide:100vw; --queue-w-narrow:100vw; }
+  /* The shift centres captions in what the queue leaves visible. Here it
+     leaves nothing, and shifted by the whole width the start screen was
+     squeezed to a sliver as the panel slid in. */
+  .workspace.queue-open{ --shift:0px; }
   /* In a narrow window a menu in columns has no room for them: they go
      one under another, as in the PiP window. Settings come first and the
      shortcuts last, and the divider moves with them, since it is drawn by

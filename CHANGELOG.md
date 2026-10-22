@@ -10,9 +10,9 @@ settings looks at the same releases on GitHub.
 - **Settings.** The settings sheet rearranges itself in a narrow window: into two columns,
   then into one, once the left edge of the window is 40 pixels away. The shortcuts gather
   into one column with it.
-- **Narrow window.** In a window up to 1080 pixels wide the queue panel takes the whole width
-  and closes with a cross. On the start screen it is hidden, and the button in the top left
-  corner opens it.
+- **Start screen.** In a window up to 1080 pixels wide the panel with the description is
+  hidden; the button in the top left corner opens it across the whole width, the cross closes
+  it. A queue that is cleared behaves the same way.
 - **Audio menu.** In a narrow window the menu comes without the "Dubs across the parts" map,
   at its former width; the map stays in the window from the queue's header.
 - **Dubs across the parts.** The window has a cross now: it closes where it used to cover its
