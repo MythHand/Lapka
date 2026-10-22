@@ -52,8 +52,8 @@ in [LICENSES/PIP-Player.MIT.txt](LICENSES/PIP-Player.MIT.txt).
   on focus and searches it, by title or address; on the right, the parts of the franchise with their
   cover, year and episode count. Each link says where you stopped and opens from there; a link you
   no longer want is removed from the list.
-- **Saving.** Saving needs ffmpeg; without it saving is unavailable, and watching works. An
-  episode as one file in your folder, with the chosen dub and the subtitles inside.
+- **Saving.** Saving needs ffmpeg; without it saving is unavailable, and watching works.
+  Each episode as a file of its own in your folder, with the chosen dub and the subtitles inside.
   Saves go in a queue, one after another: a pause holds an episode where it got to and continues
   from there, a waiting one can be made the current one, any can be cancelled, and saved files can
   be deleted from the library right in the player. A save that was cut short is finished on its own.

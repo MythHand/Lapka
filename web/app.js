@@ -1459,7 +1459,10 @@ function buildOverview() {
   const top = document.createElement('div'); top.className = 'histpop__top';
   const head = document.createElement('span'); head.className = 'histpop__head'; head.textContent = t('queue.overview');
   const count = document.createElement('span'); count.className = 'histpop__count';
-  top.append(head, count);
+  /* the cross, for a window that covers its own button or fills the screen */
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'rb rb--sm over__x'; x.title = t('common.close'); x.innerHTML = phSvg(PH.x);
+  x.onclick = ev => { ev.stopPropagation(); closeOverview(); };
+  top.append(head, count, x);
   const host = document.createElement('div'); host.className = 'dubmap';
   count.textContent = String(buildDubMap(host).dubs);
   overview.append(top, host);
@@ -2596,7 +2599,13 @@ function menuTitle(menu, text) {
    The one place where a setting turns into behaviour. It has to be
    called at startup as well, otherwise a saved value lives only in the
    menu. */
+/* Two widths. Up to 820 the window is narrow for the panel with a queue:
+   it takes the whole width, the docked mode is off, the panel is shown or
+   shut, never beside. Up to 1080 the window is narrow for the start
+   screen: the panel, which is the about page then, takes the whole width
+   and starts shut (syncQueueWidth). */
 const narrowWindow = matchMedia('(max-width:820px)');
+const startNarrow = matchMedia('(max-width:1080px)');
 function queueDocked() { return state.set.queueMode === 'docked' && !narrowWindow.matches; }
 narrowWindow.addEventListener('change', () => applySettings());
 function applySettings() {
@@ -3309,7 +3318,9 @@ function render() {
   queueFiles.textContent = t('queue.count', { n: state.list.length });
   const grid = state.view === 'grid';
   queueList.classList.toggle('queue__list--grid', grid && state.list.length > 0);
+  const emptied = !state.list.length && !queueEl.classList.contains('queue--empty');   // the queue has just been cleared
   queueEl.classList.toggle('queue--empty', !state.list.length);
+  if (emptied) syncQueueWidth();
   applyQueueWidth();
   btnLocate.hidden = !cur() || !state.list.length;
   syncQueueClose();
@@ -4673,24 +4684,34 @@ function toggleQueue(force) {
   state.queueOpen = force === undefined ? !state.queueOpen : force;
   workspace.classList.toggle('queue-open', state.queueOpen);
   btnList.classList.toggle('on', state.queueOpen);
+  /* the history stands beside the panel's link field: a panel that shuts
+     takes the field away, and the list would be placed from a field past
+     the window's edge */
+  if (!state.queueOpen && !histPop.hidden) { closeHistory(); queueLinkInput.blur(); }
   fitDeck();         // the stage has changed width; the observer follows the slide
 }
 btnList.onclick = () => toggleQueue();
 $('#btnQueueClose').onclick = () => toggleQueue(false);
 $('#btnInfo').onclick = () => toggleQueue(true);
-/* In a narrow window the panel would cover the start screen whole, so
-   there the player starts with it shut; the info button opens it. */
-toggleQueue(!narrowWindow.matches);
+/* With nothing loaded the panel is the about page. In a wide window it
+   stands open beside the start screen; in a narrow one it would cover the
+   start screen whole, so there it is shut, the info button opens it and
+   the cross shuts it. The start screen follows the width while nothing is
+   loaded, and a queue that empties leaves the panel as the start screen
+   has it. With a queue the panel is the viewer's to open and shut. */
+function syncQueueWidth() { if (!state.list.length) toggleQueue(!startNarrow.matches); }
+syncQueueWidth();
+startNarrow.addEventListener('change', syncQueueWidth);
 
 /* With nothing loaded the panel holds the project description, and
    closing it had no way back: the queue button lives in the deck, which
-   is hidden then. So the cross goes, except in a narrow window: there
-   the panel covers everything, the info button included, and the cross
-   is the only way back to the start screen. */
+   is hidden then. So the cross goes, except where the panel takes the
+   whole width: there it covers everything, the info button included, and
+   the cross is the only way back to the start screen. */
 function syncQueueClose() {
-  $('#btnQueueClose').hidden = !state.list.length && !narrowWindow.matches;
+  $('#btnQueueClose').hidden = !state.list.length && !startNarrow.matches;
 }
-narrowWindow.addEventListener('change', syncQueueClose);
+startNarrow.addEventListener('change', syncQueueClose);
 
 /* While the picture plays in a PiP window, the main tab is where the
    queue is at hand: the file in the window is switched from here without
